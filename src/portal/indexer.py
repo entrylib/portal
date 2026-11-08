@@ -9,18 +9,25 @@ Static files, under the published directory:
     p/<key>@v<n>.json, p/<key>@v<n>.txt    every version
     p/<key>/versions.json                  versions, dates, status, notices, lab record links
     p/<key>/v<n>/lab.jsonl                 the registry's copy of a version's lab record
+    p/<key>/<claim>.json, .txt             the claim bundles of the current version (claimset spec §2.3)
+    p/<key>.html                           the current reading view as a minimal page, for a human given an ID
     index.jsonl                            one paper card per claimset, current versions
+    llms.txt                               the entry point for agents (reading.llms_txt)
+
+Each version's claims and paper get the weighted text full-text search runs on (design §7.2).
 """
 
 import json
 import os
+import re
 from pathlib import Path
 
+from claimset.claim import claim_bundle, render_claim
 from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import ids
+from . import ids, reading
 
 
 def _write(path, text):
@@ -33,6 +40,49 @@ def _write(path, text):
 
 def _is_assumption(claim):
     return any(isinstance(s, dict) and s.get("kind") == "assumption" for s in claim.get("support") or [])
+
+
+MARKED_TERM = re.compile(r"\[\[(D\d+):")
+TERM_MARKUP = re.compile(r"\[\[D\d+:([^\]]*)\]\]")
+
+
+def plain(statement):
+    """A statement as words, without its term markup: '[[D3:seasonal naive method]]' becomes 'seasonal naive
+    method', so search finds the words and not the IDs."""
+    return TERM_MARKUP.sub(r"\1", statement or "")
+
+
+def _strings(x):
+    """Every string in a value, in order."""
+    if isinstance(x, str):
+        return [x]
+    if isinstance(x, dict):
+        return [s for v in x.values() for s in _strings(v)]
+    if isinstance(x, list):
+        return [s for v in x for s in _strings(v)]
+    return []
+
+
+def claim_text(claim, defs):
+    """The text a claim is also found by (weight B): the terms of the definitions its statement and `about` cite,
+    and its scope."""
+    cited = MARKED_TERM.findall(claim.get("statement") or "")
+    cited += [v for v in _strings(claim.get("about")) if v in defs]
+    terms = [defs[d].get("term", "") for d in dict.fromkeys(cited) if d in defs]
+    return " ".join(terms + _strings(claim.get("scope")))
+
+
+def paper_texts(doc):
+    """The weighted texts a paper is found by: title (A); keywords and principal claims (B); every claim and
+    definition (C)."""
+    paper = doc["paper"]
+    claims = {c.get("id"): c for c in doc.get("claims") or [] if isinstance(c, dict)}
+    keywords = (paper.get("classification") or {}).get("keywords") or paper.get("keywords") or []
+    principal = [plain(claims[c].get("statement")) for c in paper.get("contributions") or [] if c in claims]
+    rest = [plain(c.get("statement")) for c in claims.values()]
+    rest += [f"{d.get('term', '')} {d.get('definition', '')}"
+             for d in doc.get("definitions") or [] if isinstance(d, dict)]
+    return paper.get("title", ""), " ".join(_strings(keywords) + principal), " ".join(rest)
 
 
 def _validation(registry, folder, n):
@@ -48,7 +98,12 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
     paper = doc["paper"]
     concept = paper["id"]
     key = ids.url_key(concept)
-    classifier = _validation(registry, folder, n).get("classifier")
+    validation = _validation(registry, folder, n)
+    classifier = validation.get("classifier")
+    warnings = (validation.get("submission") or {}).get("warnings") or []
+    defs = {d.get("id"): d for d in doc.get("definitions") or [] if isinstance(d, dict)}
+    title, keyword_text, rest_text = paper_texts(doc)
+    paper_c = f"{title} {keyword_text}"
     with conn.transaction():
         conn.execute(
             "INSERT INTO papers (concept_id, url_key, folder, current_version, title, status, first_published, updated)"
@@ -61,15 +116,25 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
             " updated = GREATEST(papers.updated, EXCLUDED.updated)",
             (concept, key, folder, n, paper["title"], paper["status"], paper["date"], paper["date"]))
         conn.execute("DELETE FROM versions WHERE concept_id = %s AND version = %s", (concept, n))
-        conn.execute("INSERT INTO versions (concept_id, version, published, status, hash, file, classifier)"
-                     " VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                     (concept, n, paper["date"], paper["status"], doc_hash(doc), Jsonb(doc), classifier))
+        conn.execute("INSERT INTO versions (concept_id, version, published, status, hash, file, classifier, warnings)"
+                     " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                     (concept, n, paper["date"], paper["status"], doc_hash(doc), Jsonb(doc), classifier,
+                      Jsonb(warnings)))
         with conn.cursor() as cur:
             cur.executemany(
-                "INSERT INTO claims (concept_id, version, claim_id, role, type, novelty, is_assumption, statement)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO claims (concept_id, version, claim_id, role, type, novelty, is_assumption, statement,"
+                " planning, support_kinds, search) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
+                " setweight(to_tsvector('english', %s), 'A') || setweight(to_tsvector('english', %s), 'B')"
+                " || setweight(to_tsvector('english', %s), 'C'))",
                 [(concept, n, c["id"], c.get("role"), c.get("type"), c.get("novelty"), _is_assumption(c),
-                  c.get("statement", "")) for c in doc.get("claims") or [] if isinstance(c, dict)])
+                  c.get("statement", ""), c.get("planning"),
+                  sorted({s.get("kind") for s in c.get("support") or [] if isinstance(s, dict) and s.get("kind")}),
+                  plain(c.get("statement")), claim_text(c, defs), paper_c)
+                 for c in doc.get("claims") or [] if isinstance(c, dict)])
+        conn.execute("UPDATE papers SET licence = %s, search = setweight(to_tsvector('english', %s), 'A')"
+                     " || setweight(to_tsvector('english', %s), 'B') || setweight(to_tsvector('english', %s), 'C')"
+                     " WHERE concept_id = %s AND current_version = %s",
+                     (paper.get("licence"), title, keyword_text, rest_text, concept, n))
     write_static(conn, registry, folder, published_dir, base_url)
 
 
@@ -90,6 +155,8 @@ def write_static(conn, registry, folder, published_dir, base_url):
         if n == versions[-1]:
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
+            _write(p / f"{key}.html", reading.html_page(f"{doc['paper']['id']}@v{n}", view))
+            write_bundles(p / key, doc)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab = {}
         if lab_copy.exists():
@@ -116,6 +183,19 @@ def write_static(conn, registry, folder, published_dir, base_url):
     write_index(conn, published_dir, base_url)
 
 
+def write_bundles(directory, doc):
+    """The claim bundles of a version, replacing those of the version before (whose claims may differ)."""
+    directory = Path(directory)
+    for old in directory.glob("C*.*") if directory.exists() else []:
+        if re.fullmatch(r"C\d+\.(json|txt)", old.name):
+            old.unlink()
+    for c in doc.get("claims") or []:
+        cid = c.get("id") if isinstance(c, dict) else None
+        if isinstance(cid, str) and re.fullmatch(r"C\d+", cid):
+            _write(directory / f"{cid}.json", json.dumps(claim_bundle(doc, cid), indent=1, ensure_ascii=False) + "\n")
+            _write(directory / f"{cid}.txt", render_claim(doc, cid))
+
+
 def paper_card(doc, base_url):
     """A search result card, made mechanically from the file (PLT-79)."""
     paper = doc["paper"]
@@ -135,6 +215,7 @@ def write_index(conn, published_dir, base_url):
                         " ORDER BY p.first_published, p.concept_id").fetchall()
     lines = [json.dumps(paper_card(r[0], base_url), ensure_ascii=False) for r in rows]
     _write(Path(published_dir) / "index.jsonl", "".join(line + "\n" for line in lines))
+    _write(Path(published_dir) / "llms.txt", reading.llms_txt(base_url))
 
 
 def reindex(conn, registry, published_dir, base_url):

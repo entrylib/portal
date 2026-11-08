@@ -6,7 +6,7 @@ import subprocess
 import pytest
 from claimset.lab.core import Lab
 from claimset.validate import validate
-from test_publish import example
+from publishing import example
 
 from portal.check import check
 from portal.registry import Registry, dump

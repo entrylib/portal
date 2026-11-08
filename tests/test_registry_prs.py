@@ -8,8 +8,8 @@ import urllib.parse
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
+from publishing import example, fake_classifier
 from test_consent import GUARANTOR, FakeOrcid
-from test_publish import example, fake_classifier
 
 from portal import archive, worker
 from portal.app import create_app

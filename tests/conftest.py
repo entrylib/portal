@@ -41,3 +41,19 @@ def client(settings):
             yield c
     finally:
         pool.close()
+
+
+@pytest.fixture
+def env(database_url, tmp_path):
+    """A migrated database (an autocommit connection), a registry and a published directory, for publishing."""
+    from publishing import BASE, TODAY, fake_classifier
+
+    from portal.registry import Registry
+    from portal.storage import FileStore
+    migrate(database_url)
+    conn = psycopg.connect(database_url, autocommit=True)
+    published = tmp_path / "published"
+    ctx = {"conn": conn, "registry": Registry(tmp_path / "registry").init(), "store": FileStore(published, BASE),
+           "classifier": fake_classifier, "published_dir": published, "base_url": BASE, "today": TODAY}
+    yield ctx, tmp_path
+    conn.close()

@@ -2,46 +2,15 @@ import copy
 import datetime as dt
 import json
 
-import psycopg
 import pytest
 from claimset.package import build
 from claimset.validate import validate
+from publishing import BASE, example, write
 
-from portal.classify import Classification, classifier_input
-from portal.db import migrate
+from portal.classify import classifier_input
 from portal.indexer import reindex
 from portal.publish import PublishError, publish
 from portal.registry import Registry
-from portal.storage import FileStore
-
-BASE = "https://entrylib.test"
-TODAY = dt.date(2026, 11, 4)
-
-
-def example(name="submission-native.json"):
-    from importlib import resources
-    return json.loads((resources.files("claimset") / "data" / "examples" / name).read_text(encoding="utf-8"))
-
-
-def fake_classifier(doc):
-    return Classification("openalex:subfields/1803", ("openalex:T10001", "openalex:T10002"), "fake-classifier@1")
-
-
-@pytest.fixture
-def env(database_url, tmp_path):
-    migrate(database_url)
-    conn = psycopg.connect(database_url, autocommit=True)
-    published = tmp_path / "published"
-    ctx = {"conn": conn, "registry": Registry(tmp_path / "registry").init(), "store": FileStore(published, BASE),
-           "classifier": fake_classifier, "published_dir": published, "base_url": BASE, "today": TODAY}
-    yield ctx, tmp_path
-    conn.close()
-
-
-def write(tmp_path, doc, name="paper.claimset.json"):
-    p = tmp_path / name
-    p.write_text(json.dumps(doc), encoding="utf-8")
-    return p
 
 
 def test_publish_a_claimset_file(env):

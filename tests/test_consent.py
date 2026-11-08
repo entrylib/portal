@@ -5,7 +5,7 @@ import urllib.parse
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
-from test_publish import example, fake_classifier
+from publishing import example, fake_classifier
 
 from portal import consent
 from portal.app import create_app
