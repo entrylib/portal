@@ -164,18 +164,18 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 | `/p/2026.000001@v1.json`, `@v1.txt` | A given version |
 | `/p/2026.000001/versions.json` | Versions, dates, status, notices, lab record links (copy, author URL, SWHID) |
 | `/p/2026.000001/v1/lab.jsonl` | The registry's copy of a version's lab record |
-| `/p/2026.000001/C4.txt`, `.json` | Claim bundle (PLT-78); needs a single-claim renderer in the package (step 7) |
-| `/p/2026.000001` | The reading view as minimal HTML, so a human given an ID sees something |
+| `/p/2026.000001/C4.txt`, `.json` | Claim bundle of the current version (PLT-78): the claim with what it rests on, made by the claimset package (claimset spec §2.3, `claimset render --claim C4`) |
+| `/p/2026.000001` | The reading view as minimal HTML, so a human given an ID sees something: the text escaped, in a page with no scripts |
 | `/index.jsonl` | One line per claimset: ID, title, principal claims, keywords, current version (paper cards, PLT-79) |
 
-Rendered views are produced by the platform, never submitted. Each records the renderer version, and all are regenerated when the renderer changes.
+Rendered views are produced by the platform, never submitted. Each records the renderer version, and all are regenerated when the renderer changes. All of these files, `/llms.txt` included, are written at publication (and by `reindex`) and served by Caddy; the app serves only the search API and the MCP server.
 
 ### 7.2 Search API
 
 - `GET /api/search/claims?q=…` with filters on closed vocabularies: claim type, role, novelty label, planning, support kind, assumption check, licence (PLT-72, partly).
 - `GET /api/search/papers?q=…`.
-- `GET /api/related/{id}`: nearest claimsets by paper-card embedding.
-- Ranking is hybrid: Postgres full text combined with vector similarity over each claim's statement and rendered scope (PLT-73).
+- Ranking at launch is Postgres full-text search: words reduced to their stems and matched against weighted text. For a claim: its statement first, then the terms of the definitions it cites and its scope, then the paper's title and keywords. For a paper: its title first, then its keywords and principal claims, then all its claims and definitions. Only current versions are searched.
+- Embeddings (vector similarity over each claim's statement and scope, combined with full text) and `GET /api/related/{id}` come after launch, when there are enough claimsets for meaning to matter more than words (PLT-73). They need no change to the format or to the API's results; pgvector is already in the database.
 - Every result carries the version, its status and notices, and its validator warnings (PLT-13, PLT-74 in part).
 
 ### 7.3 MCP server
@@ -245,5 +245,5 @@ Changed by this design: PLT-1 and PLT-3 to PLT-5 (accounts and agent tokens) are
 3. **Several guarantors.** Whether 48 hours is enough when guarantors are in different time zones, or whether the window restarts when the first confirms.
 4. **ORCID works.** Writing works to ORCID records needs ORCID membership. Until v3 brings DOIs and DataCite auto-update, guarantors add claimsets to their records by hand; the consent page says how.
 5. **Legal removal policy:** who decides, the response time, and the tombstone format.
-6. **Embedding model:** which one, and when to re-embed if it changes.
+6. **Embedding model:** settled for launch: none; search is full text (§7.2). Which model, and when to re-embed if it changes, is decided when embeddings are added.
 7. **Related work.** A head-to-head comparison with Knows (knows.academy), aiXiv and paper.json before any funding application.

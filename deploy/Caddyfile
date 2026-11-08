@@ -6,6 +6,9 @@
 	handle @published {
 		root * /srv/published
 		header X-Content-Type-Options nosniff
+		# /p/<id> is the reading view as a minimal page (p/<id>.html): escaped text, no scripts, nothing loaded.
+		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+		try_files {path} {path}.html
 		file_server
 	}
 

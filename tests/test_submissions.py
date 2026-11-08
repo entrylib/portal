@@ -4,7 +4,7 @@ import json
 import psycopg
 import pytest
 from claimset.package import build
-from test_publish import example
+from publishing import example
 
 from portal import submissions
 from portal.screening import screen
@@ -216,7 +216,7 @@ def test_expiry_deletes_content_and_later_the_record(client, settings, database_
 
 
 def test_converted_claimsets_are_not_taken(client):
-    from test_publish import example as ex
+    from publishing import example as ex
     doc = ex()
     doc["paper"].pop("autonomy")
     doc["paper"]["origin"] = "converted"

@@ -1,4 +1,4 @@
-"""The web application: one FastAPI app serving the API, consent pages, search and (later) the MCP server.
+"""The web application: one FastAPI app serving the API, consent pages, the search API and (later) the MCP server.
 
 Published files (`/p/...`, `/index.jsonl`, `/llms.txt`, `/files/...`) are static and served by Caddy from the
 published directory; the app does not serve them in production.
@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, consent, pages, submissions, worker
+from . import __version__, consent, pages, search, submissions, worker
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -254,5 +254,29 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         if out is None:
             return _error(404, "no such submission (submissions are forgotten 14 days after they close)")
         return out
+
+    @app.get("/api/search/claims", tags=["search"])
+    def search_claims(q: str = "", type: str | None = None, role: str | None = None, novelty: str | None = None,
+                      planning: str | None = None, support: str | None = None, assumption: str | None = None,
+                      licence: str | None = None, limit: int = 10, offset: int = 0):
+        """Claims of current versions matching the words in q, best match first (full-text search, design §7.2).
+        Filters take values of the claimset specification's vocabularies. Each result carries its version, status,
+        status notice and validator warnings, and links to the claim's bundle."""
+        try:
+            with pool.connection() as conn:
+                return search.search_claims(conn, settings.base_url, q, limit, offset, type=type, role=role,
+                                            novelty=novelty, planning=planning, support=support,
+                                            assumption=assumption, licence=licence)
+        except search.SearchError as exc:
+            return _error(400, str(exc))
+
+    @app.get("/api/search/papers", tags=["search"])
+    def search_papers(q: str = "", licence: str | None = None, limit: int = 10, offset: int = 0):
+        """Claimsets whose current versions match the words in q, best match first, as paper cards."""
+        try:
+            with pool.connection() as conn:
+                return search.search_papers(conn, settings.base_url, q, limit, offset, licence=licence)
+        except search.SearchError as exc:
+            return _error(400, str(exc))
 
     return app
