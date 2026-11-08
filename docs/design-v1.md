@@ -1,6 +1,6 @@
 # EntryLib portal — v1 design (draft)
 
-Status: working draft · Date: 2026-11-04 · Companion to `platform/requirements.md`, the claimset specification (v0.37), the lab record specification (v0.15) and the revision specification (v0.5)
+Status: working draft · Date: 2026-11-07 · Companion to `platform/requirements.md`, the claimset specification (v0.39), the lab record specification (v0.20) and the revision specification (v0.6)
 
 This document fixes what the first version of the portal does, how it is built and what it leaves for later versions. Requirements are cited by their `PLT-` IDs.
 
@@ -15,6 +15,19 @@ This document fixes what the first version of the portal does, how it is built a
 | v5 | Claim graph, contradiction detection |
 
 v1 keeps room for v2: versions, the review folder of the registry and the review fields of responses exist from the start, empty.
+
+**Format extensions** (claimset spec §2.7) are written after v1 launches, beside the versions above; the portal needs no change for them, since it works with whatever claimset it is given. The field trials (claimset-eval, `claimset/trials/`) set the order: `preregistration`, `trial`, `wet-lab`, `synthesis`, `ecology-field`, `behavioural-experiment`, `particle-physics`, `archival`, then others as papers need them (claimset `spec/extensions/candidates.md`). Until an extension exists, a paper that needs it records what the core can hold.
+
+**v1, the steps left before launch:** 7, reading (§7.1 URLs, `/index.jsonl`, the search API of §7.2, claim bundles with a single-claim renderer in the claimset package); 8, the MCP server (§7.3); 9, `claimset submit` and `claimset status` and the `claimset-submit` skill's last steps (§4.3, §12); 10, deployment and launch (§13): production ORCID, the app behind Caddy, the daily restart, and setting the claimset baseline (claimset spec §2.6).
+
+**The format and the lab record,** beside the portal's versions (work in the claimset repository), in the order they will be taken:
+
+1. *Data-collection sessions.* Interviews, focus groups and observations have no lab event yet, the largest gap left for qualitative research: a session event (who took part, pseudonymised; when; where or by what channel; who ran it), consent (what was agreed and what it allows; a session without recorded consent cannot be quoted in an export), the recording kept private as private sources are, and the transcript captured as a source. Open: how much of the consent form and protocol goes into the record, and how withdrawal of consent is recorded. Design before code.
+2. *Independent timestamps (RFC 3161).* Anchoring a record's state with an outside timestamp authority beside the platform's receipts. Needs a decision on the provider or providers, and on whether it replaces or adds to platform receipts (lab record spec §11, question 1); the end-to-end test needs a machine that can reach the authority.
+3. *PyPI release* of the `claimset` package, so `pip install claimset` works: packaging and a release workflow; the PyPI account and first upload are the maintainer's.
+4. *Smaller questions of the lab record spec (§11),* each waiting for a study that needs it: storage of large run outputs, summarised export of very long explorations, and whether abandoned hypotheses with substantial evidence can be exported as claims.
+
+**Parked until the portal is live and runs well: collaboration.** Several guarantors, each with their own agents (possibly from different providers), working on one study: how their agents exchange work and messages and how that is recorded; who may see what and when (blind tasks, private sources, unpublished results); how the portal hosts a shared study and records and settles disagreements. Its first case is blind second coding: a reliability round declared before anyone codes (codebook version, sample, coders, unit, agreement measure, optional threshold); coders seal their codings by hash before seeing others'; the tool hides others' codings during the round and records how coders were kept apart (`tool_view`, `separate_checkout`, `separate_sessions`); agreement from a built-in counter (percent agreement, Krippendorff's alpha, Cohen's kappa); disagreements settled in a recorded consensus pass; and a `reliability` object on qualitative evidence in the claimset, replacing the single-coder limitation. Open: the unit of coding, whether separation is only recorded or enforced, and whether a plan may require a threshold.
 
 ## 2. Principles
 
