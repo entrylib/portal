@@ -79,8 +79,9 @@ Tests that need the database are skipped when `TEST_DATABASE_URL` is not set; CI
 | `src/portal/` | The app (`app.py`), settings (`config.py`), database and migrations (`db.py`, `migrations/`), command line (`cli.py`), publication (`publish.py`), the registry (`registry.py`), the index and static files (`indexer.py`), identifiers (`ids.py`), file store (`storage.py`), classification client (`classify.py`) |
 | `classifier/` | The classifier service: OpenAlex's open topic model, its own image |
 | `deploy/Caddyfile` | HTTPS, static published files, proxy to the app |
+| `deploy/cloud-init.yaml`, `deploy/server-setup.sh`, `deploy/launch.sh` | Setting up the server and starting the portal on it: see `docs/deploy.md` |
 | `compose.yaml`, `Dockerfile` | The deployment: app, PostgreSQL with pgvector, Caddy |
-| `docs/` | Design documents |
+| `docs/` | Design documents; `docs/deploy.md`, putting the portal on entrylib.org |
 
 ## Licence
 

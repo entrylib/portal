@@ -1,0 +1,11 @@
+#cloud-config
+# Paste this into "User data" when creating the DigitalOcean Droplet (Ubuntu 24.04), docs/deploy.md. It fetches the
+# portal and runs deploy/server-setup.sh, which prepares the server; it does not start the portal.
+# Progress: /var/log/cloud-init-output.log on the server.
+package_update: true
+packages:
+  - git
+runcmd:
+  - mkdir -p /opt/entrylib
+  - git clone -q https://github.com/entrylib/portal /opt/entrylib/portal
+  - bash /opt/entrylib/portal/deploy/server-setup.sh

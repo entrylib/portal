@@ -248,7 +248,7 @@ GitHub is the place where the record is published and the checks are logged, not
 
 ## 13. Hosting
 
-One DigitalOcean Droplet in the London region with at least 4 GB RAM, running Docker Compose: the app, PostgreSQL with pgvector, and Caddy for HTTPS and static files. DigitalOcean's daily Droplet backups (crash-consistent disk images of everything on the Droplet: database, packaged files, pending submissions; volumes are not included, so nothing is kept on one). The published record is also the registry on GitHub, from which `reindex` rebuilds the database. DigitalOcean Spaces may later store packaged files. Cloudflare's free tier in front for DDoS protection and edge rate limits. DigitalOcean's managed PostgreSQL supports pgvector, so the database can move there later without code changes.
+One DigitalOcean Droplet in the London region with at least 4 GB RAM, set up by `deploy/cloud-init.yaml` and `deploy/server-setup.sh` and started by `deploy/launch.sh` (`docs/deploy.md`), running Docker Compose: the app, PostgreSQL with pgvector, and Caddy for HTTPS and static files. DigitalOcean's daily Droplet backups (crash-consistent disk images of everything on the Droplet: database, packaged files, pending submissions; volumes are not included, so nothing is kept on one). The published record is also the registry on GitHub, from which `reindex` rebuilds the database. DigitalOcean Spaces may later store packaged files. Cloudflare's free tier in front for DDoS protection and edge rate limits. DigitalOcean's managed PostgreSQL supports pgvector, so the database can move there later without code changes.
 
 ## 14. Requirements covered
 
