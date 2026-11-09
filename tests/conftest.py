@@ -57,3 +57,26 @@ def env(database_url, tmp_path):
            "classifier": fake_classifier, "published_dir": published, "base_url": BASE, "today": TODAY}
     yield ctx, tmp_path
     conn.close()
+
+
+@pytest.fixture
+def app_client(settings):
+    """The app with a local registry, a fake classifier and a fake ORCID (test_consent.FakeOrcid)."""
+    from fastapi.testclient import TestClient
+    from publishing import fake_classifier
+    from test_consent import FakeOrcid
+
+    from portal.app import create_app
+    from portal.registry import Registry
+    from portal.storage import FileStore
+    migrate(settings.database_url)
+    pool = make_pool(settings.database_url, min_size=1, max_size=3)
+    pool.open()
+    publisher = {"registry": Registry(settings.registry_dir).init(),
+                 "store": FileStore(settings.published_dir, settings.base_url), "classifier": fake_classifier}
+    try:
+        with TestClient(create_app(settings, pool=pool, run_expiry=False, orcid=FakeOrcid(), publisher=publisher),
+                        follow_redirects=False) as c:
+            yield c
+    finally:
+        pool.close()

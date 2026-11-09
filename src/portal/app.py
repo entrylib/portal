@@ -1,4 +1,5 @@
-"""The web application: one FastAPI app serving the API, consent pages, the search API and (later) the MCP server.
+"""The web application: one FastAPI app serving the API, consent pages, the upload page, the search API and the MCP
+server (/mcp).
 
 Published files (`/p/...`, `/index.jsonl`, `/llms.txt`, `/files/...`) are static and served by Caddy from the
 published directory; the app does not serve them in production.
@@ -14,11 +15,11 @@ from importlib import resources
 from pathlib import Path
 
 import claimset
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import Body, FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, consent, pages, search, submissions, worker
+from . import __version__, consent, fetch, mcp_server, pages, search, submissions, worker
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -27,6 +28,10 @@ log = logging.getLogger("portal")
 
 #: How often pending submissions past their consent window are deleted.
 EXPIRY_INTERVAL_SECONDS = 600
+
+#: The upload page runs only its own script and sends only to this site; nothing submitted is rendered.
+UPLOAD_PAGE_CSP = ("default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; "
+                   "form-action 'none'; frame-ancestors 'none'; base-uri 'none'")
 
 
 class UploadTooLarge(Exception):
@@ -50,6 +55,18 @@ async def _save_body(request, directory):
         raise
     fh.close()
     return Path(fh.name), size
+
+
+def _client_ip(request):
+    host = request.client.host if request.client else None
+    try:
+        return str(ipaddress.ip_address(host)) if host else None
+    except ValueError:                                      # not an address (the test client): no per-address cap
+        return None
+
+
+def _static(name):
+    return (resources.files("portal") / "static" / name).read_text(encoding="utf-8")
 
 
 def _error(status, message, errors=(), warnings=()):
@@ -91,6 +108,15 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                                  f"{settings.base_url}/consent/callback")
     publisher_ctx = {}
 
+    def receive(path, client_ip, new_paper=False):
+        """Receive a submission file: the same for every route (design §4.4). Raises SubmissionError."""
+        with pool.connection() as conn:
+            return submissions.receive(conn, path, submissions_dir=settings.submissions_dir,
+                                       base_url=settings.base_url, client_ip=client_ip, new_paper=new_paper)
+
+    mcp = mcp_server.build(mcp_server.Portal(settings, pool, receive))
+    mcp_app = mcp_server.http_app(mcp)
+
     def publish_now():
         if not publisher_ctx:
             publisher_ctx.update(publisher or _publisher(settings))
@@ -119,7 +145,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             pool.open()
         task = asyncio.create_task(expiry_loop()) if run_expiry else None
         try:
-            yield
+            async with mcp.session_manager.run():
+                yield
         finally:
             if task:
                 task.cancel()
@@ -148,7 +175,17 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def home():
-        return (resources.files("portal") / "static" / "index.html").read_text(encoding="utf-8")
+        return _static("index.html")
+
+    @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
+    def upload_page():
+        """The upload page (design §4.4): a file picker whose script posts the file to /api/submissions."""
+        return HTMLResponse(_static("submit.html"), headers={"Content-Security-Policy": UPLOAD_PAGE_CSP})
+
+    @app.get("/submit.js", include_in_schema=False)
+    def upload_script():
+        return Response(_static("submit.js"), media_type="text/javascript",
+                        headers={"Content-Security-Policy": UPLOAD_PAGE_CSP})
 
     @app.post("/api/validate", tags=["submissions"])
     async def validate(request: Request):
@@ -164,34 +201,42 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             path.unlink(missing_ok=True)
         return result.as_json()
 
+    async def _receive(path, request, new_paper):
+        try:
+            return await run_in_threadpool(receive, path, _client_ip(request), new_paper)
+        except submissions.SubmissionError as exc:
+            return _error(exc.status, str(exc), exc.errors, exc.warnings)
+        finally:
+            path.unlink(missing_ok=True)
+
     @app.post("/api/submissions", status_code=201, tags=["submissions"])
-    async def submit(request: Request):
+    async def submit(request: Request, new_paper: bool = False):
         """Submit a claimset file (JSON) or a submission package (BagIt zip, `claimset package`) as the request body:
         `curl --data-binary @paper.zip -H 'Content-Type: application/zip' <portal>/api/submissions`.
 
         A valid submission is held for 48 hours. The response gives one consent link per guarantor: pass each to
         its guarantor, who signs in with ORCID and confirms. The links are shown only in this response. Once every
-        guarantor has confirmed, the claimset is published."""
+        guarantor has confirmed, the claimset is published.
+
+        A new version of a published claimset sets `paper.id` to its identifier. A new claimset with the same title
+        and guarantor as one already on EntryLib is refused (409) unless `new_paper=true` says it is a different
+        paper."""
         try:
             path, _ = await _save_body(request, uploads)
         except UploadTooLarge:
             return _error(413, f"larger than {submissions.MAX_UPLOAD_BYTES} bytes")
-        client = request.client.host if request.client else None
-        try:
-            client = str(ipaddress.ip_address(client)) if client else None
-        except ValueError:                                  # not an address (the test client): no per-address cap
-            client = None
+        return await _receive(path, request, new_paper)
 
-        def work():
-            with pool.connection() as conn:
-                return submissions.receive(conn, path, submissions_dir=settings.submissions_dir,
-                                           base_url=settings.base_url, client_ip=client)
+    @app.post("/api/submissions/from-url", status_code=201, tags=["submissions"])
+    async def submit_from_url(request: Request, url: str = Body(..., embed=True), new_paper: bool = False):
+        """Submit a package or a claimset file deposited at a public https URL (Zenodo, GitHub, a repository):
+        `{"url": "https://..."}`. The portal fetches it (at most 210 MB, 5 redirects, 120 seconds) and checks it as
+        an upload. The response is that of POST /api/submissions."""
         try:
-            return await run_in_threadpool(work)
-        except submissions.SubmissionError as exc:
-            return _error(exc.status, str(exc), exc.errors, exc.warnings)
-        finally:
-            path.unlink(missing_ok=True)
+            path = await run_in_threadpool(fetch.download, url, uploads)
+        except fetch.FetchError as exc:
+            return _error(422, f"cannot fetch the URL: {exc}")
+        return await _receive(path, request, new_paper)
 
     @app.get("/consent/callback", response_class=HTMLResponse, include_in_schema=False)
     async def consent_callback(state: str = "", code: str = "", error: str = ""):
@@ -210,7 +255,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         outcome = await run_in_threadpool(work)
         status_url = f"{settings.base_url}/api/submissions/{outcome.submission}" if outcome.submission else None
         if outcome.result != "confirmed":
-            code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409}.get(outcome.result, 400)
+            code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
             return HTMLResponse(pages.message("Not confirmed", outcome.message, status_url), status_code=code_)
         try:
             done = dict(await run_in_threadpool(publish_now))
@@ -258,7 +303,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
     @app.get("/api/search/claims", tags=["search"])
     def search_claims(q: str = "", type: str | None = None, role: str | None = None, novelty: str | None = None,
                       planning: str | None = None, support: str | None = None, assumption: str | None = None,
-                      licence: str | None = None, limit: int = 10, offset: int = 0):
+                      licence: str | None = None, guarantor: str | None = None, limit: int = 10, offset: int = 0):
         """Claims of current versions matching the words in q, best match first (full-text search, design §7.2).
         Filters take values of the claimset specification's vocabularies. Each result carries its version, status,
         status notice and validator warnings, and links to the claim's bundle."""
@@ -266,17 +311,21 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             with pool.connection() as conn:
                 return search.search_claims(conn, settings.base_url, q, limit, offset, type=type, role=role,
                                             novelty=novelty, planning=planning, support=support,
-                                            assumption=assumption, licence=licence)
+                                            assumption=assumption, licence=licence, guarantor=guarantor)
         except search.SearchError as exc:
             return _error(400, str(exc))
 
     @app.get("/api/search/papers", tags=["search"])
-    def search_papers(q: str = "", licence: str | None = None, limit: int = 10, offset: int = 0):
-        """Claimsets whose current versions match the words in q, best match first, as paper cards."""
+    def search_papers(q: str = "", licence: str | None = None, guarantor: str | None = None, limit: int = 10,
+                      offset: int = 0):
+        """Claimsets whose current versions match the words in q, best match first, as paper cards. With `guarantor`
+        (an ORCID iD) and no q: that guarantor's claimsets, most recently updated first."""
         try:
             with pool.connection() as conn:
-                return search.search_papers(conn, settings.base_url, q, limit, offset, licence=licence)
+                return search.search_papers(conn, settings.base_url, q, limit, offset, licence=licence,
+                                            guarantor=guarantor)
         except search.SearchError as exc:
             return _error(400, str(exc))
 
+    app.router.routes.extend(mcp_app.routes)                # /mcp; its session manager runs in the lifespan
     return app

@@ -6,7 +6,7 @@ writes the weights: indexer.claim_text, indexer.paper_texts). Filters run on the
 specification, which the claimset package defines; a value outside them is refused rather than matching nothing.
 """
 
-from claimset.validate import ENUM
+from claimset.validate import ENUM, ORCID_RE
 
 from . import ids
 
@@ -47,6 +47,13 @@ def _vocabulary(name, value, enum):
     return value
 
 
+def _guarantor(value):
+    value = str(value).strip().removeprefix("https://orcid.org/")
+    if not ORCID_RE.match(value):
+        raise SearchError("guarantor: an ORCID iD like 0000-0002-1825-0097")
+    return value
+
+
 def _version_fields(row_paper_id, version, status, file, warnings, base_url):
     paper = file.get("paper") or {}
     key = ids.url_key(row_paper_id)
@@ -79,6 +86,9 @@ def search_claims(conn, base_url, q, limit=10, offset=0, **filters):
     if filters.get("licence") is not None:
         where.append("p.licence = %s")
         args.append(filters["licence"])
+    if filters.get("guarantor") is not None:
+        where.append("%s = ANY(p.guarantors)")
+        args.append(_guarantor(filters["guarantor"]))
     extra = "".join(f" AND {w}" for w in where)
     rows = conn.execute(
         "WITH query AS (SELECT websearch_to_tsquery('english', %s) AS tsq)"
@@ -103,25 +113,41 @@ def search_claims(conn, base_url, q, limit=10, offset=0, **filters):
     return {"query": q, "limit": limit, "offset": offset, "results": results}
 
 
-def search_papers(conn, base_url, q, limit=10, offset=0, licence=None):
-    """Claimsets whose current versions match q, best first, as paper cards."""
+def search_papers(conn, base_url, q, limit=10, offset=0, licence=None, guarantor=None):
+    """Claimsets whose current versions match q, best first, as paper cards. With a guarantor and no q: that
+    guarantor's claimsets, most recently updated first (an author finding the claimset to correct, design §4.5)."""
     from .indexer import paper_card
-    q = _query(q)
+    if guarantor is not None and not (q or "").strip():
+        q = None
+    else:
+        q = _query(q)
     limit, offset = _page(limit, offset)
-    where, args = "", [q]
+    where, args = [], []
     if licence is not None:
-        where, args = " AND p.licence = %s", args + [licence]
-    rows = conn.execute(
-        "WITH query AS (SELECT websearch_to_tsquery('english', %s) AS tsq)"
-        " SELECT p.concept_id, p.current_version, v.status, v.file, v.warnings, ts_rank_cd(p.search, query.tsq)"
-        " FROM papers p JOIN versions v ON v.concept_id = p.concept_id AND v.version = p.current_version, query"
-        f" WHERE p.search @@ query.tsq{where}"
-        " ORDER BY 6 DESC, p.concept_id LIMIT %s OFFSET %s",
-        args + [limit, offset]).fetchall()
+        where.append("p.licence = %s")
+        args.append(licence)
+    if guarantor is not None:
+        where.append("%s = ANY(p.guarantors)")
+        args.append(_guarantor(guarantor))
+    if q is None:
+        rows = conn.execute(
+            "SELECT p.concept_id, p.current_version, v.status, v.file, v.warnings, NULL"
+            " FROM papers p JOIN versions v ON v.concept_id = p.concept_id AND v.version = p.current_version"
+            f" WHERE {' AND '.join(where)} ORDER BY p.updated DESC, p.concept_id DESC LIMIT %s OFFSET %s",
+            args + [limit, offset]).fetchall()
+    else:
+        rows = conn.execute(
+            "WITH query AS (SELECT websearch_to_tsquery('english', %s) AS tsq)"
+            " SELECT p.concept_id, p.current_version, v.status, v.file, v.warnings, ts_rank_cd(p.search, query.tsq)"
+            " FROM papers p JOIN versions v ON v.concept_id = p.concept_id AND v.version = p.current_version, query"
+            f" WHERE p.search @@ query.tsq{''.join(f' AND {w}' for w in where)}"
+            " ORDER BY 6 DESC, p.concept_id LIMIT %s OFFSET %s",
+            [q] + args + [limit, offset]).fetchall()
     results = []
     for concept, version, status, file, warnings, rank in rows:
         card = paper_card(file, base_url)
         card.update(_version_fields(concept, version, status, file, warnings, base_url))
-        card["rank"] = round(float(rank), 6)
+        if rank is not None:
+            card["rank"] = round(float(rank), 6)
         results.append(card)
     return {"query": q, "limit": limit, "offset": offset, "results": results}
