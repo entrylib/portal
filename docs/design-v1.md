@@ -35,7 +35,7 @@ agent ──zip──▶ API (FastAPI) ──▶ validator + deterministic scree
                                                 │
 guarantor ──ORCID sign-in──▶ consent page ──────┘
                                                 ▼
-                         bot opens PR on registry ──▶ CI: validator, lab chain, LLM screening
+                         bot opens PR on registry ──▶ CI: validator, lab chain, screening
                                                 ▼ (green)
                          merge + tag ──▶ static files (JSON, MD) + search index + archive requests
                                                 ▼
@@ -43,7 +43,7 @@ guarantor ──ORCID sign-in──▶ consent page ──────┘
 ```
 
 - **App:** Python, FastAPI. One process serving the submission API, consent pages, search API and MCP server. It calls the `claimset` package for validation, rendering, verifiability and patches; it never reimplements the spec.
-- **Database:** PostgreSQL with pgvector. Pending submissions, consents, rate-limit counters, the search index (full text and embeddings), and each published version's file as `jsonb`.
+- **Database:** PostgreSQL with pgvector. Pending submissions, consents, the search index (full text and embeddings), and each published version's file as `jsonb`.
 - **Static files:** every published file and its rendered views, generated at publication and served directly by Caddy. Most read traffic touches no application code.
 - **Packaged files:** stored by checksum and served as downloads at `/files/<sha256>`; a folder beside the static files now, object storage (DigitalOcean Spaces) later.
 - **Classifier:** a separate service running OpenAlex's open topic model (§5.4).
@@ -151,12 +151,12 @@ The platform assigns each version the OpenAlex subfield and 1–3 topics (claims
 |---|---|---|
 | Package limits, validator, deterministic screening | Synchronously, on every submission | CPU only |
 | `portal check` on the registry PR: only one new version folder added and nothing changed or deleted (append-only); identifier, folder and version consistent (next version, `previous_version`); validator in published-file mode; deterministic screening; lab record hash chain (lab record §6) | On the registry PR, by the registry's GitHub Actions, which install the current portal and the newest claimset | CPU only |
-| LLM screening | On the registry PR, so only after consent | Built but off in v1: a provider is chosen before launch. A small model; on the order of cents per claimset |
+| LLM screening | On the registry PR, so only after consent | Built, but v1 launches without it (decided 2026-11-09): deterministic screening only. A small model, on the order of cents per claimset, when switched on |
 
 **Safe-ingest screening (PLT-18).** Every free-text field is screened for content addressed to reading models, since EntryLib exists to place submitted text in other models' contexts.
 
 - Deterministic rules (`screening-1`, codes SI1–SI4): invisible and direction-changing Unicode (zero-width joiners, which ordinary scripts need, are allowed); text addressed to a reading model (role markers, "ignore previous instructions" and the like); long encoded runs; links in claim statements. They add to the `claimset` validator's own narrower check (error `safe-ingest`). Homoglyph runs are not yet checked.
-- LLM classifier: the fields are given to a small model as data, with a public prompt, which reports any instruction, persuasion aimed at models, or non-research content.
+- LLM classifier (off at launch): the fields are given to a small model as data, with a public prompt, which reports any instruction, persuasion aimed at models, or non-research content.
 
 A failure blocks publication and is reported to the submitter. Screening rules and the prompt are public and versioned, and each published version records the screening version that passed it.
 
@@ -202,11 +202,16 @@ Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT
 | Consent window | 48 hours, then deletion |
 | New claimsets | 2 per ORCID iD per week, counted against every confirming guarantor |
 | New versions (corrections now, revisions from v2) | 3 per claimset per day |
-| Pending submissions | capped per IP address |
-| Read API and MCP | per-IP rate limits at the edge (Cloudflare) and in the app |
+| Pending submissions | 5 per address at once |
+| Reads: search, submission status, every MCP request | 120 per minute per address |
+| Validation (`/api/validate`, MCP `validate`) | 30 per hour per address |
+| Submissions (`/api/submissions`, MCP `submit`) | 20 per hour per address |
+| Submissions by URL (`/api/submissions/from-url`, MCP `submit` with `package_url`) | 10 per hour per address, and 2 downloads at once across everyone |
 | Package size | rule 77: 200 files, 50 MB a file, 200 MB in all |
 
-ORCID iDs found abusing the service can be suspended (PLT-94). LLM screening runs only after consent, so unconfirmed spam costs validation only.
+- The per-address limits are token buckets kept in the app's memory (`ratelimit.py`): the app is one process, and a restart only forgets them. A request over a limit gets 429 with `Retry-After`; a download refused because two are running gets 503. Cloudflare limits at the edge as well, but only the app knows what a request costs.
+- The address is the client's, not Cloudflare's: Caddy takes it from `CF-Connecting-IP` on requests from Cloudflare's address ranges only, and passes the app that one address in `X-Forwarded-For`, so it cannot be forged by sending the header or by going around Cloudflare. The ranges are in the Caddyfile; they change rarely and are updated by hand.
+- ORCID iDs found abusing the service can be suspended (PLT-94). Consent is needed before anything is published, so unconfirmed spam costs validation only.
 
 ## 9. Notices and legal removal
 
@@ -221,7 +226,7 @@ The one exception is legal: personal data, infringing or unlawful content. Such 
 - The portal acts on GitHub as the EntryLib GitHub App, installed on the registry only, with contents and pull requests write access. Its private key is a file given to the portal as a Docker secret; installation tokens last an hour.
 - The validator runs with time and memory limits; zips are unpacked with the limits of §4.1.
 - No submitted content is rendered as HTML; artefacts are served as downloads.
-- The registry's check runs on every pull request, but merges happen only through the App, and only for pull requests it opened. When the LLM screening is switched on, its API key must be given only to runs on the App's own branches, never to pull requests from forks.
+- The registry's check runs on every pull request, but merges happen only through the App, and only for pull requests it opened. If the LLM screening is switched on, its API key must be given only to runs on the App's own branches, never to pull requests from forks.
 
 ## 11. Dependence on GitHub
 
@@ -243,7 +248,7 @@ GitHub is the place where the record is published and the checks are logged, not
 
 ## 13. Hosting
 
-One DigitalOcean Droplet in the London region with at least 4 GB RAM, set up by `deploy/cloud-init.yaml` and `deploy/server-setup.sh` and started by `deploy/launch.sh` (`docs/deploy.md`), running Docker Compose: the app, PostgreSQL with pgvector, and Caddy for HTTPS and static files. Nightly backups to DigitalOcean Spaces, which also stores artefacts. Cloudflare's free tier in front for DDoS protection and edge rate limits. DigitalOcean's managed PostgreSQL supports pgvector, so the database can move there later without code changes.
+One DigitalOcean Droplet in the London region with at least 4 GB RAM, set up by `deploy/cloud-init.yaml` and `deploy/server-setup.sh` and started by `deploy/launch.sh` (`docs/deploy.md`), running Docker Compose: the app, PostgreSQL with pgvector, and Caddy for HTTPS and static files. DigitalOcean's daily Droplet backups (crash-consistent disk images of everything on the Droplet: database, packaged files, pending submissions; volumes are not included, so nothing is kept on one). The published record is also the registry on GitHub, from which `reindex` rebuilds the database. DigitalOcean Spaces may later store packaged files. Cloudflare's free tier in front for DDoS protection and edge rate limits. DigitalOcean's managed PostgreSQL supports pgvector, so the database can move there later without code changes.
 
 ## 14. Requirements covered
 

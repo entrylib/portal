@@ -12,6 +12,7 @@ import ipaddress
 import socket
 import ssl
 import tempfile
+import threading
 import time
 import urllib.parse
 from pathlib import Path
@@ -22,11 +23,18 @@ MAX_REDIRECTS = 5
 DEADLINE_SECONDS = 120
 CONNECT_TIMEOUT = 15
 MAX_URL = 2048
+#: Downloads running at once, across all submitters: each holds a thread and up to 210 MB of disk.
+MAX_CONCURRENT = 2
+_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT)
 USER_AGENT = "EntryLib-portal (+https://entrylib.org/llms.txt)"
 
 
 class FetchError(Exception):
     """The URL cannot be fetched: says why, in words for the submitter."""
+
+
+class FetchBusy(FetchError):
+    """MAX_CONCURRENT downloads are already running: try again shortly."""
 
 
 def public_address(address):
@@ -85,7 +93,16 @@ def _connection(host, port, timeout):
 def download(url, directory, *, connection=_connection, limit=None):
     """Fetch `url` into a new file in `directory`. `connection(host, port, timeout)` makes the connection (tests
     replace it). Raises FetchError."""
-    limit = limit or submissions.MAX_UPLOAD_BYTES
+    check_url(url)
+    if not _SLOTS.acquire(blocking=False):
+        raise FetchBusy("the portal is fetching other submissions; try again in a minute")
+    try:
+        return _download(url, directory, connection, limit or submissions.MAX_UPLOAD_BYTES)
+    finally:
+        _SLOTS.release()
+
+
+def _download(url, directory, connection, limit):
     deadline = time.monotonic() + DEADLINE_SECONDS
     for _ in range(MAX_REDIRECTS + 1):
         host, port, path = check_url(url)

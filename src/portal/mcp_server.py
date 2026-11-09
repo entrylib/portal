@@ -15,7 +15,7 @@ from claimset.claim import claim_bundle, render_claim
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from . import __version__, fetch, ids, search, submissions
+from . import __version__, fetch, ids, ratelimit, search, submissions
 
 #: The largest claimset the `submit` and `validate` tools take inline, as JSON; larger ones go by package_url.
 MAX_JSON_BYTES = 10 * 1024 * 1024
@@ -36,11 +36,19 @@ submit returns: give that link to your human. A new version of a published claim
 
 
 class Portal:
-    """What the tools need from the app: the settings, the database pool, and a function that receives a submission
-    file (the same as POST /api/submissions)."""
+    """What the tools need from the app: the settings, the database pool, a function that receives a submission
+    file (the same as POST /api/submissions), and the per-address rate limits."""
 
-    def __init__(self, settings, pool, receive):
+    def __init__(self, settings, pool, receive, limiter=None):
         self.settings, self.pool, self.receive = settings, pool, receive
+        self.limiter = limiter or ratelimit.Limiter({})
+
+    def spend(self, ctx, kind):
+        """Count a costly tool call against its own limit (every MCP request also counts as a read)."""
+        try:
+            self.limiter.check(_client_ip(ctx), kind)
+        except ratelimit.RateLimited as exc:
+            raise ToolError(str(exc)) from None
 
 
 def _client_ip(ctx):
@@ -164,11 +172,12 @@ def build(portal):
         return render_claim(doc, claim)
 
     @server.tool()
-    def validate(claimset: dict | str) -> dict:
+    def validate(ctx: Context, claimset: dict | str) -> dict:
         """Check a claimset file (a JSON object, or its text) exactly as a submission is checked: the validator of
         the current Claimset specification and the portal's screening. Nothing is kept. `valid` says whether it would be
         accepted; `errors` and `warnings` give each problem's rule number, place and message, to fix and check
         again."""
+        portal.spend(ctx, "validate")
         path = _json_file(claimset, uploads)
         try:
             return submissions.check(path).as_json()
@@ -191,6 +200,7 @@ def build(portal):
         the guarantor already has."""
         if (claimset is None) == (package_url is None):
             raise ToolError("give either claimset or package_url")
+        portal.spend(ctx, "fetch" if package_url is not None else "submit")
         if package_url is not None:
             try:
                 path = fetch.download(package_url, uploads)
