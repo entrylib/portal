@@ -19,7 +19,7 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, consent, fetch, mcp_server, pages, search, submissions, worker
+from . import __version__, consent, fetch, mcp_server, pages, ratelimit, search, submissions, worker
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -97,9 +97,9 @@ def _publisher(settings):
     return out
 
 
-def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=None):
-    """The app. `pool`, `orcid` (an ORCID client) and `publisher` ({registry, store, classifier}) may be given, as
-    tests do; otherwise they are made from the settings."""
+def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=None, limiter=None):
+    """The app. `pool`, `orcid` (an ORCID client), `publisher` ({registry, store, classifier}) and `limiter` (the
+    per-address rate limits) may be given, as tests do; otherwise they are made from the settings."""
     settings = settings or Settings.from_env()
     own_pool = pool is None
     pool = pool or make_pool(settings.database_url, min_size=1, max_size=10)
@@ -114,7 +114,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return submissions.receive(conn, path, submissions_dir=settings.submissions_dir,
                                        base_url=settings.base_url, client_ip=client_ip, new_paper=new_paper)
 
-    mcp = mcp_server.build(mcp_server.Portal(settings, pool, receive))
+    limiter = limiter or ratelimit.Limiter()
+    mcp = mcp_server.build(mcp_server.Portal(settings, pool, receive, limiter))
     mcp_app = mcp_server.http_app(mcp)
 
     def publish_now():
@@ -159,6 +160,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                   docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     app.state.settings = settings
     app.state.pool = pool
+    app.state.limiter = limiter
+    app.add_middleware(ratelimit.RateLimitMiddleware, limiter=limiter)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz():
@@ -234,6 +237,9 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         an upload. The response is that of POST /api/submissions."""
         try:
             path = await run_in_threadpool(fetch.download, url, uploads)
+        except fetch.FetchBusy as exc:
+            return JSONResponse({"error": str(exc), "errors": [], "warnings": []}, status_code=503,
+                                headers={"Retry-After": "60"})
         except fetch.FetchError as exc:
             return _error(422, f"cannot fetch the URL: {exc}")
         return await _receive(path, request, new_paper)
