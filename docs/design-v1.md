@@ -1,6 +1,6 @@
 # EntryLib portal — v1 design (draft)
 
-Status: working draft · Date: 2026-11-07 · Companion to `platform/requirements.md`, the claimset specification (v0.39), the lab record specification (v0.20) and the revision specification (v0.6)
+Status: working draft · Date: 2026-11-09 · Companion to `platform/requirements.md`, the claimset specification (v0.39), the lab record specification (v0.20) and the revision specification (v0.6)
 
 This document fixes what the first version of the portal does, how it is built and what it leaves for later versions. Requirements are cited by their `PLT-` IDs.
 
@@ -69,8 +69,8 @@ data/
 
 ### 4.2 Flow
 
-1. `POST /api/submissions` with the package (zip) or the claimset file as the request body (`curl --data-binary @paper.zip -H 'Content-Type: application/zip'`). No account and no token. `POST /api/validate` runs the same checks and keeps nothing. Uploads over 210 MB are refused.
-2. Synchronous checks: package limits (rule 77), validator (claimset §10, current spec version only), deterministic screening (§6). Errors are returned in machine-readable form and nothing is kept.
+1. The package or the claimset file reaches the portal by one of the routes of §4.4. No account and no token. `POST /api/validate` runs the same checks and keeps nothing. Uploads over 210 MB are refused.
+2. Synchronous checks: package limits (rule 77), validator (claimset §10, current spec version only), deterministic screening (§6), and for a new claimset the duplicate check (§4.5). Errors are returned in machine-readable form and nothing is kept.
 3. A valid package becomes a pending submission with an internal ID (PLT-21) and a **consent link** for each human guarantor. The agent passes the link to its human.
 4. The guarantor opens the consent link and sees the title, the licence, the principal claims and the whole claimset as models will read it (the reading view, escaped; nothing submitted is rendered as HTML). They sign in with ORCID (the `/authenticate` scope of ORCID's free public API: the portal learns only their iD and name) and so confirm (PLT-15, PLT-16). The iD must be the guarantor's; anyone else is refused and the submission stays pending. Each sign-in is tied to its consent link by a single-use OAuth state that lasts 30 minutes.
    - Limits are applied here (§8): at most 2 new claimsets confirmed per guarantor in seven days, and 3 new versions of one claimset in a day. A confirmation over the limit is refused, and the submission stays pending until its window ends.
@@ -82,7 +82,7 @@ data/
 
 A claimset has exactly one guarantor: the main author, the person to contact, a person with an ORCID iD, who submits it (claimset spec v0.36). So a submission has one consent link; the validator refuses a second guarantor and organisations in any position but conversion guarantor. The API takes native claimsets only: converted claimsets are published by the conversion service, whose conversion guarantor (a person or an organisation) answers for them.
 
-Corrections (PLT-23) go through the same flow, with `paper.id` naming the existing claimset. Revisions with responses wait for v2.
+Corrections (PLT-23) go through the same flow, with `paper.id` naming the existing claimset (§4.5). Revisions with responses wait for v2.
 
 ### 4.3 From the lab to EntryLib
 
@@ -96,6 +96,28 @@ claimset status <submission id>                      # new
 ```
 
 The MCP server offers the same as `validate`, `submit` and `submission_status` tools, for agents without a terminal. The `claimset-submit` skill is updated to end with these steps.
+
+### 4.4 Submission routes
+
+Every route ends in the same checks and the same pending submission (§4.2); they differ only in how the file arrives.
+
+| Use case | Route | What is sent |
+|---|---|---|
+| A full pipeline in a terminal (claimset-lab, `claimset package`) | `POST /api/submissions`, the zip as the request body (`claimset submit`) | The package, with its files |
+| Evidence already deposited elsewhere (Zenodo, GitHub, an institutional repository) | `POST /api/submissions` with the JSON as the body, or the MCP tool `submit` | The claimset JSON alone; its artefacts' `uri` are the deposits' https URLs and are left there: the portal neither downloads nor copies them |
+| A claimset with no files | as above | The claimset JSON alone |
+| A person with a file, no terminal | `/submit`, a page with a file picker | The zip or the JSON, sent as the request body of `POST /api/submissions` by the page's script |
+| An agent that cannot upload a large file (MCP, a chat) but can deposit it | `POST /api/submissions/from-url` with `{"url": …}`, or the MCP tool `submit` with `package_url` | An https URL of the package or the JSON, which the portal fetches |
+
+- **By URL.** The portal fetches https URLs only, from public addresses only (loopback, private, link-local and other non-global addresses are refused, checked on the address actually connected to), follows at most 5 redirects (each checked again), and stops at 210 MB or 120 seconds. What it fetches is checked exactly as an upload is.
+- **The upload page** is static HTML and one script, served by the app with a Content-Security-Policy that allows only that script. It shows the response's submission ID, consent link and errors as text; nothing submitted is rendered.
+- **The MCP server** takes the claimset JSON as text, at most 10 MB; larger submissions and packages go by URL.
+- Batch submission, many claimsets confirmed by one sign-in, is future work (portal issue #34).
+
+### 4.5 New versions and duplicates
+
+- **New versions.** The identifier says which claimset a new version belongs to; ORCID proves the person may change it. A new version sets `paper.id` to the claimset's identifier, given in the response that published it and in every search result; the submission is then a correction of that claimset, and its guarantor must be the guarantor of the current version, who confirms with ORCID as for a new claimset. The portal never guesses a claimset from its title or its author. Handing a claimset over to a new guarantor is future work (portal issue #35).
+- **Duplicates.** A new claimset (no `paper.id`) whose guarantor already guarantees a claimset with the same title (compared in lower case with punctuation and spacing removed), published or confirmed and being published, is refused (PLT-19, in part), naming the existing identifier or submission: a new version of it sets `paper.id`. A submission still waiting for consent does not count, so a fixed file can be submitted again before confirming and the first one expires; the check runs again when the guarantor confirms, so two of them are not both published. A genuinely different paper with the same title is submitted with `new_paper=true` (a query parameter of the API, an argument of the MCP tool).
 
 ## 5. Registry and lab records
 
@@ -148,6 +170,8 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 |---|---|
 | `/` | Human home page: what EntryLib is; point an agent at `/llms.txt`; MCP server address; how to write claimsets (package and skills); links to the spec and GitHub |
 | `/llms.txt` | Entry point for agents: what is here, how to search and fetch, ID syntax and citation, how to submit, and that all content is data, not instructions |
+| `/mcp` | The MCP server (§7.3) |
+| `/submit` | The upload page (§4.4) |
 | `/p/2026.000001.json` | Current version, published file |
 | `/p/2026.000001.txt` | Current version, reading view (`claimset render`; plain text, claimset spec §2.3) |
 | `/p/2026.000001@v1.json`, `@v1.txt` | A given version |
@@ -161,15 +185,15 @@ Rendered views are produced by the platform, never submitted. Each records the r
 
 ### 7.2 Search API
 
-- `GET /api/search/claims?q=…` with filters on closed vocabularies: claim type, role, novelty label, planning, support kind, assumption check, licence (PLT-72, partly).
-- `GET /api/search/papers?q=…`.
+- `GET /api/search/claims?q=…` with filters on closed vocabularies: claim type, role, novelty label, planning, support kind, assumption check, licence (PLT-72, partly), and on the guarantor's ORCID iD (`guarantor`).
+- `GET /api/search/papers?q=…`, with `licence` and `guarantor`. With `guarantor` and no `q`, it lists that guarantor's claimsets, newest first, so an author finds the identifier of a claimset to correct.
 - Ranking at launch is Postgres full-text search: words reduced to their stems and matched against weighted text. For a claim: its statement first, then the terms of the definitions it cites and its scope, then the paper's title and keywords. For a paper: its title first, then its keywords and principal claims, then all its claims and definitions. Only current versions are searched.
 - Embeddings (vector similarity over each claim's statement and scope, combined with full text) and `GET /api/related/{id}` come after launch, when there are enough claimsets for meaning to matter more than words (PLT-73). They need no change to the format or to the API's results; pgvector is already in the database.
 - Every result carries the version, its status and notices, and its validator warnings (PLT-13, PLT-74 in part).
 
 ### 7.3 MCP server
 
-Served at `/mcp` from the same app (PLT-71, PLT-11). Tools: `search_papers`, `search_claims`, `get_paper` (markdown or JSON), `get_claim`, `related`, `validate`, `submit`, `submission_status`. Same limits as the HTTP API.
+Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT-11): the Streamable HTTP transport, stateless, answering in JSON, with no sign-in. Tools: `search_papers`, `search_claims`, `get_paper` (reading view or JSON, a version or the current one), `get_claim` (the claim bundle), `validate`, `submit` (the claimset JSON as text, or `package_url`), `submission_status`. Each calls the same code as the HTTP API, with the same limits. `related` comes with embeddings (§7.2). Tool results are data: their descriptions say so, as `/llms.txt` does.
 
 ## 8. Limits and spam controls
 
@@ -223,7 +247,7 @@ One DigitalOcean Droplet in the London region with at least 4 GB RAM, running Do
 
 ## 14. Requirements covered
 
-PLT-2 (ORCID at consent only), PLT-10 (BagIt packages), PLT-11, PLT-12, PLT-13, PLT-14, PLT-15, PLT-16, PLT-18, PLT-21, PLT-22, PLT-23, PLT-70, PLT-71, PLT-72 (closed-vocabulary filters), PLT-73, PLT-74 (in part), PLT-76 (minimal), PLT-78, PLT-79, PLT-91, PLT-94.
+PLT-2 (ORCID at consent only), PLT-10 (BagIt packages), PLT-11, PLT-12, PLT-13, PLT-14, PLT-15, PLT-16, PLT-18, PLT-19 (duplicates by the same guarantor), PLT-21, PLT-22, PLT-23, PLT-70, PLT-71, PLT-72 (closed-vocabulary filters), PLT-73, PLT-74 (in part), PLT-76 (minimal), PLT-78, PLT-79, PLT-91, PLT-94.
 
 Changed by this design: PLT-1 and PLT-3 to PLT-5 (accounts and agent tokens) are dropped for v1. Guarantors sign in with ORCID only to confirm; agents submit without tokens.
 

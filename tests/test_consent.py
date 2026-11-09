@@ -3,7 +3,6 @@ import json
 import urllib.parse
 
 import psycopg
-import pytest
 from fastapi.testclient import TestClient
 from publishing import example, fake_classifier
 
@@ -28,21 +27,6 @@ class FakeOrcid:
         if code == "fail":
             raise OrcidError("ORCID sign-in could not be completed: test")
         return code, "Signed In"
-
-
-@pytest.fixture
-def app_client(settings):
-    migrate(settings.database_url)
-    pool = make_pool(settings.database_url, min_size=1, max_size=3)
-    pool.open()
-    publisher = {"registry": Registry(settings.registry_dir).init(),
-                 "store": FileStore(settings.published_dir, settings.base_url), "classifier": fake_classifier}
-    try:
-        with TestClient(create_app(settings, pool=pool, run_expiry=False, orcid=FakeOrcid(), publisher=publisher),
-                        follow_redirects=False) as c:
-            yield c
-    finally:
-        pool.close()
 
 
 def submit(c, doc=None):
@@ -127,11 +111,17 @@ def test_expired_submission_cannot_be_confirmed(app_client, settings):
     assert r.status_code == 303 and r.headers["location"].endswith(f"/consent/{token}")      # back to the page
 
 
+def titled(n):
+    doc = example()
+    doc["paper"]["title"] = f"{doc['paper']['title']} {n}"
+    return doc
+
+
 def test_weekly_limit_on_new_claimsets(app_client):
-    for _ in range(consent.MAX_NEW_PER_WEEK):
-        _, token = submit(app_client)
+    for n in range(consent.MAX_NEW_PER_WEEK):
+        _, token = submit(app_client, titled(n))
         assert sign_in(app_client, token).status_code == 200
-    out, token = submit(app_client)
+    out, token = submit(app_client, titled("over"))
     r = sign_in(app_client, token)
     assert r.status_code == 429 and "seven days" in r.text
     assert app_client.get(f"/api/submissions/{out['id']}").json()["state"] == "pending"

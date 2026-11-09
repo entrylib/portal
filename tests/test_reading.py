@@ -33,6 +33,7 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert page.startswith("<!doctype html>") and "<script" not in page and "CLAIMSET Method M" in page
     llms = (out / "llms.txt").read_text()
     assert f"{BASE}/api/search/claims?q=" in llms and "data" in llms and "{base}" not in llms
+    assert f"{BASE}/mcp" in llms and f"{BASE}/api/submissions/from-url" in llms and "new_paper" in llms
 
 
 def test_submitted_text_is_escaped_in_the_page(env):

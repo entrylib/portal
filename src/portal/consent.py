@@ -17,7 +17,7 @@ from pathlib import Path
 from claimset.render import render
 
 from .publish import load_submission
-from .submissions import token_hash
+from .submissions import duplicate, token_hash
 
 #: New claimsets one guarantor may publish in seven days, and versions of one claimset in a day (design §8).
 MAX_NEW_PER_WEEK = 2
@@ -100,10 +100,10 @@ def complete(conn, state, orcid, now=None):
         if row is None:
             return Outcome("unknown", "this sign-in has expired or was already used; open the consent link again")
         g = conn.execute(
-            "SELECT g.submission_id, g.orcid, s.state, s.kind, s.target FROM submission_guarantors g"
-            " JOIN submissions s ON s.id = g.submission_id WHERE g.token_hash = %s FOR UPDATE OF s",
-            (row[0],)).fetchone()
-        sid, expected, sub_state, kind, target = g
+            "SELECT g.submission_id, g.orcid, s.state, s.kind, s.target, s.title_key, s.new_paper"
+            " FROM submission_guarantors g JOIN submissions s ON s.id = g.submission_id"
+            " WHERE g.token_hash = %s FOR UPDATE OF s", (row[0],)).fetchone()
+        sid, expected, sub_state, kind, target, key, new_paper = g
         if orcid != expected:
             return Outcome("wrong_person", f"you signed in as {orcid}, but this claimset names {expected} as its "
                                            f"guarantor; only the guarantor can confirm it", sid)
@@ -112,6 +112,9 @@ def complete(conn, state, orcid, now=None):
         reason = _over_limit(conn, orcid, kind, target, now)
         if reason:
             return Outcome("limit", reason, sid)
+        same = None if kind != "new" or new_paper else duplicate(conn, key, [orcid], exclude=sid)
+        if same:                                            # confirmed twice in one window (design §4.5)
+            return Outcome("duplicate", f"this looks like a claimset already confirmed: {same}", sid)
         conn.execute("UPDATE submission_guarantors SET confirmed = %s WHERE token_hash = %s", (now, row[0]))
         remaining = conn.execute("SELECT count(*) FROM submission_guarantors WHERE submission_id = %s"
                                  " AND confirmed IS NULL", (sid,)).fetchone()[0]

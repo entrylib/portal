@@ -9,7 +9,7 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from publishing import example, fake_classifier
-from test_consent import GUARANTOR, FakeOrcid
+from test_consent import GUARANTOR, FakeOrcid, titled
 
 from portal import archive, worker
 from portal.app import create_app
@@ -258,9 +258,9 @@ def test_archive_repositories_and_failure():
 def test_open_pull_requests_count_towards_the_weekly_limit(world):
     from portal import consent
     w = world
-    for _ in range(consent.MAX_NEW_PER_WEEK):
-        assert status(w, submit_and_confirm(w["client"]))["state"] == "publishing"
-    r = w["client"].post("/api/submissions", content=json.dumps(example()).encode(),
+    for n in range(consent.MAX_NEW_PER_WEEK):
+        assert status(w, submit_and_confirm(w["client"], titled(n)))["state"] == "publishing"
+    r = w["client"].post("/api/submissions", content=json.dumps(titled("over")).encode(),
                          headers={"Content-Type": "application/json"})
     token = r.json()["consent"][0]["consent_url"].rsplit("/", 1)[-1]
     state = urllib.parse.parse_qs(urllib.parse.urlparse(

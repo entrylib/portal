@@ -20,6 +20,7 @@ Each version's claims and paper get the weighted text full-text search runs on (
 import json
 import os
 import re
+import unicodedata
 from pathlib import Path
 
 from claimset.claim import claim_bundle, render_claim
@@ -50,6 +51,18 @@ def plain(statement):
     """A statement as words, without its term markup: '[[D3:seasonal naive method]]' becomes 'seasonal naive
     method', so search finds the words and not the IDs."""
     return TERM_MARKUP.sub(r"\1", statement or "")
+
+
+def title_key(title):
+    """A title reduced for the duplicate check (design §4.5): case-folded, with punctuation and spacing removed."""
+    text = unicodedata.normalize("NFKC", title or "").casefold()
+    return "".join(re.findall(r"[^\W_]+", text))
+
+
+def guarantor_ids(doc):
+    """The ORCID iDs of a claimset's guarantor (one person since claimset spec v0.36)."""
+    return sorted({c["orcid"] for c in doc.get("contributors") or []
+                   if isinstance(c, dict) and "guarantor" in (c.get("positions") or []) and c.get("orcid")})
 
 
 def _strings(x):
@@ -131,10 +144,12 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
                   sorted({s.get("kind") for s in c.get("support") or [] if isinstance(s, dict) and s.get("kind")}),
                   plain(c.get("statement")), claim_text(c, defs), paper_c)
                  for c in doc.get("claims") or [] if isinstance(c, dict)])
-        conn.execute("UPDATE papers SET licence = %s, search = setweight(to_tsvector('english', %s), 'A')"
+        conn.execute("UPDATE papers SET licence = %s, guarantors = %s, title_key = %s,"
+                     " search = setweight(to_tsvector('english', %s), 'A')"
                      " || setweight(to_tsvector('english', %s), 'B') || setweight(to_tsvector('english', %s), 'C')"
                      " WHERE concept_id = %s AND current_version = %s",
-                     (paper.get("licence"), title, keyword_text, rest_text, concept, n))
+                     (paper.get("licence"), guarantor_ids(doc), title_key(title), title, keyword_text, rest_text,
+                      concept, n))
     write_static(conn, registry, folder, published_dir, base_url)
 
 
