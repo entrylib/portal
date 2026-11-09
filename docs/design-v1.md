@@ -243,7 +243,7 @@ GitHub is the place where the record is published and the checks are logged, not
 
 ## 13. Hosting
 
-One DigitalOcean Droplet in the London region with at least 4 GB RAM, running Docker Compose: the app, PostgreSQL with pgvector, and Caddy for HTTPS and static files. Nightly backups to DigitalOcean Spaces, which also stores artefacts. Cloudflare's free tier in front for DDoS protection and edge rate limits. DigitalOcean's managed PostgreSQL supports pgvector, so the database can move there later without code changes.
+One DigitalOcean Droplet in the London region with at least 4 GB RAM, set up by `deploy/cloud-init.yaml` and `deploy/server-setup.sh` and started by `deploy/launch.sh` (`docs/deploy.md`), running Docker Compose: the app, PostgreSQL with pgvector, and Caddy for HTTPS and static files. Nightly backups to DigitalOcean Spaces, which also stores artefacts. Cloudflare's free tier in front for DDoS protection and edge rate limits. DigitalOcean's managed PostgreSQL supports pgvector, so the database can move there later without code changes.
 
 ## 14. Requirements covered
 
