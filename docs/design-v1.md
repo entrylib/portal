@@ -4,7 +4,7 @@ Status: working draft · Date: 2026-11-07 · Companion to `platform/requirements
 
 This document fixes what the first version of the portal does, how it is built and what it leaves for later versions. Requirements are cited by their `PLT-` IDs.
 
-## 1. Roadmap
+## 1. Versions
 
 | Version | Scope |
 |---|---|
@@ -16,9 +16,7 @@ This document fixes what the first version of the portal does, how it is built a
 
 v1 keeps room for v2: versions, the review folder of the registry and the review fields of responses exist from the start, empty.
 
-**v1, the steps left before launch:** 7, reading (§7.1 URLs, `/index.jsonl`, the search API of §7.2, claim bundles with a single-claim renderer in the claimset package); 8, the MCP server (§7.3); 9, `claimset submit` and `claimset status` and the `claimset-submit` skill's last steps (§4.3, §12); 10, deployment and launch (§13): production ORCID, the app behind Caddy, the daily restart, and setting the claimset baseline (claimset spec §2.6).
-
-The format, the package and the lab record have their own roadmap in the claimset repository (its README, *Roadmap*; issues [entrylib/claimset#63](https://github.com/entrylib/claimset/issues/63) to [#69](https://github.com/entrylib/claimset/issues/69)): `claimset submit` and `claimset status` for step 9, the format extensions after launch, data-collection sessions, independent timestamps, PyPI, the lab record's smaller open questions, and collaboration, parked until the portal is live.
+Planned work, for the portal and for the claimset package, is tracked in GitHub issues labelled `roadmap` (entrylib/portal and entrylib/claimset), not in this document.
 
 ## 2. Principles
 
