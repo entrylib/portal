@@ -253,3 +253,24 @@ def reindex(conn, registry, published_dir, base_url):
     if not folders:
         write_index(conn, published_dir, base_url)
     return folders
+
+
+#: In the published directory: which claimset rendered the static files.
+RENDERED_BY = ".rendered-by"
+
+
+def refresh_if_claimset_changed(conn, registry, published_dir, base_url, version):
+    """At the app's start, after it installed the newest claimset: write /llms.txt and /index.jsonl, and rebuild the
+    index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views are
+    regenerated when the renderer changes). Returns True if it rebuilt."""
+    write_index(conn, published_dir, base_url)          # /llms.txt and /index.jsonl exist before anything is published
+    marker = Path(published_dir) / RENDERED_BY
+    try:
+        if marker.read_text(encoding="utf-8").strip() == version:
+            return False
+    except FileNotFoundError:
+        pass
+    if registry is not None:
+        reindex(conn, registry, published_dir, base_url)
+    _write(marker, version + "\n")
+    return True

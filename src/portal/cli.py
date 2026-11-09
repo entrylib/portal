@@ -86,12 +86,32 @@ def main(argv=None):
             print(f"published {concept}@v{version}")
             return 0
 
+    _refresh(settings, claimset.__version__)
+
     import uvicorn
 
     from .app import create_app
     uvicorn.run(create_app(settings), host=args.host, port=args.port, proxy_headers=True,
                 forwarded_allow_ips="*")
     return 0
+
+
+def _refresh(settings, version):
+    """At start: rebuild the reading views if claimset changed since they were written. A failure is reported and
+    the app starts anyway; the next start tries again."""
+    import psycopg
+
+    from .indexer import refresh_if_claimset_changed
+    from .registry import Registry
+    registry = None
+    if (settings.registry_dir / ".git").exists():                 # nothing published before the registry exists
+        registry = Registry(settings.registry_dir, settings.git_name, settings.git_email)
+    try:
+        with psycopg.connect(settings.database_url, autocommit=True) as conn:
+            if refresh_if_claimset_changed(conn, registry, settings.published_dir, settings.base_url, version):
+                print(f"reading views rebuilt with claimset {version}")
+    except Exception as exc:  # noqa: BLE001 - serving matters more; the next start retries
+        print(f"portal: could not rebuild the reading views: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def _check(args):
