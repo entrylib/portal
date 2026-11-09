@@ -133,3 +133,26 @@ def test_search_over_http(client):
     r = client.get("/api/search/claims", params={"q": "x", "type": "nonsense"})
     assert r.status_code == 400 and "type: one of" in r.json()["error"]
     assert client.get("/api/search/papers").status_code == 400
+
+
+def test_reading_views_follow_claimset_updates(env, monkeypatch):
+    from portal import indexer
+    ctx, tmp, _ = published(env)
+    out = ctx["published_dir"]
+    args = (ctx["conn"], ctx["registry"], out, BASE)
+    assert indexer.refresh_if_claimset_changed(*args, "0.39.2")              # no marker yet: rebuilt
+    assert (out / indexer.RENDERED_BY).read_text() == "0.39.2\n"
+    (out / "p" / f"{KEY}.txt").write_text("stale rendering")
+    assert not indexer.refresh_if_claimset_changed(*args, "0.39.2")          # same claimset: left alone
+    assert (out / "p" / f"{KEY}.txt").read_text() == "stale rendering"
+    assert indexer.refresh_if_claimset_changed(*args, "0.40.0")              # a new claimset: rebuilt
+    assert (out / "p" / f"{KEY}.txt").read_text().startswith("CLAIMSET")
+    assert indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.40.1")   # no registry yet
+
+
+def test_entry_files_exist_before_anything_is_published(env):
+    from portal import indexer
+    ctx, _ = env
+    out = ctx["published_dir"]
+    indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.39.2")
+    assert (out / "llms.txt").read_text().startswith("# EntryLib") and (out / "index.jsonl").read_text() == ""
