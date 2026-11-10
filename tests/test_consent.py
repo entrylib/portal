@@ -125,8 +125,8 @@ def test_weekly_limit_on_new_claimsets(app_client, settings, monkeypatch):
         assert sign_in(app_client, token).status_code == 200
     out, token = submit(app_client, titled("over"))
     r = sign_in(app_client, token)
-    assert r.status_code == 200 and "will be published automatically on" in r.text
-    assert "at most 2 new claimsets in any seven days" in r.text
+    assert r.status_code == 200 and "It will be published on" in r.text
+    assert "Each person can publish up to 2 new claimsets a week" in r.text and "<p>Why not straight away?" in r.text
     st = app_client.get(f"/api/submissions/{out['id']}").json()
     assert st["state"] == "confirmed" and "publish_after" in st and "published" not in st
     when = dt.datetime.fromisoformat(st["publish_after"])
@@ -138,7 +138,7 @@ def test_weekly_limit_on_new_claimsets(app_client, settings, monkeypatch):
                      (out["id"],))
         assert out["id"] in [r[0] for r in worker._confirmed(conn)]              # then is published
     _, token = submit(app_client, titled("later"))                               # the next waits longer still
-    assert "will be published automatically" in sign_in(app_client, token).text
+    assert "It will be published on" in sign_in(app_client, token).text
 
 
 def test_correction_by_the_guarantor(app_client):

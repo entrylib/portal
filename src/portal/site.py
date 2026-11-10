@@ -737,7 +737,8 @@ def confirm_list(items, orcid, name=None):
 def message_page(title, text, link=None):
     """A short page after an action: what happened, and where to go next."""
     more = f'<p><a href="{esc(link[0])}">{esc(link[1])}</a></p>' if link else ""
-    return shell(title, f'<div class="wrap prose"><h1>{esc(title)}</h1><p>{esc(text)}</p>{more}</div>')
+    paragraphs = "".join(f"<p>{esc(t)}</p>" for t in str(text).split("\n\n") if t.strip())   # blank lines part them
+    return shell(title, f'<div class="wrap prose"><h1>{esc(title)}</h1>{paragraphs}{more}</div>')
 
 
 def submit_page(body):

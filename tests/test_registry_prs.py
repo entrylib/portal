@@ -267,5 +267,5 @@ def test_open_pull_requests_count_towards_the_weekly_limit(world, monkeypatch):
     state = urllib.parse.parse_qs(urllib.parse.urlparse(
         w["client"].get(f"/consent/{token}/start").headers["location"]).query)["state"][0]
     page = w["client"].get("/consent/callback", params={"state": state, "code": GUARANTOR})
-    assert page.status_code == 200 and "will be published automatically" in page.text
+    assert page.status_code == 200 and "It will be published on" in page.text
     assert status(w, r.json()["id"])["state"] == "confirmed" and "publish_after" in status(w, r.json()["id"])

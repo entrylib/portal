@@ -24,7 +24,8 @@ def page(title, body):
 def message(title, text, status_url=None):
     link = f"<p class=\"muted\">Status: <a href=\"{escape(status_url)}\">{escape(status_url)}</a></p>" \
         if status_url else ""
-    return page(title, f"<p>{escape(text)}</p>{link}")
+    paragraphs = "".join(f"<p>{escape(t)}</p>" for t in str(text).split("\n\n") if t.strip())   # blank lines part them
+    return page(title, f"{paragraphs}{link}")
 
 
 def consent(ctx, start_url, status_url):

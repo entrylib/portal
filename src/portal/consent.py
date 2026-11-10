@@ -91,17 +91,17 @@ def start(conn, token):
 
 def _slot(conn, orcid, kind, target, now):
     """When a submission confirmed now may be published under the limits of design §8: None for at once, or the time
-    the earliest publication counted against it leaves the window, with a sentence saying why. Publications already
-    scheduled count at their scheduled time, so that no window ever holds more than the limit."""
+    the earliest publication counted against it leaves the window, with sentences saying why, for anyone.
+    Publications already scheduled count at their scheduled time, so that no window ever holds more than the limit."""
     if kind == "new":
-        limit, window, what = MAX_NEW_PER_WEEK, dt.timedelta(days=7), "new claimsets in any seven days"
+        limit, window = MAX_NEW_PER_WEEK, dt.timedelta(days=7)
         times = conn.execute(
             "SELECT COALESCE(s.publish_after, g.confirmed) FROM submission_guarantors g"
             " JOIN submissions s ON s.id = g.submission_id WHERE g.orcid = %s AND s.kind = 'new'"
             " AND s.state IN ('confirmed', 'publishing', 'published') AND g.confirmed IS NOT NULL"
             " AND COALESCE(s.publish_after, g.confirmed) > %s", (orcid, now - window)).fetchall()
     else:
-        limit, window, what = MAX_VERSIONS_PER_DAY, dt.timedelta(days=1), f"new versions of {target} in a day"
+        limit, window = MAX_VERSIONS_PER_DAY, dt.timedelta(days=1)
         times = conn.execute(
             "SELECT DISTINCT ON (s.id) COALESCE(s.publish_after, g.confirmed) FROM submission_guarantors g"
             " JOIN submissions s ON s.id = g.submission_id WHERE s.target = %s"
@@ -113,10 +113,19 @@ def _slot(conn, orcid, kind, target, now):
     when = times[-limit] + window
     if when <= now:
         return None, None
-    why = (f"one guarantor may publish at most {limit} {what}, and {len(times)} of yours are already published or "
-           f"waiting in that time" if kind == "new" else
-           f"EntryLib publishes at most {limit} {what}, and {len(times)} are already published or waiting")
+    words = "a week" if kind == "new" else "a day"
+    why = (f"Each person can publish up to {limit} new claimsets {words}, so that the library grows steadily. "
+           f"You have already used {'both' if limit == 2 else 'all'} for this week."
+           if kind == "new" else
+           f"Each claimset can have up to {limit} new versions {words}. This one has already had {limit} today, "
+           f"counting those waiting to be published.")
     return when, why
+
+
+def _when(t, now):
+    """Saturday 14 November at 15:02 UTC (with the year only when it is not this year)."""
+    year = f" {t.year}" if t.year != now.year else ""
+    return f"{t:%A} {t.day} {t:%B}{year} at {t:%H:%M} UTC"
 
 
 def complete(conn, state, orcid, now=None):
@@ -155,10 +164,11 @@ def _confirm(conn, token_hash_, orcid, now):
     conn.execute("UPDATE submissions SET state = 'confirmed', publish_after = %s WHERE id = %s", (when, sid))
     if when is None:
         return Outcome("confirmed", "confirmed", sid)
-    return Outcome("scheduled", f"You have confirmed this claimset. It will be published automatically on "
-                                f"{when:%A %d %B %Y at %H:%M} UTC: {why}, so it waits until the earliest of them is "
-                                f"out of the window. You need do nothing more; the status link shows when it is "
-                                f"published.", sid)
+    return Outcome("scheduled", f"Thank you: the claimset is confirmed.\n\n"
+                                f"It will be published on {_when(when, now)}.\n\n"
+                                f"Why not straight away? {why} The next place frees up on {_when(when, now)}, and "
+                                f"this one will go out then.\n\n"
+                                f"You don't need to do anything else: it will be published on its own.", sid)
 
 
 #: How long the Confirm buttons of a /confirm listing stay valid.
