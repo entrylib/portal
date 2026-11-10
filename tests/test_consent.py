@@ -117,14 +117,28 @@ def titled(n):
     return doc
 
 
-def test_weekly_limit_on_new_claimsets(app_client):
-    for n in range(consent.MAX_NEW_PER_WEEK):
+def test_weekly_limit_on_new_claimsets(app_client, settings, monkeypatch):
+    """Over the limit, a confirmation is kept and the claimset published when the limit allows (design §8)."""
+    monkeypatch.setattr(consent, "MAX_NEW_PER_WEEK", 2)
+    for n in range(2):
         _, token = submit(app_client, titled(n))
         assert sign_in(app_client, token).status_code == 200
     out, token = submit(app_client, titled("over"))
     r = sign_in(app_client, token)
-    assert r.status_code == 429 and "seven days" in r.text
-    assert app_client.get(f"/api/submissions/{out['id']}").json()["state"] == "pending"
+    assert r.status_code == 200 and "will be published automatically on" in r.text
+    assert "at most 2 new claimsets in any seven days" in r.text
+    st = app_client.get(f"/api/submissions/{out['id']}").json()
+    assert st["state"] == "confirmed" and "publish_after" in st and "published" not in st
+    when = dt.datetime.fromisoformat(st["publish_after"])
+    assert dt.timedelta(days=6) < when - dt.datetime.now(dt.UTC) <= dt.timedelta(days=7)
+    from portal import worker
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        assert out["id"] not in [r[0] for r in worker._confirmed(conn)]          # waits
+        conn.execute("UPDATE submissions SET publish_after = now() - interval '1 minute' WHERE id = %s",
+                     (out["id"],))
+        assert out["id"] in [r[0] for r in worker._confirmed(conn)]              # then is published
+    _, token = submit(app_client, titled("later"))                               # the next waits longer still
+    assert "will be published automatically" in sign_in(app_client, token).text
 
 
 def test_correction_by_the_guarantor(app_client):

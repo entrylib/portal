@@ -336,8 +336,10 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 return consent.complete(conn, state, who)
         outcome = await run_in_threadpool(work)
         status_url = f"{settings.base_url}/api/submissions/{outcome.submission}" if outcome.submission else None
+        if outcome.result == "scheduled":                   # over the publication limit: published later (design §8)
+            return pages.message("Confirmed", outcome.message, status_url)
         if outcome.result != "confirmed":
-            code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
+            code_ = {"wrong_person": 403, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
             return HTMLResponse(pages.message("Not confirmed", outcome.message, status_url), status_code=code_)
         try:
             done = dict(await run_in_threadpool(publish_now))
@@ -390,8 +392,10 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             with pool.connection() as conn:
                 return consent.complete_ticket(conn, form.get("ticket", ""))
         outcome = await run_in_threadpool(work)
+        if outcome.result == "scheduled":                   # over the publication limit: published later (design §8)
+            return _page(site.message_page("Confirmed", outcome.message, ("/confirm", "Confirm another claimset")))
         if outcome.result != "confirmed":
-            code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
+            code_ = {"wrong_person": 403, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
             return _page(site.message_page("Not confirmed", outcome.message[:1].upper() + outcome.message[1:] + ".",
                                            ("/confirm", "Confirm a claimset")), code_)
         try:

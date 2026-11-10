@@ -49,7 +49,8 @@ def publish_confirmed(conn, *, settings, registry, store, classifier, remote=Non
 
 def _confirmed(conn):
     return conn.execute("SELECT id, file_name, kind, target, pending_id FROM submissions WHERE state = 'confirmed'"
-                        " AND file_name IS NOT NULL ORDER BY received").fetchall()
+                        " AND file_name IS NOT NULL AND (publish_after IS NULL OR publish_after <= now())"
+                        " ORDER BY received").fetchall()
 
 
 def _refuse(conn, sid, path, exc_or_text):

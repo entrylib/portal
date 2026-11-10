@@ -255,8 +255,9 @@ def test_archive_repositories_and_failure():
     assert seen[0] == "https://github.com/entrylib/registry" and len(seen) == 3
 
 
-def test_open_pull_requests_count_towards_the_weekly_limit(world):
+def test_open_pull_requests_count_towards_the_weekly_limit(world, monkeypatch):
     from portal import consent
+    monkeypatch.setattr(consent, "MAX_NEW_PER_WEEK", 2)
     w = world
     for n in range(consent.MAX_NEW_PER_WEEK):
         assert status(w, submit_and_confirm(w["client"], titled(n)))["state"] == "publishing"
@@ -266,5 +267,5 @@ def test_open_pull_requests_count_towards_the_weekly_limit(world):
     state = urllib.parse.parse_qs(urllib.parse.urlparse(
         w["client"].get(f"/consent/{token}/start").headers["location"]).query)["state"][0]
     page = w["client"].get("/consent/callback", params={"state": state, "code": GUARANTOR})
-    assert page.status_code == 429 and "seven days" in page.text
-    assert status(w, r.json()["id"])["state"] == "pending"
+    assert page.status_code == 200 and "will be published automatically" in page.text
+    assert status(w, r.json()["id"])["state"] == "confirmed" and "publish_after" in status(w, r.json()["id"])
