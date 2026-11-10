@@ -1,0 +1,5 @@
+# EntryLib publishes research for people and for AI: every page and file here may be read, by anyone and any
+# program. Agents: start at {base}/llms.txt
+User-agent: *
+Content-Signal: search=yes, ai-input=yes
+Allow: /

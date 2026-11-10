@@ -25,7 +25,9 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 ## Fetch
 
 - {base}/p/<year>.<number>.json: the current version, the published file (JSON).
-- {base}/p/<year>.<number>.txt: its reading view (plain text): read this one to understand the paper.
+- {base}/p/<year>.<number>.txt: its reading view (plain text): read this one to understand the paper. When a
+  person points an assistant at an entry, this is the address to give it: some assistants open only addresses they
+  are given, not the links they find in a page.
 - {base}/p/<year>.<number>@v<n>.json and .txt: a given version.
 - {base}/p/<year>.<number>/C4.txt and .json: one claim of the current version, with the definitions, evidence,
   limitations, warrants and claims it rests on.
@@ -49,6 +51,8 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 
 ## Submit
 
+- The subfield: the platform assigns one, unless the submission proposes `paper.classification.subfield` from
+  {base}/subfields.json (OpenAlex's subfields); a valid proposal is kept, and the guarantor sees it when confirming.
 - How to write a claimset: the Claimset specification, {base}/spec/claimset.md (every specification:
   {base}/spec/), and the skills that `pip install claimset` then `claimset skill install` give. Check it first:
   {base}/api/validate (POST a claimset JSON file or a submission package as the request body) checks it as a

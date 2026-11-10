@@ -71,7 +71,7 @@ def _context_by_hash(conn, hash_, submissions_dir):
         claims = {c.get("id"): c for c in doc.get("claims") or [] if isinstance(c, dict)}
         ctx.update(title=paper.get("title", ""), licence=paper.get("licence", ""),
                    principal=[claims[c].get("statement", "") for c in paper.get("contributions") or [] if c in claims],
-                   n_claims=len(claims), reading_view=render(doc),
+                   n_claims=len(claims), reading_view=render(doc), subfield=_subfield_line(doc),
                    correction_reason=paper.get("correction_reason"))
     return ctx
 
@@ -205,3 +205,14 @@ def forget_old(conn, now=None):
     cutoff = (now or dt.datetime.now(dt.UTC)) - dt.timedelta(days=1)
     conn.execute("DELETE FROM confirm_signins WHERE started < %s", (cutoff,))
     conn.execute("DELETE FROM confirm_tickets WHERE expires < %s", (cutoff,))
+
+
+def _subfield_line(doc):
+    """What the guarantor is told about the subfield: the one the submission proposes, or that it is assigned."""
+    from .publish import proposed_subfield
+    from .site import subfield_name
+    sub = proposed_subfield(doc)
+    if sub:
+        return f"{subfield_name({'paper': {'classification': {'subfield': sub}}})} (proposed by the submission)"
+    return ("assigned at publication by EntryLib's classifier; to choose it, propose paper.classification.subfield "
+            "(an OpenAlex subfield) and submit again")

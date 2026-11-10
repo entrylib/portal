@@ -52,6 +52,7 @@ def consent(ctx, start_url, status_url):
 <div class="box">
 <p><strong>{escape(ctx['title'])}</strong></p>
 <p class="muted">{ctx['n_claims']} claims · licence {escape(ctx['licence'])}</p>
+<p class="muted">Subfield: {escape(ctx.get('subfield') or '')}</p>
 <p>Principal claims:</p><ul>{principal}</ul>
 <details><summary>The whole claimset, as models will read it</summary><pre>{escape(ctx['reading_view'])}</pre></details>
 </div>

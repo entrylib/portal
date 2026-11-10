@@ -57,12 +57,20 @@ def build_table(topics, labels):
 
 
 def classify(scored, table, max_topics=3):
-    """{subfield, topics} from the model's [(label, score)], best first: up to three current topics, and the
-    subfield of the best one."""
-    known = [label for label, _ in scored if label in table]          # skip topics OpenAlex has retired
+    """{subfield, topics} from the model's [(label, score)], best first: up to three current topics, and the subfield
+    with the most weight among all the topics scored (the sum of their scores), not merely the best topic's. A paper
+    on forecasting intervals whose best topic is in Finance but whose next ones are in statistics and operations
+    research is put in the subfield those share. Ties go to the subfield of the better topic."""
+    known = [(label, score) for label, score in scored if label in table]   # skip topics OpenAlex has retired
     if not known:
         raise ValueError("the model returned no label of a current OpenAlex topic")
-    return {"subfield": table[known[0]]["subfield"], "topics": [table[label]["topic"] for label in known[:max_topics]]}
+    weight, first = {}, {}
+    for i, (label, score) in enumerate(known):
+        sub = table[label]["subfield"]
+        weight[sub] = weight.get(sub, 0.0) + float(score)
+        first.setdefault(sub, i)
+    subfield = max(weight, key=lambda s: (weight[s], -first[s]))
+    return {"subfield": subfield, "topics": [table[label]["topic"] for label, _ in known[:max_topics]]}
 
 
 def model_input(title, abstract):

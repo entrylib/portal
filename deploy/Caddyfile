@@ -28,7 +28,7 @@
 	# The website and the published files are static, written by the indexer (design §7.4): served from the published
 	# directory without touching the app. The pages load only this site's styles, fonts, images and two scripts
 	# (toc.js and figures.js, on claimset pages); every value from a claimset in them is escaped.
-	@published path / /index.html /lab /about /agents /privacy /all /feed.xml /site.css /toc.js /figures.js /claimset.css /spec /spec/* /fonts/* /p/* /index.jsonl /llms.txt
+	@published path / /index.html /lab /about /agents /privacy /all /feed.xml /site.css /toc.js /figures.js /claimset.css /spec /spec/* /fonts/* /p/* /index.jsonl /llms.txt /robots.txt /subfields.json
 	handle @published {
 		root * /srv/published
 		header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"

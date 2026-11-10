@@ -370,8 +370,10 @@ def _panel(doc, parts, base_url, key):
             f'<details class="cite"><summary>Citation</summary><p class="cite-text">{cite}</p></details>'
             f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
             f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}</div>'
-            f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}@v{n}.json">JSON</a> · '
-            f'<a href="/p/{key}@v{n}.txt">Reading view</a></p></div></aside>')
+            f'<div class="panel-row"><h2>For models</h2><p class="small">Give your AI assistant this address:</p>'
+            f'<p class="for-models"><code>{esc(base_url)}/p/{key}@v{n}.txt</code></p>'
+            f'<p class="small"><a href="/p/{key}@v{n}.txt">Reading view</a> · '
+            f'<a href="/p/{key}@v{n}.json">JSON</a>, for programs</p></div></aside>')
 
 
 def _versions(listing, key, current):
@@ -641,6 +643,7 @@ def confirm_list(items, orcid, name=None):
                 f'<section class="pending"><h2>{esc(it.get("title"))}</h2>{kind}'
                 f'<p class="muted">{esc(it["submission"])} · {esc(it.get("n_claims"))} claims · licence '
                 f'{esc(it.get("licence"))} · waits until {esc(expires)}</p>'
+                f'<p class="muted">Subfield: {esc(it.get("subfield"))}</p>'
                 f"<p>Principal claims:</p><ul>{principal}</ul>"
                 f"<details><summary>The whole claimset, as models will read it</summary><pre>"
                 f"{esc(it.get('reading_view'))}</pre></details>"
@@ -748,6 +751,11 @@ def write_fixed(published_dir, base_url):
     for name in PAGES:
         _write(published_dir / f"{name}.html", fixed_page(name, base_url))
     _write(published_dir / "site.css", _static("site.css").read_text(encoding="utf-8"))
+    subs = _subfields()                                     # for agents proposing a subfield (claimset spec §3.1)
+    _write(published_dir / "subfields.json", json.dumps(
+        [{"id": f"openalex:subfields/{k}", "name": v} for k, v in sorted(subs.items(), key=lambda kv: kv[1])],
+        indent=1, ensure_ascii=False) + "\n")
+    _write(published_dir / "robots.txt", _static("robots.txt").read_text(encoding="utf-8").replace("{base}", base_url))
     for name in ("toc.js", "figures.js"):
         _write(published_dir / name, _static(name).read_text(encoding="utf-8"))
     _write(published_dir / "claimset.css", cshtml.stylesheet())
