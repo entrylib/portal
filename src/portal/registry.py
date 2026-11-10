@@ -2,7 +2,8 @@
 
     <year>/<block>/<name>/v1/claimset.json  v1/lab.jsonl  v1/validation.json
     <year>/<block>/<name>/v2/claimset.json  ...
-    <year>/<block>/<name>/notices.json      retractions and removals (notices.py); a removed claimset keeps only this
+    <year>/<block>/<name>/notices.json      EntryLib's retractions and removals (design §7.5); a removed claimset
+                                            keeps only this
 
 A claimset's folder (its path, `2026/000/entrylib_2026.000123`) follows from its identifier
 (`claimset.revision.record_folder`). Only the platform writes to the registry, one commit per published version,

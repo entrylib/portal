@@ -221,7 +221,22 @@ Decided 9 November 2026 (§15 Q5; portal issue #47). The form is at `/removal`, 
 - **Reasons** come from a list ending with Other, which needs the requester's own words. Those words are screened (§6), shown as text only, and limited in length.
 - **Retract:** the claimset stays, with `status: retracted` and a `status_notice` saying who, when and why, assigned by the platform (claimset spec §9) on every version as served: pages, JSON, reading views, search and `versions.json`. The registry's files are unchanged.
 - **Remove:** the claimset's pages, files, bundles, citations and packaged files no other claimset uses are deleted, and each of its addresses answers with the notice (HTML, JSON, text). It leaves search and the listings; its identifier is never given again.
-- **Registry:** one commit adds or extends `<folder>/notices.json` (revision spec §2.4) and, for a removal, deletes the claimset's versions; history is not rewritten. In github mode it is a pull request that the registry's check (§6) accepts only when it appends exactly one valid notice and, for a removal, deletes every version file and nothing else. `reindex` rebuilds retractions and removals from these files.
+- **Registry:** one commit adds or extends `<folder>/notices.json` and, for a removal, deletes the claimset's versions; history is not rewritten. In github mode it is a pull request that the registry's check (§6) accepts only when it appends exactly one valid notice and, for a removal, deletes every version file and nothing else. `reindex` rebuilds retractions and removals from these files.
+- **Served:** what readers find is the claimset specification's (§9): a retracted claimset with `status: retracted` and its `status_notice`; a removed one as `{"id", "status": "removed", "notice"}`. The rest (who may act, the reasons, `notices.json`) is EntryLib's policy, kept here and not in the specifications.
+
+`notices.json`, in the claimset's registry folder, next to its versions:
+
+```json
+{"id": "entrylib:2026.000123",
+ "notices": [{"action": "retracted", "date": "2026-11-10", "reason_code": "error_in_results",
+              "reason": "Error in the results", "statement": "Table 2 reports the training error, not the test error.",
+              "issued_by": "A. Researcher (ORCID 0000-0002-1825-0097)",
+              "by": {"name": "A. Researcher", "orcid": "0000-0002-1825-0097"}, "versions": [1, 2]}]}
+```
+
+- `action`: `retracted` or `removed`. `reason_code`: from the lists in `notices.py` (each ends with `other`); `reason`: its name; `statement`: the requester's own words, possibly empty (required with `other`).
+- `issued_by`: who acted, as readers see it: the guarantor by name and ORCID iD, or `EntryLib` after review; `by`: the guarantor's name and iD, or `null`. `versions`: the versions the claimset had when the notice was added.
+- Notices are only appended, one per commit. A retraction changes nothing else. A removal deletes every file of every version, so the folder keeps only `notices.json`, and no notice may follow it.
 
 ## 8. Limits and spam controls
 

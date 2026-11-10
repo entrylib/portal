@@ -8,7 +8,7 @@
     overlay(doc, notices)           -> the claimset as readers see it: retracted when its notices say so
 
 A retraction keeps the claimset readable with a notice at its top; a removal replaces it, at the same addresses, by a
-notice. Both are recorded in the registry as `<folder>/notices.json` (revision spec §2.4): a removal's commit also
+notice. Both are recorded in the registry as `<folder>/notices.json` (design §7.5): a removal's commit also
 deletes the claimset's versions; history is not rewritten. Every notice says who, when and why.
 """
 
@@ -216,8 +216,8 @@ def status_notice(notice):
 
 
 def overlay(doc, notices_doc):
-    """The claimset as readers see it: with a retraction in its notices, `status: retracted` and its notice (status
-    and status_notice are assigned by the platform, claimset spec §9). Otherwise the file unchanged."""
+    """The claimset as readers see it: with a retraction in its notices, `status: retracted` and its notice (claimset
+    spec §9: the platform assigns them to every version as served). Otherwise the file unchanged."""
     n = latest(notices_doc)
     if not n or n.get("action") != "retracted":
         return doc
