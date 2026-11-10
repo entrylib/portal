@@ -304,17 +304,17 @@ def test_a_correction_notice_is_folded():
     assert retracted.startswith('<div class="notice') and "by EntryLib" in retracted
 
 
-def test_numbers_are_shown_to_four_digits(env, monkeypatch):
-    """The page asks the package for four significant digits when the package can round (claimset 0.40.7)."""
+def test_numbers_are_shown_to_four_decimal_places(env, monkeypatch):
+    """The page asks the package for four decimal places when the package can round to them (claimset 0.40.8)."""
     seen = {}
     real = site.cshtml.render_parts
 
-    def render_parts(doc, file_url=None, ref_text=None, digits=None):
-        seen["digits"] = digits
+    def render_parts(doc, file_url=None, ref_text=None, decimals=None):
+        seen["decimals"] = decimals
         return real(doc, file_url=file_url)
 
     monkeypatch.setattr(site.cshtml, "render_parts", render_parts)
     doc = example()
     doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
     site.claimset_page(doc, base_url=BASE, listing=[])
-    assert seen["digits"] == 4
+    assert seen["decimals"] == 4

@@ -429,7 +429,7 @@ def _versions(listing, key, current):
             '(<a href="https://github.com/entrylib/registry">github.com/entrylib/registry</a>).</p></section>')
 
 
-DIGITS = 4          # numbers on the pages: at most four significant digits; the published file keeps them all
+DECIMALS = 4        # numbers on the pages: at most four decimal places; the published file keeps every digit
 
 
 def _accepts(fn, name):
@@ -445,8 +445,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
-    if _accepts(cshtml.render_parts, "digits"):                           # claimset 0.40.7
-        extra["digits"] = DIGITS
+    if _accepts(cshtml.render_parts, "decimals"):                         # claimset 0.40.8
+        extra["decimals"] = DECIMALS
     parts = cshtml.render_parts(doc, file_url=file_url, **extra)
     origin = parts["origin"]
     top = [f'<span class="origin">{esc(origin)}</span>', _status(p), f'<span class="id">{esc(p["id"])}</span>',
