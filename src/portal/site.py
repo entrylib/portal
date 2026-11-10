@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import urllib.parse
 from importlib import resources
 from pathlib import Path
 
@@ -704,38 +705,40 @@ def image_type(path):
     return None
 
 
-def file_url_for(published_dir, base_url):
-    """The `file_url` for claimset.html: an artefact stored here (its uri is <base>/files/<sha256>) whose file is an
-    image is shown from /img/<sha256>.<ext>, a link to the stored file written once, with its type in its name."""
-    published_dir = Path(published_dir)
-    prefix = f"{base_url.rstrip('/')}/files/"
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+
+
+def file_url_for(published_dir, base_url, legacy=None):
+    """The `file_url` for claimset.html: an artefact stored with its claimset (its uri is
+    <base>/p/<key>/v<n>/files/<path>, storage.py) whose file is an image, by its name and its content, is shown from
+    there. `legacy`: {sha256: path} for files stored by checksum before (<base>/files/<sha256>), moved since."""
+    published_dir = Path(published_dir).resolve()
+    base = base_url.rstrip("/")
+    legacy = legacy or {}
 
     def file_url(a):
         uri = a.get("uri")
-        if not isinstance(uri, str) or not uri.startswith(prefix):
+        if not isinstance(uri, str) or not uri.startswith(base + "/"):
             return None
-        digest = uri[len(prefix):]
-        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        path = uri[len(base):]
+        m = re.fullmatch(r"/files/([0-9a-f]{64})", path)
+        if m:
+            path = legacy.get(m.group(1))
+            if path is None:
+                return None
+        if not re.match(r"^/p/[0-9]{4}\.[0-9]+/v[1-9][0-9]*/files/", path):
             return None
-        stored = published_dir / "files" / digest
-        ext = image_type(stored)
-        if ext is None:
+        stored = (published_dir / urllib.parse.unquote(path).lstrip("/")).resolve()
+        if published_dir not in stored.parents or stored.suffix.lower() not in IMAGE_EXTENSIONS:
             return None
-        shown = published_dir / "img" / f"{digest}.{ext}"
-        if not shown.exists():
-            shown.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                os.link(stored, shown)
-            except OSError:
-                shutil.copyfile(stored, shown)
-        return f"/img/{digest}.{ext}"
+        return path if image_type(stored) else None
     return file_url
 
 
-def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None):
+def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None, legacy=None):
     """The pages and citation files of one claimset: every version, and the current one at /p/<key>."""
     p = Path(published_dir) / "p"
-    file_url = file_url_for(published_dir, base_url)
+    file_url = file_url_for(published_dir, base_url, legacy)
     current = max(docs)
     for n, doc in docs.items():
         page = claimset_page(doc, base_url=base_url, listing=listing, lab=labs.get(n), file_url=file_url,

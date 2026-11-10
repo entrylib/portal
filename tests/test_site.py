@@ -84,7 +84,7 @@ def test_submitted_text_is_escaped(env):
 def test_packaged_images_are_shown(env):
     ctx, tmp = env
     doc = example()
-    doc["artefacts"].append({"id": "A9", "kind": "figure", "function": "data_plot", "uri": "errors.png",
+    doc["artefacts"].append({"id": "A9", "kind": "figure", "function": "data_plot", "uri": "figures/errors.png",
                              "description": "Errors by horizon", "licence": "CC-BY-4.0",
                              "availability": {"level": "public"}})
     for c in doc["claims"]:
@@ -92,30 +92,85 @@ def test_packaged_images_are_shown(env):
             if s.get("evidence") == "E1":
                 s["artefacts"] = s.get("artefacts", []) + ["A9"]
     folder = tmp / "pkg"
-    folder.mkdir()
-    (folder / "errors.png").write_bytes(PNG)
+    (folder / "figures").mkdir(parents=True)
+    (folder / "figures" / "errors.png").write_bytes(PNG)
     (folder / "paper.claimset.json").write_text(json.dumps(doc))
     from claimset.package import build
     build(str(folder / "paper.claimset.json"), str(tmp / "bag"))
     publish(tmp / "bag", **ctx)
     out = ctx["published_dir"]
     page = (out / "p" / f"{KEY}.html").read_text()
-    shown = list((out / "img").glob("*.png"))
-    assert len(shown) == 1 and f'<img src="/img/{shown[0].name}"' in page
-    assert shown[0].read_bytes() == PNG
+    assert f'<img src="/p/{KEY}/v1/files/figures/errors.png"' in page
+    assert (out / "p" / KEY / "v1" / "files" / "figures" / "errors.png").read_bytes() == PNG
+    assert not (out / "img").exists() or not list((out / "img").glob("*.png"))
+
+
+def test_a_new_version_links_unchanged_files(env):
+    ctx, tmp = env
+    from portal.storage import FileStore
+    store = FileStore(tmp / "pub", BASE)
+    f = tmp / "a.png"
+    f.write_bytes(PNG)
+    _, url1 = store.put(f, KEY, 1, "figures/a.png")
+    _, url2 = store.put(f, KEY, 2, "figures/a.png")
+    assert url2 == f"{BASE}/p/{KEY}/v2/files/figures/a.png"
+    assert store.path(KEY, 1, "figures/a.png").stat().st_ino == store.path(KEY, 2, "figures/a.png").stat().st_ino
+    import pytest
+
+    from portal.storage import StorageError
+    for bad in ("../x.png", "/etc/passwd", "a/../../b", ""):
+        with pytest.raises(StorageError):
+            store.put(f, KEY, 1, bad)
 
 
 def test_image_type_and_file_url(tmp_path):
-    files = tmp_path / "files"
-    files.mkdir()
-    digest = "a" * 64
-    (files / digest).write_bytes(b"<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg'/>")
-    (files / ("b" * 64)).write_bytes(b"col1,col2\n1,2\n")
-    url = site.file_url_for(tmp_path, BASE)
-    assert url({"uri": f"{BASE}/files/{digest}"}) == f"/img/{digest}.svg"
-    assert url({"uri": f"{BASE}/files/{'b' * 64}"}) is None                  # not an image
-    assert url({"uri": "https://example.org/x.png"}) is None                 # not ours: linked, not shown
-    assert url({"uri": f"{BASE}/files/../../etc/passwd"}) is None
+    files = tmp_path / "p" / KEY / "v1" / "files"
+    files.mkdir(parents=True)
+    (files / "fig.svg").write_bytes(b"<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg'/>")
+    (files / "data.csv").write_bytes(b"col1,col2\n1,2\n")
+    (files / "fake.png").write_bytes(b"col1,col2\n")
+    url = site.file_url_for(tmp_path, BASE, legacy={"a" * 64: f"/p/{KEY}/v1/files/fig.svg"})
+    assert url({"uri": f"{BASE}/p/{KEY}/v1/files/fig.svg"}) == f"/p/{KEY}/v1/files/fig.svg"
+    assert url({"uri": f"{BASE}/files/{'a' * 64}"}) == f"/p/{KEY}/v1/files/fig.svg"      # an old address, moved
+    assert url({"uri": f"{BASE}/p/{KEY}/v1/files/data.csv"}) is None                 # not an image
+    assert url({"uri": f"{BASE}/p/{KEY}/v1/files/fake.png"}) is None                 # named an image, is not one
+    assert url({"uri": "https://example.org/x.png"}) is None                         # not ours: linked, not shown
+    assert url({"uri": f"{BASE}/p/{KEY}/v1/files/../../../../etc/passwd.png"}) is None
+
+
+def test_legacy_files_move_into_their_claimset(env):
+    """Files stored by checksum before (files/<sha256>) move to /p/<key>/v<n>/files/<id>.<ext>; the old address
+    redirects."""
+    ctx, tmp = env
+    import hashlib
+
+    from portal.indexer import reindex
+    published = ctx["published_dir"]
+    sha = hashlib.sha256(PNG).hexdigest()
+    (published / "files").mkdir(parents=True)
+    (published / "files" / sha).write_bytes(PNG)
+    (published / "img").mkdir()
+    (published / "img" / f"{sha}.png").write_bytes(PNG)
+    doc = example()
+    doc["artefacts"].append({"id": "A9", "kind": "figure", "function": "data_plot", "uri": "https://x/fig.png",
+                             "description": "Errors", "licence": "CC-BY-4.0", "availability": {"level": "public"}})
+    for c in doc["claims"]:
+        for s in c.get("support") or []:
+            if s.get("evidence") == "E1":
+                s["artefacts"] = s.get("artefacts", []) + ["A9"]
+    publish(write(tmp, doc), **ctx)
+    reg = ctx["registry"]
+    folder = reg.folders()[0]
+    old = reg.read(folder, 1)                                  # as published before November 2026
+    next(a for a in old["artefacts"] if a["id"] == "A9")["uri"] = f"{BASE}/files/{sha}"
+    (reg.version_dir(folder, 1) / "claimset.json").write_text(json.dumps(old))
+    reindex(ctx["conn"], reg, published, BASE)
+    moved = published / "p" / KEY / "v1" / "files" / "A9.png"
+    assert moved.read_bytes() == PNG
+    assert not (published / "files").exists() and not (published / "img" / f"{sha}.png").exists()
+    assert f'<img src="/p/{KEY}/v1/files/A9.png"' in (published / "p" / f"{KEY}.html").read_text()
+    assert ctx["conn"].execute("SELECT path FROM legacy_files WHERE sha256 = %s", (sha,)).fetchone()[0] == \
+        f"/p/{KEY}/v1/files/A9.png"
 
 
 def test_citations():
@@ -210,3 +265,14 @@ def test_a_proposed_subfield_is_kept(env):
     assert served["paper"]["classification"]["subfield"] == "openalex:subfields/2613"
     folder = ctx["registry"].folders()[0]
     assert ctx["registry"].read(folder, 1, "validation.json")["subfield"]["chosen_by"] == "guarantor"
+
+
+def test_old_file_addresses_redirect(app_client, settings):
+    import psycopg
+    sha = "b" * 64
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        conn.execute("INSERT INTO legacy_files (sha256, path) VALUES (%s, %s)", (sha, f"/p/{KEY}/v1/files/A3.png"))
+    r = app_client.get(f"/files/{sha}")
+    assert r.status_code == 301 and r.headers["location"] == f"{settings.base_url}/p/{KEY}/v1/files/A3.png"
+    assert app_client.get(f"/files/{'c' * 64}").status_code == 404
+    assert app_client.get("/files/../etc").status_code == 404

@@ -8,7 +8,8 @@ registry pull request come in later steps; this is the part they all end in:
 1. validate the submission with the `claimset` package (rules of every file, submission rules, rules 70 and 77);
 2. the claimset is classified; then a new claimset gets the next `entrylib:` identifier (only once the classifier
    has answered, so an outage uses up no numbers), while a correction names an existing one (claimset spec §9);
-3. packaged files are stored by checksum and their relative `uri` replaced with the permanent URL;
+3. packaged files are stored with the version (`/p/<key>/v<n>/files/<path>`) and their relative `uri` replaced with
+   the permanent URL;
 4. the platform's fields are added: identifier, version, date, status, classification, verifiability, and for a
    correction previous_version, changes and the status notice;
 5. the result is validated as a published file; it must pass;
@@ -38,6 +39,7 @@ from . import ids
 from .indexer import index_version
 from .registry import dump
 from .screening import SCREENING_VERSION
+from .storage import StorageError
 
 
 class PublishError(Exception):
@@ -137,7 +139,10 @@ def prepare(source, *, conn, registry, store, classifier, today=None, concept=No
         for a in published.get("artefacts") or []:
             if isinstance(a, dict) and is_relative_uri(a.get("uri")):
                 f = payload / a["uri"]
-                digest, url = store.put(f)
+                try:
+                    digest, url = store.put(f, ids.url_key(concept), version, a["uri"])
+                except StorageError as exc:
+                    raise PublishError(f"artefact {a.get('id')}: {exc}") from None
                 if a.get("kind") == "lab_record" and lab_copy is None:
                     lab_copy = f.read_text(encoding="utf-8")
                 a["uri"] = url

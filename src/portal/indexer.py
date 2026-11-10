@@ -21,6 +21,7 @@ Static files, under the published directory:
 Each version's claims and paper get the weighted text full-text search runs on (design §7.2).
 """
 
+import contextlib
 import json
 import os
 import re
@@ -212,8 +213,9 @@ def write_static(conn, registry, folder, published_dir, base_url):
     dois = [b.get("target") for d in docs.values() for b in d.get("references") or []
             if isinstance(b, dict) and b.get("id_type") == "doi"]
     written = crossref.texts(conn, dois)                 # asks Crossref about DOIs not seen before
+    legacy = move_legacy_files(conn, docs, key, published_dir, base_url)
     site.write_claimset(published_dir, base_url, key, docs, listing, labs,
-                        ref_text=lambda b: written.get(crossref.normalise(b.get("target"))))
+                        ref_text=lambda b: written.get(crossref.normalise(b.get("target"))), legacy=legacy)
     write_index(conn, published_dir, base_url)
 
 
@@ -241,7 +243,8 @@ def write_removed(conn, notes, published_dir, base_url):
         conn.execute("DELETE FROM papers WHERE concept_id = %s", (concept,))
         conn.execute("INSERT INTO removed (concept_id, url_key, notice) VALUES (%s, %s, %s) ON CONFLICT (concept_id)"
                      " DO UPDATE SET notice = EXCLUDED.notice", (concept, key, Jsonb(notice)))
-    for digest in digests:                                  # packaged files no other claimset uses
+    conn.execute("DELETE FROM legacy_files WHERE path LIKE %s", (f"/p/{key}/%",))   # its files go with its folder
+    for digest in digests:                                  # old checksum-named files no other claimset uses
         if not conn.execute("SELECT 1 FROM versions WHERE strpos(file::text, %s) > 0 LIMIT 1",
                             (digest,)).fetchone():
             (published_dir / "files" / digest).unlink(missing_ok=True)
@@ -270,6 +273,60 @@ def _stored_digests(doc, base_url):
         uri = a.get("uri") if isinstance(a, dict) else None
         if isinstance(uri, str) and uri.startswith(prefix) and re.fullmatch(r"[0-9a-f]{64}", uri[len(prefix):]):
             yield uri[len(prefix):]
+
+
+LEGACY = re.compile(r"/files/([0-9a-f]{64})$")
+
+
+def move_legacy_files(conn, docs, key, published_dir, base_url):
+    """Files stored by checksum before November 2026 (<base>/files/<sha256>, still the uri in the published files of
+    that time): each is put in its claimset's folder, /p/<key>/v<n>/files/<artefact id><extension>, and the old
+    address is recorded to redirect there (legacy_files; app: /files/<sha256>). Returns {sha256: path}."""
+    published_dir = Path(published_dir)
+    base = base_url.rstrip("/")
+    out = {}
+    for n, doc in sorted(docs.items()):
+        for a in doc.get("artefacts") or []:
+            uri = a.get("uri") if isinstance(a, dict) else None
+            m = LEGACY.search(uri) if isinstance(uri, str) and uri.startswith(base + "/files/") else None
+            if not m or not re.fullmatch(r"A\d+", str(a.get("id"))):
+                continue
+            sha = m.group(1)
+            known = conn.execute("SELECT path FROM legacy_files WHERE sha256 = %s", (sha,)).fetchone()
+            if known and (published_dir / known[0].lstrip("/")).exists():
+                out[sha] = known[0]
+                continue
+            old = published_dir / "files" / sha
+            if not old.exists():
+                continue
+            ext = site.image_type(old)
+            path = f"/p/{key}/v{n}/files/{a['id']}" + (f".{ext}" if ext else "")
+            dest = published_dir / path.lstrip("/")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if not dest.exists():
+                try:
+                    os.link(old, dest)
+                except OSError:
+                    shutil.copyfile(old, dest)
+            conn.execute("INSERT INTO legacy_files (sha256, path) VALUES (%s, %s) ON CONFLICT (sha256) DO NOTHING",
+                         (sha, path))
+            out[sha] = conn.execute("SELECT path FROM legacy_files WHERE sha256 = %s", (sha,)).fetchone()[0]
+    return out
+
+
+def tidy_legacy_files(conn, published_dir):
+    """Once every claimset has been indexed: delete the checksum-named copies that have moved (files/<sha256>) and
+    the image links of the old layout (img/<sha256>.<ext>)."""
+    published_dir = Path(published_dir)
+    moved = {r[0]: r[1] for r in conn.execute("SELECT sha256, path FROM legacy_files").fetchall()}
+    for sha, path in moved.items():
+        if (published_dir / path.lstrip("/")).exists():
+            (published_dir / "files" / sha).unlink(missing_ok=True)
+    for f in (published_dir / "img").glob("*.*") if (published_dir / "img").is_dir() else []:
+        if re.fullmatch(r"[0-9a-f]{64}\.\w+", f.name):
+            f.unlink()
+    with contextlib.suppress(OSError):
+        (published_dir / "files").rmdir()                  # only when empty
 
 
 def _lab_summary(record):
@@ -342,6 +399,7 @@ def reindex(conn, registry, published_dir, base_url):
     for folder in registry.removed_folders():
         write_removed(conn, registry.notices(folder), published_dir, base_url)
     write_index(conn, published_dir, base_url)
+    tidy_legacy_files(conn, published_dir)
     return folders
 
 

@@ -43,6 +43,18 @@
 	# The website and the published files are static, written by the indexer (design §7.4): served from the published
 	# directory without touching the app. The pages load only this site's styles, fonts, images and one script
 	# (page.js, on claimset and specification pages); every value from a claimset in them is escaped.
+	# Packaged files, in their claimset's folder (storage.py): never run (a sandbox, nothing loaded), images shown,
+	# everything else downloaded. A published version's files never change. Before the pages: /p/* is theirs too.
+	@claimset_files path_regexp ^/p/[0-9]{4}\.[0-9]+/v[0-9]+/files/
+	handle @claimset_files {
+		root * /srv/published
+		@not_image not path_regexp (?i)\.(png|jpe?g|gif|webp|svg)$
+		header @not_image Content-Disposition attachment
+		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
 	@published path / /index.html /lab /about /agents /privacy /all /feed.xml /site.css /page.js /claimset.css /spec /spec/* /fonts/* /p/* /index.jsonl /llms.txt /robots.txt /subfields.json
 	handle @published {
 		root * /srv/published
@@ -74,20 +86,11 @@
 		file_server
 	}
 
-	# Images shown on the pages: links to packaged files, named with their type so they display (site.file_url_for).
+	# The site's own images (the ORCID icon, photos on the About page).
 	handle /img/* {
 		root * /srv/published
 		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 		header Cache-Control "public, max-age=86400"
-		file_server
-	}
-
-	# Packaged files, stored by checksum: always downloads, never rendered (an SVG or HTML file cannot run here).
-	handle /files/* {
-		root * /srv/published
-		header Content-Disposition attachment
-		header Content-Security-Policy "default-src 'none'; sandbox"
-		header Cache-Control "public, max-age=31536000, immutable"
 		file_server
 	}
 

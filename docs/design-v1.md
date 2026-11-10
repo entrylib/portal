@@ -45,7 +45,7 @@ guarantor ──ORCID sign-in──▶ consent page ──────┘
 - **App:** Python, FastAPI. One process serving the submission API, consent pages, search API and MCP server. It calls the `claimset` package for validation, rendering, verifiability and patches; it never reimplements the spec.
 - **Database:** PostgreSQL with pgvector. Pending submissions, consents, the search index (full text and embeddings), and each published version's file as `jsonb`.
 - **Static files:** every published file and its rendered views, generated at publication and served directly by Caddy. Most read traffic touches no application code.
-- **Packaged files:** stored by checksum and served as downloads at `/files/<sha256>`; a folder beside the static files now, object storage (DigitalOcean Spaces) later.
+- **Packaged files:** kept with their claimset, at `/p/<key>/v<n>/files/<path in the package>`, so that a claimset's files live in its folder and leave with it; a file unchanged from the version before is a hard link, not a copy. Images are shown on the pages from there; other files are downloads. Files stored by checksum before November 2026 (`/files/<sha256>`, still the `uri` in those versions) were moved to `/p/<key>/v<n>/files/<artefact id>.<ext>`, and their old addresses redirect there (`legacy_files`). Object storage (DigitalOcean Spaces) may take the folder's place later.
 - **Classifier:** a separate service running OpenAlex's open topic model (§5.4).
 - **Embeddings:** a small open embedding model run on the server's CPU.
 
@@ -184,7 +184,7 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 | `/p/2026.000001/C4.txt`, `.json` | Claim bundle of the current version (PLT-78): the claim with what it rests on, made by the claimset package (claimset spec §2.3, `claimset render --claim C4`) |
 | `/p/2026.000001`, `@v1` | The page for people (§7.4). The same address answers `Accept: application/json` with the published file and `Accept: application/x-bibtex` with its BibTeX entry |
 | `/p/2026.000001.bib`, `.ris`, `@v1.bib`, `@v1.ris` | Citations, written at publication |
-| `/img/<sha256>.<ext>` | A packaged image shown on a page: a link to the stored file, named with its type |
+| `/p/2026.000001/v1/files/<path>` | A packaged file of a version, under its path in the package; images shown on the pages, other files downloaded |
 | `/index.jsonl` | One line per claimset: ID, title, principal claims, keywords, current version (paper cards, PLT-79) |
 
 Rendered views are produced by the platform, never submitted. All are regenerated when the claimset package or the site's own templates and styles change (checked when the app starts). All of these files, `/llms.txt` included, are written at publication (and by `reindex`, and the fixed pages at start) and served by Caddy; the app serves the search page, the upload page, the APIs and the MCP server.
@@ -274,7 +274,7 @@ The one exception is legal: personal data, infringing or unlawful content. Such 
 - Database reachable only from the app.
 - The portal acts on GitHub as the EntryLib GitHub App, installed on the registry only, with contents and pull requests write access. Its private key is a file given to the portal as a Docker secret; installation tokens last an hour.
 - The validator runs with time and memory limits; zips are unpacked with the limits of §4.1.
-- Submitted content is never rendered as HTML: the pages show it escaped. Artefacts are served as downloads; packaged images are shown on pages through `/img/`, in a sandbox when opened on their own.
+- Submitted content is never rendered as HTML: the pages show it escaped. Packaged files are served in a sandbox, never run: images are shown, other files downloaded.
 - No access log: readers' IP addresses are used in memory for the limits only (§8), and a submission's address is deleted when it closes.
 - The registry's check runs on every pull request, but merges happen only through the App, and only for pull requests it opened. If the LLM screening is switched on, its API key must be given only to runs on the App's own branches, never to pull requests from forks.
 
