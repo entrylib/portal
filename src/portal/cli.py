@@ -39,6 +39,11 @@ def main(argv=None):
     pub = sub.add_parser("publish", help="publish a submission directly, without consent (administration, tests)")
     pub.add_argument("submission", help="a submission package (BagIt zip or folder) or a claimset file")
     sub.add_parser("reindex", help="rebuild the database index and static files from the registry")
+    sub.add_parser("requests", help="retraction and removal requests waiting for review")
+    dec = sub.add_parser("decide", help="decide a retraction or removal request under review")
+    dec.add_argument("request", help="the request's id (rq_...)")
+    dec.add_argument("decision", choices=["apply", "decline"])
+    dec.add_argument("--note", help="why (kept with the request; for a decline, the answer to the requester)")
     chk = sub.add_parser("check", help="the registry's checks on a pull request (no database)")
     chk.add_argument("--registry", default=".", help="the registry checkout, at the pull request's head")
     chk.add_argument("--base", default="origin/main", help="what the pull request is merged into")
@@ -48,7 +53,7 @@ def main(argv=None):
     from . import MIN_CLAIMSET, claimset_ok
     if not claimset_ok(claimset.__version__):
         print(f"portal: claimset {claimset.__version__} is older than {MIN_CLAIMSET}, the oldest the portal works "
-              f"with; update it: pip install --upgrade 'claimset @ git+https://github.com/entrylib/claimset'",
+              f"with; update it: pip install --upgrade claimset",
               file=sys.stderr)
         return 2
     if args.command == "check":
@@ -62,6 +67,9 @@ def main(argv=None):
         if not applied:
             print("database is up to date")
         return 0
+
+    if args.command in ("requests", "decide"):
+        return _requests(settings, args)
 
     if args.command in ("publish", "reindex"):
         import psycopg
@@ -95,6 +103,32 @@ def main(argv=None):
     uvicorn.run(create_app(settings), host=args.host, port=args.port, proxy_headers=True,
                 forwarded_allow_ips="*", access_log=False)
     return 0
+
+
+def _requests(settings, args):
+    """List or decide the requests under review. An approved request is applied by the app's next round."""
+    import psycopg
+
+    from . import notices
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        if args.command == "requests":
+            rows = conn.execute("SELECT id, received, concept_id, action, reason_code, statement, contact, grounds"
+                                " FROM notice_requests WHERE state = 'review' ORDER BY received").fetchall()
+            for rid, received, concept, action, reason, statement, contact, grounds in rows:
+                print(f"{rid}  {received:%Y-%m-%d %H:%M}  {action} {concept}  ({notices.reason_label(reason)})")
+                print(f"  from: {contact}")
+                print(f"  statement (shown in the notice): {statement or '-'}")
+                print("  grounds: " + (grounds or "-").replace("\n", "\n          "))
+            if not rows:
+                print("no requests waiting for review")
+            return 0
+        try:
+            state = notices.decide(conn, args.request, args.decision == "apply", args.note)
+        except notices.NoticeError as exc:
+            print(f"portal: {exc}", file=sys.stderr)
+            return 1
+        print(f"{args.request}: {state}" + ("; the app applies it within ten minutes" if state == "confirmed" else ""))
+        return 0
 
 
 def _refresh(settings, version):

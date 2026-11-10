@@ -2,6 +2,7 @@
 
     <year>/<block>/<name>/v1/claimset.json  v1/lab.jsonl  v1/validation.json
     <year>/<block>/<name>/v2/claimset.json  ...
+    <year>/<block>/<name>/notices.json      retractions and removals (notices.py); a removed claimset keeps only this
 
 A claimset's folder (its path, `2026/000/entrylib_2026.000123`) follows from its identifier
 (`claimset.revision.record_folder`). Only the platform writes to the registry, one commit per published version,
@@ -16,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 VERSION_DIR = re.compile(r"^v([1-9]\d*)$")
+NOTICES = "notices.json"
 YEAR_DIR = re.compile(r"^\d{4}$")
 BLOCK_DIR = re.compile(r"^\d{3,}$")
 
@@ -89,3 +91,34 @@ class Registry:
         self.git("commit", "-q", "-m", message)
         self.git("tag", tag_name(folder, n))
         return d
+
+    def notices(self, folder):
+        """The claimset's notices document ({id, notices: [...]}), or None."""
+        f = self.path / folder / NOTICES
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+    def removed_folders(self):
+        """Folders of removed claimsets: a notices document and no versions."""
+        out = []
+        for f in sorted(self.path.glob(f"[0-9][0-9][0-9][0-9]/*/*/{NOTICES}")):
+            folder = f.parent.relative_to(self.path).as_posix()
+            if not self.versions(folder):
+                out.append(folder)
+        return out
+
+    def write_notices(self, folder, notices, message, remove=False):
+        """Write a claimset's notices document and commit it; with `remove`, the commit also deletes its versions.
+        History is not rewritten: the removed files stay in earlier commits."""
+        apply_notices(self.path, folder, notices, remove, self.git)
+        self.git("commit", "-q", "-m", message)
+
+
+def apply_notices(root, folder, notices, remove, git):
+    """Stage a notices document (and, with `remove`, the deletion of every version) in a work tree."""
+    d = Path(root) / folder
+    d.mkdir(parents=True, exist_ok=True)
+    (d / NOTICES).write_text(dump(notices), encoding="utf-8")
+    git("add", "--", f"{folder}/{NOTICES}")
+    if remove:
+        for v in sorted(p.name for p in d.iterdir() if p.is_dir() and VERSION_DIR.match(p.name)):
+            git("rm", "-r", "-q", "--", f"{folder}/{v}")

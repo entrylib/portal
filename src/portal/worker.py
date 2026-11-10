@@ -12,6 +12,7 @@ is still published. Two modes:
 import logging
 from pathlib import Path
 
+from . import notices
 from .archive import archive_version
 from .classify import ClassifierError
 from .indexer import index_version
@@ -25,15 +26,22 @@ PUBLISH_LOCK = 4_242_001
 
 
 def publish_confirmed(conn, *, settings, registry, store, classifier, remote=None, archive=None):
-    """Publish what can be published. Returns [(submission ID, published ID or None)] for the submissions
-    published or refused in this round; [] at once if another publisher is running, which then does it."""
+    """Publish what can be published, and apply confirmed retractions and removals. Returns [(submission ID,
+    published ID or None)] for the submissions published or refused in this round, and [(request ID, state)] for
+    the notices; [] at once if another publisher is running, which then does it."""
     if not conn.execute("SELECT pg_try_advisory_lock(%s)", (PUBLISH_LOCK,)).fetchone()[0]:
         return []
     try:
         if remote is None:
-            return _publish_local(conn, settings=settings, registry=registry, store=store, classifier=classifier)
-        done = _settle_open(conn, settings=settings, remote=remote, archive=archive)
-        done += _open_new(conn, settings=settings, remote=remote, store=store, classifier=classifier)
+            done = _publish_local(conn, settings=settings, registry=registry, store=store, classifier=classifier)
+        else:
+            done = _settle_open(conn, settings=settings, remote=remote, archive=archive)
+            done += _open_new(conn, settings=settings, remote=remote, store=store, classifier=classifier)
+        try:                                        # retractions and removals (notices.py), in the same round
+            done += notices.apply_confirmed(conn, registry=registry, published_dir=settings.published_dir,
+                                            base_url=settings.base_url, remote=remote)
+        except Exception:
+            log.exception("applying retractions and removals failed; will retry")
         return done
     finally:
         conn.execute("SELECT pg_advisory_unlock(%s)", (PUBLISH_LOCK,))

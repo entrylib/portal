@@ -10,6 +10,7 @@ import contextlib
 import ipaddress
 import logging
 import tempfile
+import urllib.parse
 from contextlib import asynccontextmanager
 from importlib import resources
 from pathlib import Path
@@ -19,7 +20,7 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, consent, fetch, mcp_server, pages, ratelimit, search, site, submissions, worker
+from . import __version__, consent, fetch, mcp_server, notices, pages, ratelimit, search, site, submissions, worker
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -131,6 +132,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
     def expire_now():
         with pool.connection() as conn:
             expired = submissions.expire(conn, settings.submissions_dir)
+            notices.forget_stale(conn)
         publish_now()                                       # confirmed submissions left by a restart or a failure
         return expired
 
@@ -288,9 +290,11 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return HTMLResponse(pages.message("Sign-in cancelled", "ORCID sign-in was not completed. Open the "
                                               "consent link again to retry."), status_code=400)
         try:
-            who, _ = await run_in_threadpool(orcid.exchange, code)
+            who, name = await run_in_threadpool(orcid.exchange, code)
         except OrcidError as exc:
             return HTMLResponse(pages.message("Sign-in failed", str(exc)), status_code=502)
+        if notices.is_notice_state(state):                  # a sign-in from the removal form
+            return await removal_signed_in(state, who, name)
 
         def work():
             with pool.connection() as conn:
@@ -309,6 +313,62 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         text = (f"Thank you. The claimset is published as {published}." if published else
                 "Thank you. You have confirmed the claimset; it will be published shortly.")
         return pages.message("Confirmed", text, status_url)
+
+    removal_csp = PAGE_CSP.replace("form-action 'self'", f"form-action 'self' {settings.orcid_base}")
+
+    def _page(html_, status=200):
+        return HTMLResponse(html_, status_code=status, headers={"Content-Security-Policy": removal_csp})
+
+    @app.get("/removal", response_class=HTMLResponse, include_in_schema=False)
+    def removal_form():
+        """Retraction and removal (design §7.5): the policy and the form."""
+        return _page(site.removal_page(orcid_ready=orcid.configured))
+
+    @app.post("/removal", response_class=HTMLResponse, include_in_schema=False)
+    async def removal_request(request: Request):
+        """A request from the form: the guarantor goes on to ORCID; anyone else's is kept for review."""
+        body = await request.body()
+        if len(body) > 20_000:
+            return _page(site.removal_page(error="The request is too long."), 413)
+        form = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("utf-8", "replace")).items()}
+        action, _, reason = (form.get("reason") or "").partition(":")
+        guarantor = form.get("who") != "other"
+        if guarantor and not orcid.configured:
+            return _page(site.removal_page(form, "ORCID sign-in is not available now.", False), 503)
+
+        def work():
+            with pool.connection() as conn:
+                rid = notices.request(conn, concept=form.get("id", ""), action=action, reason_code=reason,
+                                      statement=form.get("statement", ""), guarantor=guarantor,
+                                      contact=form.get("contact"), grounds=form.get("grounds"))
+                return rid, notices.start_signin(conn, rid) if guarantor else None
+        try:
+            rid, state = await run_in_threadpool(work)
+        except notices.NoticeError as exc:
+            return _page(site.removal_page(form, str(exc)[:1].upper() + str(exc)[1:] + ".", orcid.configured), 400)
+        if state:
+            return RedirectResponse(orcid.authorize_url(state), status_code=303)
+        return _page(site.message_page("Request received", f"Your request {rid} is with EntryLib for review. We "
+                                       "will answer at the email address you gave.", ("/", "Home")))
+
+    async def removal_signed_in(state, who, name):
+        def work():
+            with pool.connection() as conn:
+                return notices.complete_signin(conn, state, who, name)
+        outcome = await run_in_threadpool(work)
+        if outcome.result != "confirmed":
+            code_ = {"wrong_person": 403, "not_waiting": 409}.get(outcome.result, 400)
+            return _page(site.message_page("Not confirmed", outcome.message[:1].upper() + outcome.message[1:] + ".",
+                                           ("/removal", "Retraction and removal")), code_)
+        try:
+            done = dict(await run_in_threadpool(publish_now))
+        except Exception:  # noqa: BLE001 - the periodic loop retries; the guarantor has confirmed either way
+            log.exception("applying a notice after sign-in failed")
+            done = {}
+        text = ("Done. The entry's pages now show the notice." if done.get(outcome.request) == "applied" else
+                "Confirmed. The notice is being recorded in the public registry and will show on the entry's pages "
+                "shortly.")
+        return _page(site.message_page("Confirmed", text, ("/", "Home")))
 
     @app.get("/consent/{token}", response_class=HTMLResponse, include_in_schema=False)
     def consent_page(token: str):

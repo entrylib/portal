@@ -208,7 +208,20 @@ The site for people follows the website design decisions of 10 November 2026 (En
 - **Claimset page.** Made from the JSON by the claimset package (`claimset.html.render_parts`, the same view as `claimset render --html`); the portal adds the page around it: origin label (lab, lab · record withheld, converted, native), status and notices, the header panel (quality score, shown as "–" until it is defined; claims by support light; Cite with the plain citation, BibTeX and RIS; links for models), the lab record's summary for a lab claimset, and the versions. Packaged images are shown in their evidence; images elsewhere are linked, never loaded.
 - **Pages without scripts.** Every page is static HTML and CSS except search (rendered by the app) and the upload page (its own script only). They load only this site's styles, fonts (Source Serif 4, served from the site) and images; the content security policy says so. Everything taken from a claimset is escaped.
 - **Look.** One font, Source Serif 4; one colour scheme with a dark theme; colour only for links, status and the support lights. Phones get a menu button and a single column.
-- **Not yet:** the removal form (issue #47; the page says to write meanwhile), the specifications as HTML pages (#46), subfield names (the classifier gives OpenAlex IDs), the quality score.
+- **Subfields** are shown by name, from a table of OpenAlex's subfields kept in the portal (`data/subfields.json`).
+- **Specifications** (#46): `/spec/claimset`, `/spec/lab-record`, `/spec/revision`, `/spec/extensions/<name>`, each version at `/<version>` and as text at `.md`, made from the Markdown shipped with the installed claimset package by a small converter of our own (`markdown.py`; our text only, never submitted content) and written when the app starts.
+- **Scripts:** one, `toc.js`, on claimset and specification pages: it marks the section being read in the contents and, on a phone, shows it in a bar that opens the contents. Without it the contents still link to every section.
+- **Not yet:** the quality score (shown as "–").
+
+### 7.5 Retraction and removal
+
+Decided 9 November 2026 (§15 Q5; portal issue #47). The form is at `/removal`, rendered by the app.
+
+- **The guarantor** signs in with ORCID (the same callback as consent); if the iD is a guarantor of the current version, the request is applied at once. **Anyone else** gives an email address and their grounds; EntryLib reviews (`portal requests`, `portal decide <id> apply|decline`), and the notice then names EntryLib. The email and grounds are deleted when the request closes; a guarantor's request never confirmed is deleted after a day.
+- **Reasons** come from a list ending with Other, which needs the requester's own words. Those words are screened (§6), shown as text only, and limited in length.
+- **Retract:** the claimset stays, with `status: retracted` and a `status_notice` saying who, when and why, assigned by the platform (claimset spec §9) on every version as served: pages, JSON, reading views, search and `versions.json`. The registry's files are unchanged.
+- **Remove:** the claimset's pages, files, bundles, citations and packaged files no other claimset uses are deleted, and each of its addresses answers with the notice (HTML, JSON, text). It leaves search and the listings; its identifier is never given again.
+- **Registry:** one commit adds or extends `<folder>/notices.json` (revision spec §2.4) and, for a removal, deletes the claimset's versions; history is not rewritten. In github mode it is a pull request that the registry's check (§6) accepts only when it appends exactly one valid notice and, for a removal, deletes every version file and nothing else. `reindex` rebuilds retractions and removals from these files.
 
 ## 8. Limits and spam controls
 
