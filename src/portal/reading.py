@@ -60,7 +60,8 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   public https URL, for a file too large to send directly.
 - {base}/submit: a page where a person uploads the file.
 - Each response gives a consent link: the guarantor signs in with ORCID within 48 hours by that link and confirms;
-  then the claimset is published. {base}/api/submissions/<id> shows its state.
+  then the claimset is published. Keep the whole response: the link is shown only there. Without it, the guarantor
+  confirms at {base}/confirm, signing in with ORCID. {base}/api/submissions/<id> shows the state.
 - A new version of a published claimset sets `paper.id` to its identifier (and `paper.correction_reason`) and is
   confirmed by the same guarantor. A new claimset with the same title and guarantor as one already published is
   refused as a duplicate, unless `new_paper=true` (a query parameter) says it is a different paper.

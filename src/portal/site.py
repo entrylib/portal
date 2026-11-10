@@ -595,6 +595,53 @@ def removal_page(form=None, error=None, orcid_ready=True):
                  description="How an entry is retracted or removed, and the form to ask for it.")
 
 
+CONSENT = ("By confirming, you state that you are the main author of this work and the person to contact about it, "
+           "that you answer for its research (whether the claims are true and the work was done properly), and that it "
+           "may be published under its licence. Once published, a claimset stays: it can be corrected or retracted, "
+           "and is removed only when it must be.")
+
+
+def confirm_page(orcid_ready=True):
+    """/confirm: sign in with ORCID to see the submissions waiting for you, without the consent link."""
+    action = ('<p><a class="button" href="/confirm/start">Sign in with ORCID</a></p>' if orcid_ready else
+              '<p class="muted">ORCID sign-in is not available now.</p>')
+    main = ('<div class="wrap prose"><h1>Confirm a claimset</h1><p class="lead">When an agent submits a claimset, '
+            "its guarantor confirms it before it is published. The consent link the agent was given leads straight "
+            "to it; without the link, sign in here with your ORCID iD to see every submission waiting for you."
+            f"</p>{action}<p class=\"muted\">Submissions wait 48 hours for confirmation; then they are deleted and "
+            "can be submitted again.</p></div>")
+    return shell("Confirm a claimset", main, head='<meta name="robots" content="noindex">')
+
+
+def confirm_list(items, orcid, name=None):
+    """The submissions waiting for the guarantor who signed in, each with its claims and a Confirm button."""
+    who = f"{esc(name)} (ORCID {esc(orcid)})" if name else f"ORCID {esc(orcid)}"
+    if not items:
+        body = (f"<p>No submission is waiting for {who}. A submission is deleted 48 hours after it was made; if "
+                "yours has expired, submit it again.</p>")
+    else:
+        rows = []
+        for it in items:
+            principal = "".join(f"<li>{esc(plain(s))}</li>" for s in it.get("principal") or [])
+            kind = (f"<p><strong>A new version of {esc(it['target'])}.</strong> Reason given: "
+                    f"{esc(it.get('correction_reason') or '')}</p>") if it.get("kind") == "correction" else ""
+            expires = it["expires"].strftime("%d %B %Y, %H:%M UTC")
+            rows.append(
+                f'<section class="pending"><h2>{esc(it.get("title"))}</h2>{kind}'
+                f'<p class="muted">{esc(it["submission"])} · {esc(it.get("n_claims"))} claims · licence '
+                f'{esc(it.get("licence"))} · waits until {esc(expires)}</p>'
+                f"<p>Principal claims:</p><ul>{principal}</ul>"
+                f"<details><summary>The whole claimset, as models will read it</summary><pre>"
+                f"{esc(it.get('reading_view'))}</pre></details>"
+                f'<form method="post" action="/confirm"><input type="hidden" name="ticket" value="{esc(it["ticket"])}">'
+                '<p><button class="button" type="submit">Confirm and publish</button></p></form></section>')
+        body = (f"<p>Signed in as {who}. {len(items)} submission{'s' if len(items) != 1 else ''} "
+                f"name{'s' if len(items) == 1 else ''} you as guarantor.</p><p>{esc(CONSENT)}</p>" + "".join(rows)
+                + '<p class="muted">These buttons work for 30 minutes; then sign in again.</p>')
+    main = f'<div class="wrap prose"><h1>Confirm a claimset</h1>{body}</div>'
+    return shell("Confirm a claimset", main, head='<meta name="robots" content="noindex">')
+
+
 def message_page(title, text, link=None):
     """A short page after an action: what happened, and where to go next."""
     more = f'<p><a href="{esc(link[0])}">{esc(link[1])}</a></p>' if link else ""

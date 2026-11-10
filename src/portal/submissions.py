@@ -205,6 +205,8 @@ def status(conn, sub_id, base_url, registry_repo=None):
     out = {"id": sid, "state": state, "kind": kind, "received": received.isoformat(), "expires": expires.isoformat(),
            "status_url": f"{base_url}/api/submissions/{sid}",
            "guarantors": [{"orcid": o, "confirmed": c} for o, c in people]}
+    if state == "pending":                                  # the guarantor can confirm without the consent link
+        out["confirm_url"] = f"{base_url}/confirm"
     if target:
         out["corrects"] = target
     if published:
