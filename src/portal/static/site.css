@@ -134,7 +134,21 @@ details.notice[open] summary { margin-bottom: 4px; }
 
 /* claimset page */
 .cs-page .cs-header { min-width: 0; }
-.entry-head { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 32px; align-items: start; }
+/* One grid: the header spans the contents and the body, so "In brief" follows it directly; the panel runs down the
+   right beside both, from the top of the header, and stays in view while reading. */
+.entry { display: grid; grid-template-columns: 210px minmax(0, 1fr) 270px; column-gap: 40px;
+  grid-template-areas: "head head panel" "nav body panel"; align-items: start; }
+.entry-header { grid-area: head; margin-bottom: 28px; }
+.entry > .panel { grid-area: panel; position: sticky; top: 16px; }
+.entry > .cs-toc { grid-area: nav; }
+.entry > .cs-body { grid-area: body; }
+.entry > .toc-bar { grid-area: bar; }
+@media (max-height: 700px) { .entry > .panel { position: static; } }
+@media (max-width: 1100px) {
+  .entry { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "head head" "panel panel" "nav body"; }
+  .entry > .panel { position: static; margin-bottom: 28px; display: flex; flex-wrap: wrap; gap: 0 24px; }
+  .entry > .panel .panel-row { border-bottom: 0; flex: 1 1 180px; }
+}
 .entry-top { margin: 0 0 4px; font-size: 15px; color: var(--muted); }
 .entry-top .id { overflow-wrap: anywhere; }
 .origin-line { margin: 10px 0 0; font-size: 16px; color: var(--muted); }
@@ -189,7 +203,8 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
 .versions { padding-left: 20px; }
 .orcid-verified, .orcid.orcid-verified { padding-left: 20px; background: url(/img/orcid.svg) no-repeat left center / 16px 16px; }
 @media (max-width: 860px) {
-  .entry-head { grid-template-columns: 1fr; gap: 16px; }
+  .entry { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "panel" "bar" "nav" "body"; }
+  .entry-header { margin-bottom: 16px; }
   .panel { display: flex; flex-wrap: wrap; gap: 0 24px; }
   .panel-row { border-bottom: 0; flex: 1 1 140px; }
   .cs-toc { position: static; max-height: none; flex-basis: 100%; }

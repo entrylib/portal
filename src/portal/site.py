@@ -486,11 +486,12 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     nav = parts["nav"].replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
                                               f'<span class="count">{len(listing)}</span></li></ol></nav>')
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
-    main = (f'<div class="cs-page"><div class="entry-head"><div class="cs-header">'
+    # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
+    main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p)}{parts["header"]}'
-            f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key, scores)}</div>'
-            f'<div class="cs-layout">{nav}<article class="cs-body">{score_html.decorate(parts["body"], scores)}'
-            f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div></div>')
+            f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key, scores)}'
+            f'{nav}<article class="cs-body">{score_html.decorate(parts["body"], scores)}'
+            f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
     first = _principal(doc)[:1]
     description = plain(first[0].get("statement")) if first else ""
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
