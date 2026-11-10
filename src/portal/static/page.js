@@ -54,6 +54,21 @@
   document.documentElement.classList.add("toc-js");
 })();
 
+// The site's header: on a phone it slides away while reading down the page and comes back on the first scroll up,
+// so the menu is never far; on a wide screen it always stays. Never hidden while its menu is open or near the top.
+(function () {
+  "use strict";
+  var root = document.documentElement, narrow = window.matchMedia("(max-width: 860px)"), last = window.scrollY;
+  var menu = document.querySelector(".site-menu");
+  window.addEventListener("scroll", function () {
+    var y = window.scrollY;
+    if (!narrow.matches || y < 120 || (menu && menu.open)) root.classList.remove("head-hidden");
+    else if (y > last + 6) root.classList.add("head-hidden");
+    else if (y < last - 6) root.classList.remove("head-hidden");
+    last = y;
+  }, { passive: true });
+})();
+
 // Pop-ups: one dialog shape for the whole site, with its close button in the top right corner; Esc, the button or a
 // click outside closes it. window.entrylibPopup(className, label) gives {dialog, body, open}.
 window.entrylibPopup = function (className, label) {
