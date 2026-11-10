@@ -114,12 +114,21 @@ def fingerprint():
 
 # --- the shell --------------------------------------------------------------------------------------------------------
 
+#: The mark (static/img/entrylib-mark.svg) inline, its brackets in the text's colour so that it follows the theme.
+MARK = ('<svg class="logo-mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" focusable="false">'
+        '<path d="M11 5H6v22h5M21 5h5v22h-5" fill="none" stroke="currentColor" stroke-width="3.2" '
+        'stroke-linecap="square"/><circle cx="16" cy="16" r="4" fill="#2e8b57"/></svg>')
+#: The icons a browser, a phone's home screen and an installed site use (static/icons, written at the site's root).
+ICONS = ('<link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml">'
+         '<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest">')
+
+
 def _header(active):
     links = "".join(f'<a href="{href}"' + (' aria-current="page"' if key == active else "") + f">{label}</a>"
                     for href, label, key in NAV)
     submit = '<a class="button" href="/submit">Submit a claimset</a>'
     return (f'<header class="site-header"><div class="wrap">'
-            f'<a class="logo" href="/">{SITE}</a>'
+            f'<a class="logo" href="/">{MARK}<span>{SITE}</span></a>'
             f'<nav class="site-nav" aria-label="Site">{links}{submit}</nav>'
             f'<details class="site-menu"><summary>Menu</summary><nav aria-label="Site">{links}{submit}</nav></details>'
             "</div></header>")
@@ -148,7 +157,7 @@ def shell(title, main, *, active=None, description="", head="", canonical=None, 
     canon = f'<link rel="canonical" href="{esc(canonical)}">' if canonical else ""
     return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            f"<title>{esc(full)}</title>{meta}{canon}"
+            f"<title>{esc(full)}</title>{meta}{canon}{ICONS}"
             f'<link rel="stylesheet" href="{asset("/fonts/fonts.css")}">'
             f'<link rel="stylesheet" href="{asset("/claimset.css")}">'
             f'<link rel="stylesheet" href="{asset("/site.css")}">'
@@ -848,6 +857,9 @@ def write_fixed(published_dir, base_url):
     _write(published_dir / "robots.txt", _static("robots.txt").read_text(encoding="utf-8").replace("{base}", base_url))
     _write(published_dir / "page.js", _static("page.js").read_text(encoding="utf-8"))
     _write(published_dir / "claimset.css", cshtml.stylesheet())
+    for f in Path(str(_static("icons"))).iterdir():          # favicons and the manifest, at the site's root
+        if f.is_file():
+            shutil.copyfile(f, published_dir / f.name)
     for folder in ("fonts", "img"):
         src = Path(str(_static(folder)))
         for f in src.iterdir():

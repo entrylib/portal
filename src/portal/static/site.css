@@ -55,7 +55,9 @@ main { min-height: 60vh; }
 .head-hidden .site-header { transform: translateY(-100%); }
 [id] { scroll-margin-top: calc(var(--head) + 12px); }
 .site-header .wrap { display: flex; align-items: center; gap: 24px; min-height: 64px; }
-.logo { font-size: 24px; font-weight: 700; color: var(--ink); text-decoration: none; margin-right: auto; }
+.logo { font-size: 24px; font-weight: 700; color: var(--ink); text-decoration: none; margin-right: auto;
+  display: inline-flex; align-items: center; gap: 9px; }
+.logo-mark { flex: none; }
 .site-nav { display: flex; align-items: center; gap: 22px; }
 .site-nav a:not(.button), .site-menu nav a:not(.button) { color: var(--ink); text-decoration: none; }
 .site-nav a[aria-current], .site-menu a[aria-current] { text-decoration: underline; text-decoration-thickness: 2px; }
