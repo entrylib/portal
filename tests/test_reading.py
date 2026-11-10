@@ -30,7 +30,7 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert [c["id"] for c in bundle["claims"]] == ["C2", "C1", "C3"]
     assert {f.name for f in (out / "p" / KEY).glob("C*")} == {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")}
     page = (out / "p" / f"{KEY}.html").read_text()
-    assert page.startswith("<!doctype html>") and page.count("<script") == 1 and 'class="cs-page"' in page
+    assert page.startswith("<!doctype html>") and page.count("<script") == 1 and 'class="cs-page entry"' in page
     assert "<title>Method M" in page and f'href="/p/{KEY}@v1.json"' in page
     llms = (out / "llms.txt").read_text()
     assert f"{BASE}/api/search/claims?q=" in llms and "data" in llms and "{base}" not in llms
