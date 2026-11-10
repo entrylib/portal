@@ -41,6 +41,9 @@ def test_listings_and_feed(env):
     assert "The open library of machine-readable entries" in home and f'href="/p/{KEY}"' in home
     assert 'action="/search"' in home and "Recently published" in home
     assert f'href="/p/{KEY}"' in (out / "all.html").read_text()
+    sitemap = (out / "sitemap.xml").read_text()
+    assert sitemap.startswith("<?xml") and f"<loc>{BASE}/p/{KEY}</loc>" in sitemap
+    assert f"<loc>{BASE}/read</loc>" in sitemap
     feed = (out / "feed.xml").read_text()
     assert feed.startswith('<?xml') and f"<id>{BASE}/p/{KEY}@v1</id>" in feed
 
@@ -58,6 +61,9 @@ def test_fixed_pages_and_assets_at_start(env):
     assert (out / "fonts" / "fonts.css").exists() and (out / "img" / "orcid.svg").exists()
     assert (out / "spec" / "claimset.md").exists() and "Specifications" in (out / "spec" / "index.html").read_text()
     assert (out / "index.html").exists()                    # the home page, before anything is published
+    security = (out / ".well-known" / "security.txt").read_text()
+    assert "Contact: mailto:mail@entrylib.org" in security and "Expires: " in security
+    assert f"Sitemap: {BASE}/sitemap.xml" in (out / "robots.txt").read_text()
 
 
 def test_pages_are_rebuilt_when_the_site_changes(env, monkeypatch):

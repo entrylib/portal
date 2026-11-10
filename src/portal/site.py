@@ -10,6 +10,7 @@ The indexer writes all of it as static files at publication and when the app sta
 page the app renders, on request (`search_page`).
 """
 
+import datetime as dt
 import functools
 import hashlib
 import html
@@ -832,6 +833,30 @@ def write_listings(published_dir, base_url, docs):
     _write(published_dir / "index.html", home(docs))
     _write(published_dir / "all.html", all_page(docs))
     _write(published_dir / "feed.xml", feed(docs, base_url))
+    _write(published_dir / "sitemap.xml", sitemap(docs, base_url))
+
+
+#: The site's own pages that search engines should know, besides the claimsets.
+SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/spec/"]
+
+
+def sitemap(docs, base_url):
+    """/sitemap.xml: the site's pages and the current page of every claimset, with the date it last changed."""
+    urls = [f"<url><loc>{esc(base_url + path)}</loc></url>" for path in SITEMAP_PAGES]
+    for d in docs:
+        p = d["paper"]
+        urls.append(f"<url><loc>{esc(base_url)}/p/{ids.url_key(p['id'])}</loc>"
+                    f"<lastmod>{esc(str(p.get('date') or '')[:10])}</lastmod></url>")
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "\n".join(urls) + "\n</urlset>\n")
+
+
+def security_txt(base_url, today=None):
+    """/.well-known/security.txt (RFC 9116): whom to tell about a security problem. Written at every start, so its
+    expiry, a year ahead, never passes."""
+    expires = (today or dt.date.today()) + dt.timedelta(days=365)
+    return (f"Contact: mailto:{CONTACT}\nExpires: {expires.isoformat()}T00:00:00Z\nPreferred-Languages: en\n"
+            f"Canonical: {base_url}/.well-known/security.txt\n")
 
 
 def write_fixed(published_dir, base_url):
@@ -847,6 +872,7 @@ def write_fixed(published_dir, base_url):
         indent=1, ensure_ascii=False) + "\n")
     _write(published_dir / "robots.txt", _static("robots.txt").read_text(encoding="utf-8").replace("{base}", base_url))
     _write(published_dir / "page.js", _static("page.js").read_text(encoding="utf-8"))
+    _write(published_dir / ".well-known" / "security.txt", security_txt(base_url))
     _write(published_dir / "claimset.css", cshtml.stylesheet())
     for folder in ("fonts", "img"):
         src = Path(str(_static(folder)))
