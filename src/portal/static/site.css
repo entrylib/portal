@@ -45,7 +45,15 @@ main { min-height: 60vh; }
   background: var(--accent); color: var(--ground) !important; text-decoration: none; font-weight: 600; }
 
 /* header and footer */
-.site-header { border-bottom: 1px solid var(--rule); }
+/* The site's header stays at the top of the window (--head is its height), so the menu, the home page and Read are
+   always one click away. On a phone it slides away while reading down and comes back on the first scroll up
+   (page.js sets .head-hidden); without the script it simply stays. */
+:root { --head: 65px; }
+.head-hidden { --head: 0px; }
+.site-header { border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 30; background: var(--ground);
+  transition: transform .2s ease; }
+.head-hidden .site-header { transform: translateY(-100%); }
+[id] { scroll-margin-top: calc(var(--head) + 12px); }
 .site-header .wrap { display: flex; align-items: center; gap: 24px; min-height: 64px; }
 .logo { font-size: 24px; font-weight: 700; color: var(--ink); text-decoration: none; margin-right: auto; }
 .site-nav { display: flex; align-items: center; gap: 22px; }
@@ -139,7 +147,8 @@ details.notice[open] summary { margin-bottom: 4px; }
 .entry { display: grid; grid-template-columns: 210px minmax(0, 1fr) 270px; column-gap: 40px;
   grid-template-areas: "head head panel" "nav body panel"; align-items: start; }
 .entry-header { grid-area: head; margin-bottom: 28px; }
-.entry > .panel { grid-area: panel; position: sticky; top: 16px; }
+.entry > .panel { grid-area: panel; position: sticky; top: calc(var(--head) + 16px); }
+.cs-page .cs-toc, .spec-toc { top: calc(var(--head) + 16px); }
 .entry > .cs-toc { grid-area: nav; }
 .entry > .cs-body { grid-area: body; }
 .entry > .toc-bar { grid-area: bar; }
@@ -257,14 +266,14 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
   vertical-align: -2px; background: var(--accent); }
 .toc-bar { display: none; }
 @media (max-width: 860px) {
-  .toc-js .toc-bar { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0;
+  .toc-js .toc-bar { transition: top .2s ease; display: flex; align-items: center; justify-content: space-between; position: sticky; top: var(--head);
     z-index: 20; width: 100%; min-height: 44px; margin: 0 0 8px; padding: 0 12px; font: inherit; font-size: 16px;
     font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
     cursor: pointer; text-align: left; }
   .toc-js .toc-bar::after { content: "▾"; color: var(--muted); }
   .toc-js .toc-bar[aria-expanded="true"]::after { content: "▴"; }
   .toc-js .cs-toc { display: none; }
-  .toc-js .cs-toc.open { display: block; position: sticky; top: 52px; z-index: 20; max-height: 70vh; overflow-y: auto;
+  .toc-js .cs-toc.open { display: block; position: sticky; top: calc(var(--head) + 52px); z-index: 20; max-height: 70vh; overflow-y: auto;
     background: var(--ground); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 16px; }
   .toc-js .cs-toc a { display: inline-block; min-height: 44px; line-height: 44px; }
 }
@@ -276,7 +285,7 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
 .spec-body h2 { font-size: 26px; margin: 40px 0 10px; border-top: 1px solid var(--rule); padding-top: 22px; }
 .spec-body h3 { font-size: 20px; margin: 28px 0 8px; }
 .spec-body h4 { font-size: 17px; margin: 22px 0 6px; }
-.spec-body :target { scroll-margin-top: 60px; }
+.spec-body :target { scroll-margin-top: calc(var(--head) + 60px); }
 .spec-body pre { background: var(--panel); border: 1px solid var(--rule-light); border-radius: 4px; padding: 12px;
   overflow-x: auto; font-size: 14px; line-height: 1.45; }
 .spec-body pre code { background: none; padding: 0; overflow-wrap: normal; }
@@ -296,7 +305,7 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
 .request button { border: 0; font: inherit; cursor: pointer; }
 .spec-body table code { overflow-wrap: normal; word-break: normal; white-space: nowrap; }
 @media (max-width: 860px) {
-  .toc-js .cs-body [id], .toc-js .spec-body [id] { scroll-margin-top: 60px; }
+  .toc-js .cs-body [id], .toc-js .spec-body [id] { scroll-margin-top: calc(var(--head) + 60px); }
 }
 
 /* /confirm */
