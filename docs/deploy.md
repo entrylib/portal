@@ -135,9 +135,13 @@ real paper you want published, or skip this until you have one.
 - **Updates to the portal:** `sudo /opt/entrylib/portal/deploy/launch.sh --update` (fetches the newest code, rebuilds,
   restarts, and reloads Caddy so a changed Caddyfile takes effect). After changing `.env`:
   `sudo /opt/entrylib/portal/deploy/launch.sh`.
-- **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
-  and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
-  restart app`.
+- **Claimset and rubric updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from
+  PyPI and the newest scoring rubric from GitHub (design §10, §7.6), and rebuilds the reading views and the pages if
+  either changed. At once: `cd /opt/entrylib/portal && sudo docker compose restart app`.
+- **Which to run:** a merged pull request in `entrylib/portal` changes the portal's own code, which is built into its
+  image, so it needs `launch.sh --update`. A new claimset release or a merged pull request in `entrylib/rubric` needs
+  only a restart of the app (or nothing, if the next morning will do). `launch.sh --update` restarts the app too, so
+  after both kinds of change it covers both.
 - **Retraction and removal requests** from anyone but the guarantor wait for review: `cd /opt/entrylib/portal && sudo
   docker compose exec app portal requests` lists them; `... portal decide rq_... apply` (or `decline --note "why"`)
   decides. An applied request is written to the registry and the site within ten minutes. Answer the requester by
