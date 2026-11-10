@@ -133,6 +133,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         with pool.connection() as conn:
             expired = submissions.expire(conn, settings.submissions_dir)
             notices.forget_stale(conn)
+            consent.forget_old(conn)
         publish_now()                                       # confirmed submissions left by a restart or a failure
         return expired
 
@@ -257,8 +258,9 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         `curl --data-binary @paper.zip -H 'Content-Type: application/zip' <portal>/api/submissions`.
 
         A valid submission is held for 48 hours. The response gives one consent link per guarantor: pass each to
-        its guarantor, who signs in with ORCID and confirms. The links are shown only in this response. Once every
-        guarantor has confirmed, the claimset is published.
+        its guarantor, who signs in with ORCID and confirms. The links are shown only in this response; without one,
+        the guarantor confirms at /confirm, signing in with ORCID. Once every guarantor has confirmed, the claimset
+        is published.
 
         A new version of a published claimset sets `paper.id` to its identifier. A new claimset with the same title
         and guarantor as one already on EntryLib is refused (409) unless `new_paper=true` says it is a different
@@ -295,6 +297,15 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return HTMLResponse(pages.message("Sign-in failed", str(exc)), status_code=502)
         if notices.is_notice_state(state):                  # a sign-in from the removal form
             return await removal_signed_in(state, who, name)
+        if consent.is_listing_state(state):                 # a sign-in at /confirm
+            def listing():
+                with pool.connection() as conn:
+                    return consent.listing(conn, state, who, settings.submissions_dir)
+            items = await run_in_threadpool(listing)
+            if items is None:
+                return _page(site.message_page("Sign-in expired", "This sign-in has expired or was already used. "
+                                               "Sign in again.", ("/confirm", "Confirm a claimset")), 400)
+            return _page(site.confirm_list(items, who, name))
 
         def work():
             with pool.connection() as conn:
@@ -318,6 +329,47 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
     def _page(html_, status=200):
         return HTMLResponse(html_, status_code=status, headers={"Content-Security-Policy": removal_csp})
+
+    @app.get("/confirm", response_class=HTMLResponse, include_in_schema=False)
+    def confirm_page():
+        """For a guarantor without the consent link: sign in with ORCID to see the submissions waiting for them."""
+        return _page(site.confirm_page(orcid.configured))
+
+    @app.get("/confirm/start", include_in_schema=False)
+    def confirm_start():
+        if not orcid.configured:
+            return _page(site.confirm_page(False), 503)
+        with pool.connection() as conn:
+            state = consent.start_listing(conn)
+        return RedirectResponse(orcid.authorize_url(state), status_code=303)
+
+    @app.post("/confirm", response_class=HTMLResponse, include_in_schema=False)
+    async def confirm_ticket(request: Request):
+        """A Confirm button of the /confirm listing: its ticket is bound to the submission and the iD that signed
+        in."""
+        body = await request.body()
+        form = {k: v[0] for k, v in urllib.parse.parse_qs(body[:2000].decode("utf-8", "replace")).items()}
+
+        def work():
+            with pool.connection() as conn:
+                return consent.complete_ticket(conn, form.get("ticket", ""))
+        outcome = await run_in_threadpool(work)
+        if outcome.result != "confirmed":
+            code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
+            return _page(site.message_page("Not confirmed", outcome.message[:1].upper() + outcome.message[1:] + ".",
+                                           ("/confirm", "Confirm a claimset")), code_)
+        try:
+            done = dict(await run_in_threadpool(publish_now))
+        except Exception:  # noqa: BLE001 - the periodic loop retries; the guarantor has confirmed either way
+            log.exception("publishing after confirmation failed")
+            done = {}
+        published = done.get(outcome.submission)
+        if published:
+            key = published.split(":", 1)[1].split("@")[0]
+            return _page(site.message_page("Published", f"Thank you. The claimset is published as {published}.",
+                                           (f"/p/{key}", "Open it")))
+        return _page(site.message_page("Confirmed", "Thank you. You have confirmed the claimset; it will be "
+                                       "published shortly.", ("/confirm", "Back to your submissions")))
 
     @app.get("/removal", response_class=HTMLResponse, include_in_schema=False)
     def removal_form():

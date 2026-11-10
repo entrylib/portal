@@ -57,8 +57,8 @@ def consent(ctx, start_url, status_url):
 </div>
 <p>By confirming, you state that you are the main author of this work and the person to contact about it, that you
 answer for its research (whether the claims are true and the work was done properly), and that it may be published
-under the licence {escape(ctx['licence'])}. Once published, a claimset is never withdrawn; it can be corrected, and
-problems with it are marked.</p>
+under the licence {escape(ctx['licence'])}. Once published, a claimset stays: it can be corrected or retracted, and
+is removed only when it must be (<a href="/removal">retraction and removal</a>).</p>
 <p><a class="button" href="{escape(start_url)}">Sign in with ORCID and confirm</a></p>
 <p class="muted">Only {escape(ctx['orcid'])} can confirm. This link expires {escape(expires)}. If you did not
 expect this, ignore it: nothing is published without your confirmation.</p>
