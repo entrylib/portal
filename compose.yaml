@@ -74,7 +74,9 @@ services:
     environment:
       PORTAL_DOMAIN: ${PORTAL_DOMAIN:-localhost}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The folder, not the file: `git pull` replaces the Caddyfile with a new file, which a file mount would not
+      # see; launch.sh then reloads Caddy.
+      - ./deploy:/etc/caddy:ro
       - published:/srv/published:ro
       - caddy_data:/data
       - caddy_config:/config

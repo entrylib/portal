@@ -41,6 +41,8 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 docker compose up -d --build --remove-orphans
+# Caddy does not watch its Caddyfile: reload it, so a changed one takes effect (without dropping connections).
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
 domain="$(value PORTAL_DOMAIN)"
 echo "waiting for the app..."
