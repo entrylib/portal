@@ -38,7 +38,8 @@ FEED_ENTRIES = 30
 
 NAV = [("/search", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
        ("/about", "About", "about")]
-FOOTER = [("/about", "About"), ("/privacy", "Privacy"), ("/removal", "Removal requests"), ("/spec/", "Specification"),
+FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/privacy", "Privacy"),
+          ("/removal", "Removal requests"), ("/spec/", "Specification"),
           (SOURCE_CODE, "Source code"), (f"mailto:{CONTACT}", CONTACT)]
 
 #: The fixed pages: address -> (file under static/pages, title, active nav item, description).
@@ -716,7 +717,11 @@ def message_page(title, text, link=None):
 
 def submit_page(body):
     """The upload page: its form and script (static/submit.html) in the site's page."""
-    return shell("Submit a claimset", f'<div class="wrap prose">{body}</div>', description="Submit a claimset to "
+    waiting = ('<p class="small">Waiting for your confirmation as a guarantor? '
+               '<a href="/confirm">See your submissions</a>: sign in with ORCID to confirm them, without the '
+               'consent link.</p>')
+    return shell("Submit a claimset", f'<div class="wrap prose">{waiting}{body}</div>',
+                 description="Submit a claimset to "
                  "EntryLib: upload a package or a claimset file; its guarantor confirms with ORCID.")
 
 
