@@ -1,0 +1,115 @@
+{
+ "source": "OpenAlex fields and domains (the ASJC-based top levels of OpenAlex's topic classification); a subfield's field is the first two digits of its number",
+ "domains": {
+  "1": "Life Sciences",
+  "2": "Social Sciences",
+  "3": "Physical Sciences",
+  "4": "Health Sciences"
+ },
+ "fields": {
+  "11": {
+   "name": "Agricultural and Biological Sciences",
+   "domain": "1"
+  },
+  "12": {
+   "name": "Arts and Humanities",
+   "domain": "2"
+  },
+  "13": {
+   "name": "Biochemistry, Genetics and Molecular Biology",
+   "domain": "1"
+  },
+  "14": {
+   "name": "Business, Management and Accounting",
+   "domain": "2"
+  },
+  "15": {
+   "name": "Chemical Engineering",
+   "domain": "3"
+  },
+  "16": {
+   "name": "Chemistry",
+   "domain": "3"
+  },
+  "17": {
+   "name": "Computer Science",
+   "domain": "3"
+  },
+  "18": {
+   "name": "Decision Sciences",
+   "domain": "2"
+  },
+  "19": {
+   "name": "Earth and Planetary Sciences",
+   "domain": "3"
+  },
+  "20": {
+   "name": "Economics, Econometrics and Finance",
+   "domain": "2"
+  },
+  "21": {
+   "name": "Energy",
+   "domain": "3"
+  },
+  "22": {
+   "name": "Engineering",
+   "domain": "3"
+  },
+  "23": {
+   "name": "Environmental Science",
+   "domain": "3"
+  },
+  "24": {
+   "name": "Immunology and Microbiology",
+   "domain": "1"
+  },
+  "25": {
+   "name": "Materials Science",
+   "domain": "3"
+  },
+  "26": {
+   "name": "Mathematics",
+   "domain": "3"
+  },
+  "27": {
+   "name": "Medicine",
+   "domain": "4"
+  },
+  "28": {
+   "name": "Neuroscience",
+   "domain": "1"
+  },
+  "29": {
+   "name": "Nursing",
+   "domain": "4"
+  },
+  "30": {
+   "name": "Pharmacology, Toxicology and Pharmaceutics",
+   "domain": "1"
+  },
+  "31": {
+   "name": "Physics and Astronomy",
+   "domain": "3"
+  },
+  "32": {
+   "name": "Psychology",
+   "domain": "2"
+  },
+  "33": {
+   "name": "Social Sciences",
+   "domain": "2"
+  },
+  "34": {
+   "name": "Veterinary",
+   "domain": "4"
+  },
+  "35": {
+   "name": "Dentistry",
+   "domain": "4"
+  },
+  "36": {
+   "name": "Health Professions",
+   "domain": "4"
+  }
+ }
+}

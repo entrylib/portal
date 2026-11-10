@@ -97,3 +97,44 @@ def text(scores):
             out.append(f"{pid} [{p['group']}; up to -{p['cost']}; {', '.join(p['claims'])}] {words} "
                        f"To remove it: {p['fix']}")
     return "\n".join(out) + "\n"
+
+
+def issues_text(scores, concept, n, base_url):
+    """Every issue that lowers a reliability score, as plain text for the authors' agent to work through in the next
+    version (/p/<key>@v<n>.issues.txt)."""
+    if not scores:
+        return ""
+    key = concept.split(":", 1)[-1]
+    out = [f"EntryLib: the issues that lower the reliability scores of {concept}@v{n}, by the EntryLib rubric "
+           f"{scores['rubric']}.",
+           "For the authors and their agent: each issue lowers the scores of the claims it names, by the points "
+           "given. Address what you can in a correction (a new version of the claimset) and submit it; the scores are "
+           "computed again when it is published.",
+           NOTE.format(v=scores["rubric"]),
+           "Rubric: https://github.com/entrylib/rubric/blob/main/RUBRIC.md",
+           f"Page: {base_url}/p/{key}@v{n}#score · Scores as JSON: {base_url}/p/{key}@v{n}.score.json", ""]
+    paper = scores.get("paper")
+    if paper:
+        out.append(f"PAPER: reliability {paper['score']} ({paper['band']}), the score of its lowest principal claim, "
+                   f"{paper['lowest']}. Raising the lowest principal claim raises the paper.")
+        out.append("")
+    if not scores["problems"]:
+        out.append("No issues: every scored claim keeps all its points.")
+        return "\n".join(out) + "\n"
+    out.append("ISSUES, those of the principal claims first, most costly first:")
+    for pid, p in scores["problems"].items():
+        claims = [c for c, item in scores["claims"].items() if pid in item["problems"]]
+        if not claims:
+            continue
+        words = p["text"] if p["text"].rstrip().endswith((".", "!", "?")) else p["text"] + "."
+        out += ["", f"{pid}. {words}",
+                f"  Check: {p['check']} (group: {p['group']}); costs up to {p['cost']} points.",
+                f"  Lowers: {', '.join(f'{c} (-{scores['claims'][c]['costs'][pid]})' for c in claims)}."]
+        if p["objects"]:
+            out.append(f"  Concerns: {', '.join(p['objects'])}.")
+        out.append(f"  To fix: {p['fix']}")
+    out += ["", "CLAIMS: score (band): issues"]
+    for cid, c in scores["claims"].items():
+        issues = ", ".join(f"{p} (-{c['costs'][p]})" for p in c["problems"]) or "none"
+        out.append(f"{cid}: {c['score']} ({c['band']}): {issues}")
+    return "\n".join(out) + "\n"

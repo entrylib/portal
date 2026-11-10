@@ -32,6 +32,10 @@ def test_scores_are_written_and_shown(env):
     assert page.count('class="dots"') >= len(data["claims"])
     assert "SCORES" in (p / f"{KEY}.txt").read_text()
     assert "SCORES" in (p / f"{KEY}.read.html").read_text()
+    issues = (p / f"{KEY}.issues.txt").read_text()
+    assert issues == (p / f"{KEY}@v1.issues.txt").read_text() and "To fix:" in issues
+    assert all(f"{pid}. " in issues for pid in data["paper"]["problems"])
+    assert page.count(f'href="/p/{KEY}@v1.issues.txt"') == 2            # the panel and the section Score
 
 
 def test_problem_text_is_escaped():
@@ -65,3 +69,13 @@ def test_close_match_with_an_earlier_claimset(env):
     assert n["matches"][0]["claim"] == f"entrylib:2026.000001#{principal}"
     first_scores = json.loads((ctx["published_dir"] / "p" / f"{KEY}.score.json").read_text())
     assert first_scores["novelty"][principal]["check"] == "none"     # only earlier claimsets count
+
+
+def test_lists_show_reliability(env):
+    ctx, tmp = env
+    publish(write(tmp, example()), **ctx)
+    score = json.loads((ctx["published_dir"] / "p" / f"{KEY}.score.json").read_text())["paper"]
+    for page in ("index.html", "all.html"):
+        text = (ctx["published_dir"] / page).read_text()
+        assert f'<span class="card-score-num">{score["score"]}</span>' in text, page
+        assert f'href="/p/{KEY}#score"' in text

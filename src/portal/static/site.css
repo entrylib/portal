@@ -109,6 +109,11 @@ main { min-height: 60vh; }
 .card-top, .card-counts, .card-who { font-size: 15px; color: var(--muted); }
 .card-top { overflow-wrap: anywhere; }
 .card-claim { font-size: 17px; }
+.card-scored { display: flex; gap: 18px; align-items: flex-start; }
+.card-body { min-width: 0; flex: 1; }
+.card-score { flex: none; width: 64px; padding-top: 4px; text-align: center; text-decoration: none; color: inherit; }
+.card-score-num { display: block; font-size: 32px; line-height: 1; font-weight: 700; }
+.card-score-band { display: block; font-size: 13px; font-weight: 600; margin-top: 3px; }
 
 /* labels */
 .origin { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
@@ -310,3 +315,22 @@ dialog.zoom figcaption { padding: 10px 56px 12px 16px; font-size: 15px; }
 .cs-statement { line-height: 1.6; }
 .cs-defs li, .cs-def { margin-bottom: 6px; }
 .cs-brief li { padding: 6px 0 !important; }
+
+/* Read (design §7.7): the tree of fields beside the claims or claimsets of the part chosen */
+.read-layout { display: flex; flex-wrap: wrap; gap: 32px; margin-top: 24px; align-items: flex-start; }
+.read-tree { flex: 1 1 240px; max-width: 300px; font-size: 16px; }
+.read-tree ul { list-style: none; margin: 0; padding: 0; }
+.read-tree ul ul { padding-left: 16px; border-left: 1px solid var(--rule-light); margin: 2px 0 6px 4px; }
+.read-tree li { margin: 3px 0; }
+.read-tree a { text-decoration: none; }
+.read-tree a[aria-current] { color: var(--ink); font-weight: 600; }
+.read-tree .count { color: var(--muted); font-size: 14px; }
+.read-main { flex: 999 1 560px; min-width: 0; }
+.read-main h2 { margin: 0 0 4px; font-size: 26px; }
+.read-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 12px; font-size: 15px; }
+.read-filters select, .read-filters button { font: inherit; min-height: 36px; }
+.read-filters .check { display: flex; align-items: center; gap: 6px; }
+.read-filters button { padding: 0 14px; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel);
+  color: var(--ink); cursor: pointer; }
+.result .card-top .score-badge { margin-right: 6px; }
+.pager { margin-top: 16px; }

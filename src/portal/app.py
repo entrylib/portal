@@ -21,7 +21,20 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, consent, fetch, mcp_server, notices, pages, ratelimit, search, site, submissions, worker
+from . import (
+    __version__,
+    consent,
+    fetch,
+    mcp_server,
+    notices,
+    pages,
+    ratelimit,
+    read,
+    search,
+    site,
+    submissions,
+    worker,
+)
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -219,6 +232,16 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 error = str(exc)
         page = site.search_page(q, kind, results, error=error, offset=offset, limit=site.SEARCH_PAGE, files=files)
         return HTMLResponse(page, status_code=400 if error else 200, headers={"Content-Security-Policy": PAGE_CSP})
+
+    @app.get("/read", response_class=HTMLResponse, include_in_schema=False)
+    def read_page(request: Request):
+        """What EntryLib holds, by field, with its claims and claimsets filtered (design §7.7)."""
+        q = read.Query.parse(dict(request.query_params))
+        with pool.connection() as conn:
+            docs = [r[0] for r in conn.execute(
+                "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+                " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
+        return HTMLResponse(read.page(docs, q), headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():

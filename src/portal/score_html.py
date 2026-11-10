@@ -78,7 +78,7 @@ def decorate(body, scores):
     return BRIEF.sub(brief, CLAIM.sub(claim, body))
 
 
-def panel_rows(scores, lights=None):
+def panel_rows(scores, lights=None, issues_url=None):
     """The panel's first rows: reliability and novelty, then the claims by band (without scores: by support
     light, from the page view)."""
     if not scores or not scores.get("paper"):
@@ -111,6 +111,9 @@ def panel_rows(scores, lights=None):
             f'{dots(scores)}'
             f'<p class="small">The lowest of the principal claims: <a href="#{esc(p["lowest"])}">'
             f'{esc(p["lowest"])}</a>. <a href="#score" data-popup="score-paper">Why</a></p>'
+            + (f'<p class="small"><a href="{esc(issues_url)}">Issues as text, for your agent</a></p>'
+               if issues_url else "")
+            +
             f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
             + (f'<span class="small"> · {esc(check)}</span>' if check else "") + "</p></div>"
             f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
@@ -131,11 +134,13 @@ def _problem(scores, pid, cost=None):
             + f' <span class="fix">To remove it: {esc(p["fix"])}</span></li>')
 
 
-def section(scores):
+def section(scores, issues_url=None):
     """The section *Score*: the paper's explanation, then every claim's. The pop-ups show parts of it."""
     if not scores:
         return ""
-    note = f'<p class="score-note">{esc(scores["note"])} <a href="{RUBRIC_URL}">The rubric</a>.</p>'
+    note = (f'<p class="score-note">{esc(scores["note"])} <a href="{RUBRIC_URL}">The rubric</a>.'
+            + (f' <a href="{esc(issues_url)}">Every issue as text</a>, for an agent preparing the next version.'
+               if issues_url else "") + "</p>")
     out = ['<section class="cs-section score-section" id="score"><h2>Score</h2>']
     p = scores.get("paper")
     if p:

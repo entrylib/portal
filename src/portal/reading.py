@@ -44,6 +44,8 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 - {base}/p/<year>.<number>/versions.json: versions, dates, status, notices and lab record links.
 - {base}/p/<year>.<number>.score.json (and @v<n>.score.json): its scores by EntryLib's public rubric, each lost
   point with its reason; computed by rules from the file, they check the record, not the science.
+- {base}/p/<year>.<number>.issues.txt (and @v<n>.issues.txt): every issue that lowers its scores, with what would
+  fix it, for the authors' agent preparing the next version.
 - {base}/index.jsonl: one line per claimset: identifier, title, principal claims, keywords, subfield.
 
 ## Search
