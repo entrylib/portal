@@ -6,9 +6,12 @@ A pull request either publishes one version or maintains the repository, never b
   `claimset.json`, `validation.json` and optionally `lab.jsonl`, and changes nothing else. The version must be
   the claimset's next, its file must be a valid published file whose identifier names the folder, it must pass the
   deterministic screening, and its lab record must verify.
+- **Notice**: appends one retraction or removal to a claimset's `notices.json` (notices.py); a removal also deletes
+  every file of the claimset's versions, and nothing else.
 - **Maintenance**: changes only the repository's own files (README, LICENSE, `.github/`), and no claimset.
 
-A published file is never modified or deleted: any pull request that touches an existing version fails.
+A published file is never modified, and deleted only by a removal: any other pull request that touches an existing
+version fails.
 """
 
 import json
@@ -27,6 +30,7 @@ VERSION_FILES = {"claimset.json", "validation.json", "lab.jsonl"}
 REQUIRED_FILES = {"claimset.json", "validation.json"}
 REPOSITORY_FILES = re.compile(r"^(?:README\.md|LICENSE|NOTICE|\.gitignore|\.gitattributes|\.github/.+)$")
 VERSION_PATH = re.compile(r"^(?P<folder>\d{4}/\d{3,}/[^/]+)/v(?P<n>[1-9]\d*)/(?P<name>[^/]+)$")
+NOTICES_PATH = re.compile(r"^(?P<folder>\d{4}/\d{3,}/[^/]+)/notices\.json$")
 
 
 @dataclass
@@ -44,8 +48,9 @@ class Result:
         self.problems.append((check, message))
 
     def markdown(self):
+        what = {"publication": "publication of", "notice": "notice for"}.get(self.kind)
         head = (f"### {'Passed' if self.ok else 'Failed'}: "
-                + (f"publication of `{self.published}`" if self.published else f"{self.kind} pull request"))
+                + (f"{what} `{self.published}`" if self.published and what else f"{self.kind} pull request"))
         lines = [head, ""]
         lines += [f"- **{check}**: {msg}" for check, msg in self.problems]
         lines += [f"- {n}" for n in self.notes]
@@ -83,6 +88,9 @@ def check(repo, base):
     if not diff:
         r.fail("changes", "the pull request changes nothing")
         return r
+
+    if any(NOTICES_PATH.match(p) for _, p in diff):
+        return _check_notice(repo, base, diff, r)
 
     in_versions = [(s, p) for s, p in diff if VERSION_PATH.match(p)]
     other = [(s, p) for s, p in diff if not VERSION_PATH.match(p)]
@@ -176,4 +184,75 @@ def check(repo, base):
                 r.fail(f"lab record {e['rule']}", f"seq {e['seq']} {e.get('id') or ''}: {e['message']}")
             r.notes.append(f"lab record: {out['events']} event(s), hash chain "
                            f"{'verified' if out['ok'] else 'NOT verified'}")
+    return r
+
+
+def _show(repo, ref, path):
+    return _git(repo, "show", f"{ref}:{path}")
+
+
+def _check_notice(repo, base, diff, r):
+    """A notice pull request: one retraction or removal appended to a claimset's notices.json."""
+    from .notices import ACTIONS, REASONS
+    r.kind = "notice"
+    folders = {m["folder"] for _, p in diff if (m := NOTICES_PATH.match(p))}
+    if len(folders) != 1:
+        r.fail("scope", "a notice pull request changes one claimset's notices.json")
+        return r
+    folder, = folders
+    deleted = set()
+    for s, p in diff:
+        if NOTICES_PATH.match(p):
+            if s not in ("A", "M"):
+                r.fail("append-only", f"{p} is {'deleted' if s == 'D' else 'changed'}; notices are only added")
+        elif (m := VERSION_PATH.match(p)) and m["folder"] == folder and s == "D":
+            deleted.add(p)
+        else:
+            r.fail("scope", f"{p}: a notice pull request changes only {folder}/notices.json and, for a removal, "
+                            f"deletes the claimset's versions")
+    try:
+        new = json.loads((repo / folder / "notices.json").read_text(encoding="utf-8"))
+        old = json.loads(_show(repo, base, f"{folder}/notices.json")) if _exists_at(repo, base,
+                                                                                   f"{folder}/notices.json") else None
+    except (OSError, ValueError, RuntimeError) as exc:
+        r.fail("files", f"{folder}/notices.json is not readable JSON: {exc}")
+        return r
+    items = new.get("notices") if isinstance(new, dict) else None
+    before = (old or {}).get("notices") or []
+    if not isinstance(items, list) or items[:len(before)] != before or len(items) != len(before) + 1:
+        r.fail("append-only", "notices.json must keep every earlier notice and add exactly one")
+        return r
+    try:
+        if record_folder(new.get("id")) != folder:
+            r.fail("identifier", f"notices.json names {new.get('id')!r}, whose folder is not {folder}")
+    except (ValueError, TypeError) as exc:
+        r.fail("identifier", str(exc))
+    if before and before[-1].get("action") == "removed":
+        r.fail("final", "the claimset was removed already; a removal is final")
+    n = items[-1]
+    action = n.get("action") if isinstance(n, dict) else None
+    if action not in ACTIONS.values():
+        r.fail("notice", f"action must be one of {sorted(ACTIONS.values())}")
+        return r
+    kind = {v: k for k, v in ACTIONS.items()}[action]
+    if n.get("reason_code") not in REASONS[kind]:
+        r.fail("notice", f"reason_code {n.get('reason_code')!r} is not a reason for {action}")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(n.get("date") or "")):
+        r.fail("notice", "date must be YYYY-MM-DD")
+    if not isinstance(n.get("issued_by"), str) or not n["issued_by"].strip():
+        r.fail("notice", "issued_by must say who acted")
+    if not isinstance(n.get("statement", ""), str):
+        r.fail("notice", "statement must be text")
+    for f in screen({"statement": n.get("statement") or "", "issued_by": n.get("issued_by") or ""}):
+        r.fail(f"screening {f['rule']}", f"{f['where']}: {f['message']}")
+    present = set(_git(repo, "ls-tree", "-r", "--name-only", base, "--", f"{folder}/").split())
+    in_versions = {p for p in present if VERSION_PATH.match(p)}
+    if action == "removed":
+        if deleted != in_versions:
+            r.fail("removal", "a removal deletes every file of the claimset's versions: "
+                              f"{len(in_versions - deleted)} left")
+    elif deleted:
+        r.fail("append-only", "a retraction deletes nothing")
+    r.published = new.get("id")
+    r.notes.append(f"notice: {action} ({n.get('reason_code')}) by {n.get('issued_by')}")
     return r

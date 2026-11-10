@@ -37,7 +37,7 @@ Homepage = "https://github.com/entrylib/portal"
 where = ["src"]
 
 [tool.setuptools.package-data]
-portal = ["migrations/*.sql", "static/*", "static/pages/*", "static/fonts/*", "static/img/*"]
+portal = ["migrations/*.sql", "data/*.json", "static/*", "static/pages/*", "static/fonts/*", "static/img/*"]
 
 [tool.ruff]
 line-length = 120

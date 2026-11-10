@@ -30,6 +30,7 @@ LIMITS = {
     "validate": Limit(30, 3600),    # POST /api/validate, MCP validate
     "submit": Limit(20, 3600),      # POST /api/submissions, MCP submit
     "fetch": Limit(10, 3600),       # submission by URL: the server downloads up to 210 MB
+    "request": Limit(10, 3600),     # POST /removal: retraction and removal requests
 }
 
 #: Buckets kept before full ones are dropped.
@@ -89,7 +90,7 @@ def kind_of(method, path):
         return "read"
     if method == "POST":
         return {"/api/validate": "validate", "/api/submissions": "submit",
-                "/api/submissions/from-url": "fetch"}.get(path)
+                "/api/submissions/from-url": "fetch", "/removal": "request"}.get(path)
     return None
 
 

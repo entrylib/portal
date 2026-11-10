@@ -22,7 +22,7 @@ def test_claimset_page(env):
     out = ctx["published_dir"]
     page = (out / "p" / f"{KEY}.html").read_text()
     assert page == (out / "p" / f"{KEY}@v1.html").read_text()
-    assert "<script" not in page and 'href="/site.css"' in page and 'class="cs-page"' in page
+    assert page.count("<script") == 1 and 'src="/toc.js"' in page and 'class="cs-page"' in page
     for part in ('<span class="origin">native</span>', "status-ok", f"{concept}@v1", 'id="versions"',
                  '<a href="#versions">Versions</a>', f'href="/p/{KEY}@v1.bib"', f'href="/p/{KEY}@v1.ris"',
                  f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "How it is computed", "light-green"):
@@ -48,14 +48,14 @@ def test_fixed_pages_and_assets_at_start(env):
     ctx, _ = env
     out = ctx["published_dir"]
     indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.40.1")
-    for name in ("lab", "about", "agents", "privacy", "removal"):
+    for name in ("lab", "about", "agents", "privacy"):
         page = (out / f"{name}.html").read_text()
         assert page.startswith("<!doctype html>") and "<script" not in page and "{base}" not in page, name
     assert "This website was created by Claude Opus 5.5." in (out / "about.html").read_text()
     assert f"{BASE}/mcp" in (out / "agents.html").read_text()
     assert (out / "site.css").exists() and ".cs-toc" in (out / "claimset.css").read_text()
     assert (out / "fonts" / "fonts.css").exists() and (out / "img" / "orcid.svg").exists()
-    assert list((out / "spec").glob("claimset-v*.md")) and "Specifications" in (out / "spec" / "index.html").read_text()
+    assert (out / "spec" / "claimset.md").exists() and "Specifications" in (out / "spec" / "index.html").read_text()
     assert (out / "index.html").exists()                    # the home page, before anything is published
 
 
@@ -142,3 +142,41 @@ def test_home_and_submit_pages(app_client):
     r = app_client.get("/submit")
     assert r.status_code == 200 and 'src="/submit.js"' in r.text and "script-src 'self'" in r.headers[
         "content-security-policy"]
+
+
+def test_subfield_names():
+    doc = example()
+    doc["paper"]["classification"] = {"subfield": "openalex:subfields/1803"}
+    assert site.subfield_name(doc) == "Management Science and Operations Research"
+    doc["paper"]["id"], doc["paper"]["date"] = "entrylib:2026.000001", "2026-11-04"
+    assert "Management Science and Operations Research" in site.card(doc)
+    doc["paper"]["classification"] = {"subfield": "openalex:subfields/0"}
+    assert site.subfield_name(doc) is None
+
+
+def test_specification_pages(env):
+    ctx, _ = env
+    out = ctx["published_dir"]
+    indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.40.1")
+    from portal import specs
+    cat = specs.catalogue()
+    current = cat["claimset"]["current"]
+    page = (out / "spec" / "claimset.html").read_text()
+    assert (out / "spec" / "claimset" / f"{current}.html").exists()
+    assert '<h3 id="2.6">' in page and 'href="#2.6"' in page and 'src="/toc.js"' in page
+    assert (out / "spec" / "claimset.md").read_text().startswith("# Claimset")
+    assert (out / "spec" / "lab-record.html").exists() and (out / "spec" / "revision.html").exists()
+    assert (out / "spec" / "extensions" / "qualitative.html").exists()
+    assert "Extensions" in (out / "spec" / "extensions.html").read_text()
+    assert 'href="/spec/claimset"' in (out / "spec" / "index.html").read_text()
+
+
+def test_markdown():
+    from portal import markdown
+    text = ("# T\n\n## 2.1 One\n\nSee §2.1 and `a|b`.\n\n| x | y |\n|---|---|\n| `p\\|q` | **b** |\n\n"
+            "- a\n  - b\n- c\n\n```json\n{\"k\": \"<v>\"}\n```\n\n[x](javascript:alert(1)) <i>\n")
+    html_, heads = markdown.convert(text)
+    assert heads[1] == (2, "2.1", "2.1 One")
+    assert '<a href="#2.1">§2.1</a>' in html_ and "<code>a|b</code>" in html_ and "<td><code>p|q</code></td>" in html_
+    assert "<ul><li>a<ul><li>b</li></ul></li><li>c</li></ul>" in html_
+    assert '&quot;&lt;v&gt;&quot;' in html_ and "javascript:" not in html_ and "&lt;i&gt;" in html_
