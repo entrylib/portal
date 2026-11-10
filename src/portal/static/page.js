@@ -104,6 +104,35 @@ window.entrylibPopup = function (className, label) {
   });
 })();
 
+// Claimset pages: a score opens its explanation (the section *Score* on the page) in a pop-up. Without this script the
+// score's link goes to the section.
+(function () {
+  "use strict";
+  if (!window.HTMLDialogElement) return;
+  var popup = null;
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest("a[data-popup]");
+    if (!link || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var source = document.getElementById(link.getAttribute("data-popup"));
+    if (!source) return;
+    e.preventDefault();
+    if (!popup) {
+      popup = window.entrylibPopup("explain", "Explanation of the score");
+      popup.body.addEventListener("click", function (ev) {      // a link to a claim closes the pop-up and goes there
+        var a = ev.target.closest('a[href^="#"]');
+        if (a) popup.dialog.close();
+      });
+    }
+    var copy = source.cloneNode(true);
+    copy.removeAttribute("id");
+    copy.querySelectorAll("[id]").forEach(function (n) { n.removeAttribute("id"); });
+    popup.body.replaceChildren(copy);
+    var note = document.querySelector("#score .score-note");
+    if (note && !copy.querySelector(".score-note")) copy.appendChild(note.cloneNode(true));
+    popup.open();
+  });
+})();
+
 // "Copy the link for your AI assistant": copies the reading-view address instead of opening it.
 (function () {
   "use strict";

@@ -24,7 +24,8 @@ from pathlib import Path
 
 from claimset import html as cshtml
 
-from . import ids, specs
+from . import ids, score_html, specs
+from . import scores as score_data
 
 SITE = "EntryLib"
 CONTACT = "mail@entrylib.org"
@@ -84,6 +85,8 @@ def _write(path, text):
 def fingerprint():
     """A hash of everything here that shapes a page: when it changes, the pages are written again."""
     h = hashlib.sha256(Path(__file__).read_bytes())
+    h.update(Path(score_html.__file__).read_bytes())
+    h.update(f"rubric {score_data.version()}".encode())        # pages follow the rubric (design §7.6)
     for name in ("site.css", "page.js", "fonts/fonts.css"):
         h.update(_static(name).read_bytes())
     for f in sorted((Path(str(_static("pages")))).glob("*.html")):
@@ -370,13 +373,9 @@ def _origin_line(doc, origin, lab):
     return ""
 
 
-def _panel(doc, parts, base_url, key):
+def _panel(doc, parts, base_url, key, scores=None):
     p = doc["paper"]
     n = p.get("version")
-    lights = parts["lights"]
-    names = {"green": "checkable", "amber": "not checkable", "red": "unsupported"}
-    light_rows = "".join(f'<li><span class="light light-{k}"></span>{lights.get(k, 0)} {v}</li>'
-                         for k, v in names.items())
     cite = esc(citation_text(doc, base_url))
     original = ""
     src = _source(doc)
@@ -384,9 +383,7 @@ def _panel(doc, parts, base_url, key):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
     return (f'<aside class="panel" aria-label="About this entry">'
-            f'<div class="panel-row"><h2>Quality</h2><p class="score">–</p>'
-            f'<p class="small"><a href="/about#quality">How it is computed</a></p></div>'
-            f'<div class="panel-row"><h2>Claims</h2><ul class="lights">{light_rows}</ul></div>'
+            f'{score_html.panel_rows(scores, parts.get("lights"))}'
             f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(p["id"])}@v{n}</code></p>'
             f'<details class="cite"><summary>Citation</summary><p class="cite-text">{cite}</p></details>'
             f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
@@ -448,9 +445,10 @@ def _accepts(fn, name):
         return False
 
 
-def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None):
+def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
     """The page of one version of a claimset. `listing`: its versions (versions.json entries); `lab`: {copy,
-    summary} when the registry holds its lab record; `current`: the claimset's current version number."""
+    summary} when the registry holds its lab record; `current`: the claimset's current version number; `scores`: its
+    scores (scores.compute), or None to show "–"."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
@@ -466,13 +464,14 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     if current and current != n:
         newer = (f'<p class="notice notice-warn">This is version {esc(n)}. '
                  f'<a href="/p/{key}">The current version is {esc(current)}</a>.</p>')
-    nav = parts["nav"].replace("</ol></nav>", f'<li><a href="#versions">Versions</a> '
+    score_item = '<li><a href="#score">Score</a></li>' if scores else ""
+    nav = parts["nav"].replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
                                               f'<span class="count">{len(listing)}</span></li></ol></nav>')
     main = (f'<div class="cs-page"><div class="entry-head"><div class="cs-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p)}{parts["header"]}'
-            f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key)}</div>'
-            f'<div class="cs-layout">{nav}<article class="cs-body">{parts["body"]}'
-            f'{_versions(listing, key, n)}</article></div></div>')
+            f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key, scores)}</div>'
+            f'<div class="cs-layout">{nav}<article class="cs-body">{score_html.decorate(parts["body"], scores)}'
+            f'{score_html.section(scores)}{_versions(listing, key, n)}</article></div></div>')
     first = _principal(doc)[:1]
     description = plain(first[0].get("statement")) if first else ""
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
@@ -773,14 +772,15 @@ def file_url_for(published_dir, base_url, legacy=None):
     return file_url
 
 
-def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None, legacy=None):
-    """The pages and citation files of one claimset: every version, and the current one at /p/<key>."""
+def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None, legacy=None, scores=None):
+    """The pages and citation files of one claimset: every version, and the current one at /p/<key>. `scores`:
+    {version: its scores}."""
     p = Path(published_dir) / "p"
     file_url = file_url_for(published_dir, base_url, legacy)
     current = max(docs)
     for n, doc in docs.items():
         page = claimset_page(doc, base_url=base_url, listing=listing, lab=labs.get(n), file_url=file_url,
-                             current=current, ref_text=ref_text)
+                             current=current, ref_text=ref_text, scores=(scores or {}).get(n))
         _write(p / f"{key}@v{n}.html", page)
         _write(p / f"{key}@v{n}.bib", bibtex(doc, base_url))
         _write(p / f"{key}@v{n}.ris", ris(doc, base_url))

@@ -34,21 +34,18 @@ on its own.</p>
 <h2>What EntryLib checks, and what it does not</h2>
 <p>Every submission is checked against the specification: its claims, support and references must fit together. Its
 text is screened for content aimed at manipulating AI readers. A lab record is checked for tampering, and each claim
-shows whether its support can be checked by a reader:</p>
-<ul class="legend">
-<li><span class="light light-green"></span><strong>Checkable</strong>: supported by evidence in the claimset that a
-reader can check.</li>
-<li><span class="light light-amber"></span><strong>Supported, not checkable</strong>: the data is restricted, or the
-support is cited work, argument or expert judgement.</li>
-<li><span class="light light-red"></span><strong>Unsupported</strong>: no stated support, or support nobody can
-check.</li>
-</ul>
-<p>Assumptions have no light: they are taken as given.</p>
-<p>EntryLib does not referee research. Publishing here is not peer review, and an entry is as good as the evidence it
-shows. That is why every entry shows it.</p>
-<h3 id="quality">Quality score</h3>
-<p>Each entry has a place for a quality score. How it is computed is still being worked out and will be published here;
-until then every entry shows –.</p>
+is scored by public rules.</p>
+<h3 id="quality">Scores</h3>
+<p><strong>Reliability</strong>, from 0 to 100, says how far an entry's own record supports each claim. Every claim
+starts at 100 and loses points for named problems: weak support, a test not planned beforehand, material a reader
+cannot obtain, a missing scope or link to earlier work, open limitations and unchecked assumptions. Five dots beside
+each claim show where the points went: support, plan, checkable, context and open problems. An entry scores as its
+lowest principal claim. High is 80 and over, Medium 60 to 79, Low under 60. Click a score to see why.</p>
+<p><strong>Novelty</strong> is the authors' own account (new, extends, replicates or refutes earlier work), checked
+against the claims already on EntryLib: a close match the entry does not acknowledge puts it in question.</p>
+<p>The scores are computed by rules from the entry's file. They check the record, not the science, and may change as
+the rules and reviews develop. The rules are public: <a href="https://github.com/entrylib/rubric/blob/main/RUBRIC.md">the
+EntryLib rubric</a>.</p>
 
 <h2>Citing, versions and corrections</h2>
 <p>Every entry has a permanent identifier, such as <code>entrylib:2026.000001</code>, and each version its own, such

@@ -12,7 +12,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN pip install .
+RUN pip install '.[scores]'
 
 # Named volumes take their owner from these folders when first created, so the app (not root) can write to them.
 RUN mkdir -p /srv/published /srv/registry /srv/submissions /home/portal/.local \
