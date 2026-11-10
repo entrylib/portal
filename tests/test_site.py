@@ -198,6 +198,8 @@ def test_home_and_submit_pages(app_client):
     r = app_client.get("/submit")
     assert r.status_code == 200 and 'src="/submit.js"' in r.text and "script-src 'self'" in r.headers[
         "content-security-policy"]
+    assert '<a href="/confirm">See your submissions</a>' in r.text      # for a guarantor without the consent link
+    assert '<a href="/confirm">Confirm a submission</a>' in app_client.get("/").text   # in every page's footer
 
 
 def test_subfield_names():
