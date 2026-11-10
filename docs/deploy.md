@@ -137,6 +137,10 @@ real paper you want published, or skip this until you have one.
 - **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
   and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
   restart app`.
+- **Retraction and removal requests** from anyone but the guarantor wait for review: `cd /opt/entrylib/portal && sudo
+  docker compose exec app portal requests` lists them; `... portal decide rq_... apply` (or `decline --note "why"`)
+  decides. An applied request is written to the registry and the site within ten minutes. Answer the requester by
+  email yourself.
 - **Logs:** `cd /opt/entrylib/portal && sudo docker compose logs --tail 100 app` (or `caddy`, `db`, `classifier`).
 - **The server's Ubuntu** (24.04 LTS, supported to 2029) is not upgraded in place: a new release means a new Droplet
   made with the same startup script, with `.env`, the key and the Docker volumes copied over, and the DNS record moved.

@@ -24,6 +24,7 @@ Each version's claims and paper get the weighted text full-text search runs on (
 import json
 import os
 import re
+import shutil
 import unicodedata
 from pathlib import Path
 
@@ -32,7 +33,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import ids, reading, site
+from . import ids, notices, reading, site
 
 
 def _write(path, text):
@@ -111,7 +112,8 @@ def _validation(registry, folder, n):
 
 def index_version(conn, registry, folder, n, published_dir, base_url):
     """Index version n of the claimset in `folder`: database rows and static files. Idempotent."""
-    doc = registry.read(folder, n)
+    raw = registry.read(folder, n)
+    doc = notices.overlay(raw, registry.notices(folder))   # retracted: as readers see it (notices.py)
     paper = doc["paper"]
     concept = paper["id"]
     key = ids.url_key(concept)
@@ -135,7 +137,7 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
         conn.execute("DELETE FROM versions WHERE concept_id = %s AND version = %s", (concept, n))
         conn.execute("INSERT INTO versions (concept_id, version, published, status, hash, file, classifier, warnings)"
                      " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                     (concept, n, paper["date"], paper["status"], doc_hash(doc), Jsonb(doc), classifier,
+                     (concept, n, paper["date"], paper["status"], doc_hash(raw), Jsonb(doc), classifier,
                       Jsonb(warnings)))
         with conn.cursor() as cur:
             cur.executemany(
@@ -161,13 +163,17 @@ def write_static(conn, registry, folder, published_dir, base_url):
     """The static files of one claimset, from its registry folder, and the index."""
     published_dir = Path(published_dir)
     versions = registry.versions(folder)
-    docs = {n: registry.read(folder, n) for n in versions}
+    notes = registry.notices(folder)
+    raws = {n: registry.read(folder, n) for n in versions}
+    docs = {n: notices.overlay(raw, notes) for n, raw in raws.items()}
     current = docs[versions[-1]]
     key = ids.url_key(current["paper"]["id"])
     p = published_dir / "p"
     listing, labs = [], {}
     for n, doc in docs.items():
         text = (registry.version_dir(folder, n) / "claimset.json").read_text(encoding="utf-8")
+        if docs[n] is not raws[n]:                       # retracted: the file with the status the platform assigned
+            text = json.dumps(docs[n], indent=1, ensure_ascii=False) + "\n"
         view = render(doc)
         _write(p / f"{key}@v{n}.json", text)
         _write(p / f"{key}@v{n}.txt", view)
@@ -190,7 +196,7 @@ def write_static(conn, registry, folder, published_dir, base_url):
                 labs[n] = {"copy": lab_artefacts[0], "summary": None}
         pp = doc["paper"]
         entry = {"id": f"{pp['id']}@v{n}", "version": n, "date": pp["date"], "status": pp["status"],
-                 "hash": doc_hash(doc), "json": f"{base_url}/p/{key}@v{n}.json",
+                 "hash": doc_hash(raws[n]), "json": f"{base_url}/p/{key}@v{n}.json",
                  "reading_view": f"{base_url}/p/{key}@v{n}.txt",
                  "classifier": _validation(registry, folder, n).get("classifier")}
         for f in ("status_notice", "previous_version"):
@@ -199,11 +205,67 @@ def write_static(conn, registry, folder, published_dir, base_url):
         if lab:
             entry["lab_record"] = lab
         listing.append(entry)
-    _write(p / key / "versions.json",
-           json.dumps({"id": current["paper"]["id"], "current_version": versions[-1], "versions": listing},
-                      indent=1, ensure_ascii=False) + "\n")
+    head = {"id": current["paper"]["id"], "current_version": versions[-1]}
+    if notes:
+        head["notices"] = notes["notices"]
+    _write(p / key / "versions.json", json.dumps({**head, "versions": listing}, indent=1, ensure_ascii=False) + "\n")
     site.write_claimset(published_dir, base_url, key, docs, listing, labs)
     write_index(conn, published_dir, base_url)
+
+
+def apply_notices(conn, registry, folder, published_dir, base_url):
+    """After a claimset's notices changed in the registry: a retracted claimset is indexed again with its notice; a
+    removed one is taken out of the index and the site, its addresses answering with the notice."""
+    if registry.versions(folder):
+        for n in registry.versions(folder):
+            index_version(conn, registry, folder, n, published_dir, base_url)
+        return
+    write_removed(conn, registry.notices(folder), published_dir, base_url)
+
+
+def write_removed(conn, notes, published_dir, base_url):
+    """Take a removed claimset out of the index, the site and the file store, and write its notice at its
+    addresses."""
+    concept = notes["id"]
+    notice = notices.latest(notes)
+    key = ids.url_key(concept)
+    published_dir = Path(published_dir)
+    rows = conn.execute("SELECT version, file FROM versions WHERE concept_id = %s", (concept,)).fetchall()
+    versions = sorted({r[0] for r in rows} | set(notice.get("versions") or []))
+    digests = {d for _, f in rows for d in _stored_digests(f, base_url)}
+    with conn.transaction():
+        conn.execute("DELETE FROM papers WHERE concept_id = %s", (concept,))
+        conn.execute("INSERT INTO removed (concept_id, url_key, notice) VALUES (%s, %s, %s) ON CONFLICT (concept_id)"
+                     " DO UPDATE SET notice = EXCLUDED.notice", (concept, key, Jsonb(notice)))
+    for digest in digests:                                  # packaged files no other claimset uses
+        if not conn.execute("SELECT 1 FROM versions WHERE strpos(file::text, %s) > 0 LIMIT 1",
+                            (digest,)).fetchone():
+            (published_dir / "files" / digest).unlink(missing_ok=True)
+            for img in (published_dir / "img").glob(f"{digest}.*"):
+                img.unlink()
+    p = published_dir / "p"
+    for f in list(p.glob(f"{key}.*")) + list(p.glob(f"{key}@v*.*")):
+        f.unlink()
+    if (p / key).is_dir():
+        shutil.rmtree(p / key)
+    gone = {"id": concept, "status": "removed", "notice": notices.status_notice(notice)}
+    page = site.removed_page(concept, notice)
+    text = site.removed_text(concept, notice)
+    for name in [key] + [f"{key}@v{n}" for n in versions]:
+        _write(p / f"{name}.html", page)
+        _write(p / f"{name}.json", json.dumps(gone, indent=1, ensure_ascii=False) + "\n")
+        _write(p / f"{name}.txt", text)
+    _write(p / key / "versions.json", json.dumps({**gone, "notices": notes["notices"]}, indent=1,
+                                                 ensure_ascii=False) + "\n")
+    write_index(conn, published_dir, base_url)
+
+
+def _stored_digests(doc, base_url):
+    prefix = f"{base_url.rstrip('/')}/files/"
+    for a in doc.get("artefacts") or []:
+        uri = a.get("uri") if isinstance(a, dict) else None
+        if isinstance(uri, str) and uri.startswith(prefix) and re.fullmatch(r"[0-9a-f]{64}", uri[len(prefix):]):
+            yield uri[len(prefix):]
 
 
 def _lab_summary(record):
@@ -254,9 +316,15 @@ def reindex(conn, registry, published_dir, base_url):
     """Rebuild the database index, the identifier counters and the static files from the registry alone."""
     with conn.transaction():
         conn.execute("DELETE FROM papers")
+        conn.execute("DELETE FROM removed")
         counters = {}
         for folder in registry.folders():
             concept = registry.read(folder, registry.versions(folder)[0])["paper"]["id"]
+            if concept.startswith(ids.PREFIX):
+                year, number = ids.year_number(concept)
+                counters[year] = max(counters.get(year, 0), number)
+        for folder in registry.removed_folders():            # a removed claimset's number is never given again
+            concept = (registry.notices(folder) or {}).get("id", "")
             if concept.startswith(ids.PREFIX):
                 year, number = ids.year_number(concept)
                 counters[year] = max(counters.get(year, 0), number)
@@ -267,8 +335,9 @@ def reindex(conn, registry, published_dir, base_url):
     for folder in folders:
         for n in registry.versions(folder):
             index_version(conn, registry, folder, n, published_dir, base_url)
-    if not folders:
-        write_index(conn, published_dir, base_url)
+    for folder in registry.removed_folders():
+        write_removed(conn, registry.notices(folder), published_dir, base_url)
+    write_index(conn, published_dir, base_url)
     return folders
 
 

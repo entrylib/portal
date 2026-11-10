@@ -199,12 +199,30 @@ class RemoteRegistry:
             number = self.gh.create_pull(branch, prepared.message, body)
         return Opened(number, branch)
 
-    def settle(self, number, branch, title, tag):
+    def open_notices(self, folder, notices, remove, message, body, branch):
+        """Push a claimset's notices document (and, with `remove`, the deletion of its versions) as a branch from
+        main and open its pull request (notices.py). Idempotent like `open`."""
+        from .registry import apply_notices
+        self.sync()
+        self._git("checkout", "-q", "-B", branch, f"{self.remote}/main")
+        try:
+            apply_notices(self.registry.path, folder, notices, remove, self._git)
+            self._git("commit", "-q", "-m", message)
+            self._git("push", "-q", "--force", self.remote, f"{branch}:refs/heads/{branch}", auth=True)
+        finally:
+            self.sync()
+        number = self.gh.find_pull(branch)
+        if number is None:
+            number = self.gh.create_pull(branch, message, body)
+        return Opened(number, branch)
+
+    def settle(self, number, branch, title, tag=None):
         """Look at a pull request. Returns ("waiting", None), ("merged", None) or ("failed", reason). Merged pull
         requests are tagged and the clone brought up to date; failed ones are closed and their branch deleted."""
         pr = self.gh.pull(number)
         if pr["merged"]:
-            self.gh.tag(tag, pr["merge_sha"])
+            if tag:
+                self.gh.tag(tag, pr["merge_sha"])
             self.gh.delete_branch(branch)
             self.sync()
             return "merged", None
@@ -221,7 +239,8 @@ class RemoteRegistry:
             self.gh.delete_branch(branch)
             return "failed", f"the registry checks failed ({pr['url']}): {reason}"
         sha = self.gh.merge(number, pr["head_sha"], title)
-        self.gh.tag(tag, sha)
+        if tag:
+            self.gh.tag(tag, sha)
         self.gh.delete_branch(branch)
         self.sync()
         return "merged", None
