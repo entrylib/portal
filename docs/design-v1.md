@@ -252,6 +252,15 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 - **For programs:** `/p/<key>@v<n>.score.json` (and `/p/<key>.score.json` for the current version) holds the scores, their problems and the rubric version; `/p/<key>@v<n>.issues.txt` lists every issue that lowers a score, with what would fix it, for the authors' agent preparing the next version (linked from the panel and the section *Score*); the reading view ends with the scores in text. Lists of claimsets (home, all, search) show each paper's reliability.
 - **When they change:** pages are rewritten when the rubric version changes (it is part of the marker of §7.1), so scores follow the current rubric. Without the rubric installed the page shows "–".
 
+### 7.7 Read
+
+`/read` (the menu's Read) shows what EntryLib holds. Rendered by the app, without scripts:
+
+- **A tree** of OpenAlex domains, fields and subfields (`data/fields.json`, `data/subfields.json`), only the parts that have claimsets, each with how many. A claimset is in the subfield of its classification.
+- **For the part chosen** (or everything): its **principal claims** by default, or all claims (a switch), or its **claimsets** as cards. Each claim shows its reliability, dots and novelty, and links to its claimset.
+- **Filters:** claim type, novelty label, planned or exploratory, reliability band; **sort** by reliability or newest; 50 a page. Search (`/search`) stays at the top.
+- Scores come from the rubric over each current file, kept in memory per version and rubric version; when the library grows, the indexer should store them in the database instead.
+
 ## 8. Limits and spam controls
 
 | Limit | Value (initial) |

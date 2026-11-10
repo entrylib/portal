@@ -37,7 +37,7 @@ RECENT = 10
 #: How many entries the feed carries.
 FEED_ENTRIES = 30
 
-NAV = [("/search", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
+NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
        ("/about", "About", "about")]
 FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/privacy", "Privacy"),
           ("/removal", "Removal requests"), ("/spec/", "Specification"),
