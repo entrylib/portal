@@ -17,6 +17,7 @@ pending, and the guarantor is within the limits of design §8. Confirmed submiss
 """
 
 import datetime as dt
+import os
 import secrets
 import tempfile
 from dataclasses import dataclass
@@ -27,9 +28,11 @@ from claimset.render import render
 from .publish import load_submission
 from .submissions import duplicate, token_hash
 
-#: New claimsets one guarantor may publish in seven days, and versions of one claimset in a day (design §8).
-MAX_NEW_PER_WEEK = 2
-MAX_VERSIONS_PER_DAY = 3
+#: New claimsets one guarantor may publish in seven days, and versions of one claimset in a day (design §8). Set by
+#: PORTAL_MAX_NEW_PER_WEEK and PORTAL_MAX_VERSIONS_PER_DAY; the defaults are raised for the launch while the library is
+#: seeded (issue: revert to 2 and 3 once others submit).
+MAX_NEW_PER_WEEK = int(os.environ.get("PORTAL_MAX_NEW_PER_WEEK", "20"))
+MAX_VERSIONS_PER_DAY = int(os.environ.get("PORTAL_MAX_VERSIONS_PER_DAY", "10"))
 #: How long a sign-in started from a consent page may take.
 SIGNIN_WINDOW = dt.timedelta(minutes=30)
 
@@ -86,23 +89,34 @@ def start(conn, token):
     return state
 
 
-def _over_limit(conn, orcid, kind, target, now):
+def _slot(conn, orcid, kind, target, now):
+    """When a submission confirmed now may be published under the limits of design §8: None for at once, or the time
+    the earliest publication counted against it leaves the window, with a sentence saying why. Publications already
+    scheduled count at their scheduled time, so that no window ever holds more than the limit."""
     if kind == "new":
-        n = conn.execute(
-            "SELECT count(*) FROM submission_guarantors g JOIN submissions s ON s.id = g.submission_id"
-            " WHERE g.orcid = %s AND s.kind = 'new' AND s.state IN ('confirmed', 'publishing', 'published')"
-            " AND g.confirmed > %s", (orcid, now - dt.timedelta(days=7))).fetchone()[0]
-        if n >= MAX_NEW_PER_WEEK:
-            return f"you have confirmed {n} new claimsets in the last seven days, the most allowed; this one can be " \
-                   f"confirmed later, before its link expires"
+        limit, window, what = MAX_NEW_PER_WEEK, dt.timedelta(days=7), "new claimsets in any seven days"
+        times = conn.execute(
+            "SELECT COALESCE(s.publish_after, g.confirmed) FROM submission_guarantors g"
+            " JOIN submissions s ON s.id = g.submission_id WHERE g.orcid = %s AND s.kind = 'new'"
+            " AND s.state IN ('confirmed', 'publishing', 'published') AND g.confirmed IS NOT NULL"
+            " AND COALESCE(s.publish_after, g.confirmed) > %s", (orcid, now - window)).fetchall()
     else:
-        n = conn.execute(
-            "SELECT count(*) FROM submission_guarantors g JOIN submissions s ON s.id = g.submission_id"
-            " WHERE s.target = %s AND s.state IN ('confirmed', 'publishing', 'published') AND g.confirmed > %s",
-            (target, now - dt.timedelta(days=1))).fetchone()[0]
-        if n >= MAX_VERSIONS_PER_DAY:
-            return f"{target} already has {n} new versions confirmed in the last day, the most allowed"
-    return None
+        limit, window, what = MAX_VERSIONS_PER_DAY, dt.timedelta(days=1), f"new versions of {target} in a day"
+        times = conn.execute(
+            "SELECT DISTINCT ON (s.id) COALESCE(s.publish_after, g.confirmed) FROM submission_guarantors g"
+            " JOIN submissions s ON s.id = g.submission_id WHERE s.target = %s"
+            " AND s.state IN ('confirmed', 'publishing', 'published') AND g.confirmed IS NOT NULL"
+            " AND COALESCE(s.publish_after, g.confirmed) > %s ORDER BY s.id", (target, now - window)).fetchall()
+    times = sorted(t for (t,) in times)
+    if len(times) < limit:
+        return None, None
+    when = times[-limit] + window
+    if when <= now:
+        return None, None
+    why = (f"one guarantor may publish at most {limit} {what}, and {len(times)} of yours are already published or "
+           f"waiting in that time" if kind == "new" else
+           f"EntryLib publishes at most {limit} {what}, and {len(times)} are already published or waiting")
+    return when, why
 
 
 def complete(conn, state, orcid, now=None):
@@ -129,18 +143,22 @@ def _confirm(conn, token_hash_, orcid, now):
                                        f"guarantor; only the guarantor can confirm it", sid)
     if sub_state != "pending":
         return Outcome("not_pending", f"this submission is {sub_state}", sid)
-    reason = _over_limit(conn, orcid, kind, target, now)
-    if reason:
-        return Outcome("limit", reason, sid)
     same = None if kind != "new" or new_paper else duplicate(conn, key, [orcid], exclude=sid)
     if same:                                            # confirmed twice in one window (design §4.5)
         return Outcome("duplicate", f"this looks like a claimset already confirmed: {same}", sid)
     conn.execute("UPDATE submission_guarantors SET confirmed = %s WHERE token_hash = %s", (now, token_hash_))
     remaining = conn.execute("SELECT count(*) FROM submission_guarantors WHERE submission_id = %s"
                              " AND confirmed IS NULL", (sid,)).fetchone()[0]
-    if remaining == 0:
-        conn.execute("UPDATE submissions SET state = 'confirmed' WHERE id = %s", (sid,))
-    return Outcome("confirmed", "confirmed", sid)
+    if remaining:
+        return Outcome("confirmed", "confirmed", sid)
+    when, why = _slot(conn, orcid, kind, target, now)
+    conn.execute("UPDATE submissions SET state = 'confirmed', publish_after = %s WHERE id = %s", (when, sid))
+    if when is None:
+        return Outcome("confirmed", "confirmed", sid)
+    return Outcome("scheduled", f"You have confirmed this claimset. It will be published automatically on "
+                                f"{when:%A %d %B %Y at %H:%M} UTC: {why}, so it waits until the earliest of them is "
+                                f"out of the window. You need do nothing more; the status link shows when it is "
+                                f"published.", sid)
 
 
 #: How long the Confirm buttons of a /confirm listing stay valid.
