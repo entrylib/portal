@@ -3,7 +3,7 @@ citation files and the feed.
 
 The claimset itself is rendered by the claimset package (`claimset.html.render_parts`); this module supplies the page
 around it. Every value taken from a claimset is escaped; nothing submitted is rendered as HTML. Pages carry no scripts
-but one: on claimset pages, toc.js marks the section being read.
+but two, on claimset pages: toc.js marks the section being read, figures.js opens a figure over the page.
 
 The indexer writes all of it as static files at publication and when the app starts (`write_site`); search is the one
 page the app renders, on request (`search_page`).
@@ -12,6 +12,7 @@ page the app renders, on request (`search_page`).
 import functools
 import hashlib
 import html
+import inspect
 import json
 import os
 import re
@@ -81,7 +82,7 @@ def _write(path, text):
 def fingerprint():
     """A hash of everything here that shapes a page: when it changes, the pages are written again."""
     h = hashlib.sha256(Path(__file__).read_bytes())
-    for name in ("site.css", "toc.js"):
+    for name in ("site.css", "toc.js", "figures.js"):
         h.update(_static(name).read_bytes())
     for f in sorted((Path(str(_static("pages")))).glob("*.html")):
         h.update(f.read_bytes())
@@ -118,7 +119,9 @@ def shell(title, main, *, active=None, description="", head="", canonical=None, 
             '<link rel="stylesheet" href="/site.css">'
             f'<link rel="alternate" type="application/atom+xml" title="{SITE}: recently published" href="/feed.xml">'
             f"{head}</head>\n<body>{_header(active)}<main>{main}</main>{_footer()}"
-            + (f'<script src="{script}" defer></script>' if script else "") + "</body></html>\n")
+            + "".join(f'<script src="{s}" defer></script>' for s in ([script] if isinstance(script, str) else
+                                                                      script or []))
+            + "</body></html>\n")
 
 
 # --- facts about a claimset -------------------------------------------------------------------------------------------
@@ -386,12 +389,20 @@ def _versions(listing, key, current):
             '(<a href="https://github.com/entrylib/registry">github.com/entrylib/registry</a>).</p></section>')
 
 
-def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None):
+def _accepts(fn, name):
+    try:
+        return name in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None):
     """The page of one version of a claimset. `listing`: its versions (versions.json entries); `lab`: {copy,
     summary} when the registry holds its lab record; `current`: the claimset's current version number."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
-    parts = cshtml.render_parts(doc, file_url=file_url)
+    extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
+    parts = cshtml.render_parts(doc, file_url=file_url, **extra)
     origin = parts["origin"]
     top = [f'<span class="origin">{esc(origin)}</span>', _status(p), f'<span class="id">{esc(p["id"])}</span>',
            f"version {esc(n)} · {esc(p.get('date'))}"]
@@ -415,7 +426,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'<link rel="alternate" type="application/x-bibtex" href="/p/{key}@v{n}.bib">')
     canonical = f"{base_url}/p/{key}" if not current or current == n else f"{base_url}/p/{key}@v{n}"
     return shell(p.get("title", ""), main, active="read", description=description, head=head, canonical=canonical,
-                 script="/toc.js")
+                 script=["/toc.js", "/figures.js"])
 
 
 # --- cards, home, all, feed -------------------------------------------------------------------------------------------
@@ -705,14 +716,14 @@ def file_url_for(published_dir, base_url):
     return file_url
 
 
-def write_claimset(published_dir, base_url, key, docs, listing, labs):
+def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None):
     """The pages and citation files of one claimset: every version, and the current one at /p/<key>."""
     p = Path(published_dir) / "p"
     file_url = file_url_for(published_dir, base_url)
     current = max(docs)
     for n, doc in docs.items():
         page = claimset_page(doc, base_url=base_url, listing=listing, lab=labs.get(n), file_url=file_url,
-                             current=current)
+                             current=current, ref_text=ref_text)
         _write(p / f"{key}@v{n}.html", page)
         _write(p / f"{key}@v{n}.bib", bibtex(doc, base_url))
         _write(p / f"{key}@v{n}.ris", ris(doc, base_url))
@@ -737,7 +748,8 @@ def write_fixed(published_dir, base_url):
     for name in PAGES:
         _write(published_dir / f"{name}.html", fixed_page(name, base_url))
     _write(published_dir / "site.css", _static("site.css").read_text(encoding="utf-8"))
-    _write(published_dir / "toc.js", _static("toc.js").read_text(encoding="utf-8"))
+    for name in ("toc.js", "figures.js"):
+        _write(published_dir / name, _static(name).read_text(encoding="utf-8"))
     _write(published_dir / "claimset.css", cshtml.stylesheet())
     for folder in ("fonts", "img"):
         src = Path(str(_static(folder)))

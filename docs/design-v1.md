@@ -210,7 +210,9 @@ The site for people follows the website design decisions of 10 November 2026 (En
 - **Look.** One font, Source Serif 4; one colour scheme with a dark theme; colour only for links, status and the support lights. Phones get a menu button and a single column.
 - **Subfields** are shown by name, from a table of OpenAlex's subfields kept in the portal (`data/subfields.json`).
 - **Specifications** (#46): `/spec/claimset`, `/spec/lab-record`, `/spec/revision`, `/spec/extensions/<name>`, each version at `/<version>` and as text at `.md`, made from the Markdown shipped with the installed claimset package by a small converter of our own (`markdown.py`; our text only, never submitted content) and written when the app starts.
-- **Scripts:** one, `toc.js`, on claimset and specification pages: it marks the section being read in the contents and, on a phone, shows it in a bar that opens the contents. Without it the contents still link to every section.
+- **Scripts:** two, on claimset pages (`toc.js` also on specification pages). `toc.js` marks the section being read in the contents and, on a phone, shows it in a bar that opens the contents; `figures.js` opens a figure over the page with its caption. Without them the contents still link to every section and a figure's link opens the image.
+- **Maths and code:** the claimset package writes formulae as MathML (no script); the site serves STIX Two Math for them. `code` in text is set as code.
+- **References by DOI** are written out at publication from Crossref (`crossref.py`, kept in `doi_metadata`), so pages show author (year) and the full reference; the published file keeps the DOI. Needs claimset 0.40.4 (`ref_text`); with an older one the page shows the DOI.
 - **Not yet:** the quality score (shown as "–").
 
 ### 7.5 Retraction and removal

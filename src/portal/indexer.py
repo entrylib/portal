@@ -33,7 +33,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import ids, notices, reading, site
+from . import crossref, ids, notices, reading, site
 
 
 def _write(path, text):
@@ -209,7 +209,11 @@ def write_static(conn, registry, folder, published_dir, base_url):
     if notes:
         head["notices"] = notes["notices"]
     _write(p / key / "versions.json", json.dumps({**head, "versions": listing}, indent=1, ensure_ascii=False) + "\n")
-    site.write_claimset(published_dir, base_url, key, docs, listing, labs)
+    dois = [b.get("target") for d in docs.values() for b in d.get("references") or []
+            if isinstance(b, dict) and b.get("id_type") == "doi"]
+    written = crossref.texts(conn, dois)                 # asks Crossref about DOIs not seen before
+    site.write_claimset(published_dir, base_url, key, docs, listing, labs,
+                        ref_text=lambda b: written.get(crossref.normalise(b.get("target"))))
     write_index(conn, published_dir, base_url)
 
 
