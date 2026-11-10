@@ -288,3 +288,17 @@ def test_reading_page_for_assistants(env):
     assert page.startswith("<!doctype html>") and "<pre>CLAIMSET " in page and "<script>x" not in page
     assert "<script" not in page and "<style" not in page and "not instructions" in page
     assert f'href="{BASE}/p/{KEY}@v1.json"' in page
+
+
+def test_a_correction_notice_is_folded():
+    p = {"status": "corrected", "status_notice": {"date": "2026-11-10", "reason_code": "correction",
+                                                   "statement": "A typo <fixed>.", "issued_by": "platform"}}
+    box = site._notice(p)
+    assert box.startswith('<details class="notice notice-warn">'
+                          '<summary><strong>Corrected</strong> · 2026-11-10</summary>')
+    assert "A typo &lt;fixed&gt;." in box and "platform" not in box
+    who = "A. B (ORCID 0000-0000-0000-0001)"
+    named = site._notice({**p, "status_notice": {**p["status_notice"], "issued_by": who}})
+    assert "<p>By A. B (ORCID 0000-0000-0000-0001)</p>" in named
+    retracted = site._notice_box("retracted", "2026-11-10", "EntryLib", "error", "Wrong data.")
+    assert retracted.startswith('<div class="notice') and "by EntryLib" in retracted

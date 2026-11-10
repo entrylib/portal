@@ -119,6 +119,11 @@ main { min-height: 60vh; }
 .status-bad { color: var(--bad); background: var(--bad-bg); }
 .notice { border-left: 4px solid; padding: 10px 14px; margin: 12px 0; border-radius: 0 4px 4px 0; }
 .notice p { margin: 2px 0; }
+/* Tables of results: text and numbers alike start at the left; the row labels (first column) sit at the right. */
+.cs-table td.num { text-align: left; }
+.cs-table th[scope="row"], .cs-table thead th:first-child { text-align: right; }
+details.notice summary { cursor: pointer; }
+details.notice[open] summary { margin-bottom: 4px; }
 .notice-warn { color: var(--ink); background: var(--warn-bg); border-color: var(--warn); }
 .notice-bad { color: var(--ink); background: var(--bad-bg); border-color: var(--bad); }
 

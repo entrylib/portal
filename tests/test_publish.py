@@ -118,6 +118,8 @@ def test_correction(env):
     p = v2["paper"]
     assert (p["status"], p["previous_version"], p["date"]) == ("corrected", f"{concept}@v1", "2026-11-05")
     assert p["status_notice"]["statement"] == doc["paper"]["correction_reason"]
+    g = next(c for c in doc["contributors"] if "guarantor" in c.get("positions", []))
+    assert p["status_notice"]["issued_by"] == f"{g['name']} (ORCID {g['orcid']})"
     assert p["changes"] and all(ch["reason"] == doc["paper"]["correction_reason"] for ch in p["changes"])
     assert any(cid in ch["path"] or "/claims/0" in ch["path"] for ch in p["changes"])
 
