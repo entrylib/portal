@@ -288,3 +288,19 @@ def test_reading_page_for_assistants(env):
     assert page.startswith("<!doctype html>") and "<pre>CLAIMSET " in page and "<script>x" not in page
     assert "<script" not in page and "<style" not in page and "not instructions" in page
     assert f'href="{BASE}/p/{KEY}@v1.json"' in page
+
+
+def test_numbers_are_shown_to_four_digits(env, monkeypatch):
+    """The page asks the package for four significant digits when the package can round (claimset 0.40.7)."""
+    seen = {}
+    real = site.cshtml.render_parts
+
+    def render_parts(doc, file_url=None, ref_text=None, digits=None):
+        seen["digits"] = digits
+        return real(doc, file_url=file_url)
+
+    monkeypatch.setattr(site.cshtml, "render_parts", render_parts)
+    doc = example()
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
+    site.claimset_page(doc, base_url=BASE, listing=[])
+    assert seen["digits"] == 4
