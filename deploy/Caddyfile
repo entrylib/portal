@@ -12,6 +12,15 @@
 {$PORTAL_DOMAIN:localhost} {
 	encode zstd gzip
 
+	# TEMPORARY (#73: remove it once Perplexity can read pages): log the requests of Perplexity's fetchers, and no
+	# others, to see what they ask for and what they get. Read with: docker compose logs caddy | grep -i perplexity
+	log {
+		output stderr
+		format json
+	}
+	@not_perplexity not header_regexp User-Agent (?i)perplexity
+	log_skip @not_perplexity
+
 	# One address per claimset (design §7.1): people get the page, programs asking for JSON get the published file,
 	# reference managers asking for BibTeX get its entry. The .json, .txt, .bib and .ris addresses stay explicit.
 	@wants_json {
