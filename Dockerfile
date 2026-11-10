@@ -13,6 +13,10 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 RUN pip install .
+# The scoring rubric (design §7.6), from GitHub; the image builds without it (the pages then show "–" for scores), and
+# deploy/start.sh installs it again at each start.
+RUN pip install "entrylib-rubric @ git+https://github.com/entrylib/rubric" \
+ || echo "portal: the rubric could not be installed; scores will show –"
 
 # Named volumes take their owner from these folders when first created, so the app (not root) can write to them.
 RUN mkdir -p /srv/published /srv/registry /srv/submissions /home/portal/.local \

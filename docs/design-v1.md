@@ -206,9 +206,9 @@ Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT
 
 The site for people follows the website design decisions of 10 November 2026 (EntryLib website v1). In short:
 
-- **Claimset page.** Made from the JSON by the claimset package (`claimset.html.render_parts`, the same view as `claimset render --html`); the portal adds the page around it: origin label (lab, lab · record withheld, converted, native), status and notices, the header panel (quality score, shown as "–" until it is defined; claims by support light; Cite with the plain citation, BibTeX and RIS; links for models), the lab record's summary for a lab claimset, and the versions. Packaged images are shown in their evidence; images elsewhere are linked, never loaded.
+- **Claimset page.** Made from the JSON by the claimset package (`claimset.html.render_parts`, the same view as `claimset render --html`); the portal adds the page around it: origin label (lab, lab · record withheld, converted, native), status and notices, the header panel (reliability and novelty, §7.6; claims by band; Cite with the plain citation, BibTeX and RIS; links for models), the lab record's summary for a lab claimset, and the versions. Packaged images are shown in their evidence; images elsewhere are linked, never loaded.
 - **Pages without scripts.** Every page is static HTML and CSS except search (rendered by the app) and the upload page (its own script only). They load only this site's styles, fonts (Source Serif 4, served from the site) and images; the content security policy says so. Everything taken from a claimset is escaped.
-- **Look.** One font, Source Serif 4; one colour scheme with a dark theme; colour only for links, status and the support lights. Phones get a menu button and a single column.
+- **Look.** One font, Source Serif 4; one colour scheme with a dark theme; colour only for links, status and scores. Phones get a menu button and a single column.
 - **Subfields** are shown by name, from a table of OpenAlex's subfields kept in the portal (`data/subfields.json`).
 - **Specifications** (#46): `/spec/claimset`, `/spec/lab-record`, `/spec/revision`, `/spec/extensions/<name>`, each version at `/<version>` and as text at `.md`, made from the Markdown shipped with the installed claimset package by a small converter of our own (`markdown.py`; our text only, never submitted content) and written when the app starts.
 - **Script:** one, `page.js`, on claimset and specification pages: it marks the section being read in the contents (and on a phone shows it in a bar that opens the contents), opens a figure over the page with its caption, and copies the reading-view address for an AI assistant. Without it the contents link to every section, a figure's link opens the image, and the assistant link opens the reading view.
@@ -218,7 +218,6 @@ The site for people follows the website design decisions of 10 November 2026 (En
 - **For models:** the claimset page has "Copy the link for your AI assistant", which copies its reading-view address: some assistants open only addresses they are given, never links found in a page (Gemini refused the page's `.json` and `.txt` links). `/robots.txt` allows every reader and program, with `Content-Signal: search=yes, ai-input=yes`; the training signal is the owner's decision, still to be made.
 - **Subfield:** a valid `paper.classification.subfield` proposed by the submission is kept (claimset spec §3.1: the agent may propose it) and shown on the consent page; `/subfields.json` lists OpenAlex's subfields for agents. Otherwise the classifier's subfield is the one with the most weight across its topics, not only the best topic's. `validation.json` records who chose it.
 - **References by DOI** are written out at publication from Crossref (`crossref.py`, kept in `doi_metadata`), so pages show author (year) and the full reference; the published file keeps the DOI. Needs claimset 0.40.4 (`ref_text`); with an older one the page shows the DOI.
-- **Not yet:** the quality score (shown as "–").
 
 ### 7.5 Retraction and removal
 
@@ -244,6 +243,14 @@ Decided 9 November 2026 (§15 Q5; portal issue #47). The form is at `/removal`, 
 - `action`: `retracted` or `removed`. `reason_code`: from the lists in `notices.py` (each ends with `other`); `reason`: its name; `statement`: the requester's own words, possibly empty (required with `other`).
 - `issued_by`: who acted, as readers see it: the guarantor by name and ORCID iD, or `EntryLib` after review; `by`: the guarantor's name and iD, or `null`. `versions`: the versions the claimset had when the notice was added.
 - Notices are only appended, one per commit. A retraction changes nothing else. A removal deletes every file of every version, so the folder keeps only `notices.json`, and no notice may follow it.
+
+### 7.6 Scores
+
+Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`), installed from GitHub with the rubric's scorer and updated when the app starts, like claimset; the portal applies it and never sets costs of its own. In short: a **reliability** score from 0 to 100 for every claim that is not an assumption, computed by rules from the published file, each lost point naming its problem and what would remove it; the paper's is its lowest principal claim's. **Novelty** is the authors' label with a close-match check against the claims of claimsets published before this one (candidates found by the portal's full-text search, the match decided by the rubric).
+
+- **On the page:** the panel shows the paper's reliability large, coloured by band (High 80+, Medium 60–79, Low under 60) and named, and novelty small and uncoloured. Every claim shows its score and five dots (support, plan, checkable, context, open problems), each dot explained on hover; clicking a score opens its explanation in a pop-up (`page.js`). The section *Score* at the end of the page holds the paper's explanation, so it can be linked and read without the script. The explanation says that scores are computed by rules from the file and may change as the rubric and reviews develop.
+- **For programs:** `/p/<key>@v<n>.score.json` (and `/p/<key>.score.json` for the current version) holds the scores, their problems and the rubric version; the reading view ends with the scores in text.
+- **When they change:** pages are rewritten when the rubric version changes (it is part of the marker of §7.1), so scores follow the current rubric. Without the rubric installed the page shows "–".
 
 ## 8. Limits and spam controls
 

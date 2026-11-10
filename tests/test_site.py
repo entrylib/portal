@@ -26,7 +26,7 @@ def test_claimset_page(env):
     assert 'href="/site.css?v=' in page and 'href="/claimset.css?v=' in page
     for part in ('<span class="origin">native</span>', "status-ok", f"{concept}@v1", 'id="versions"',
                  '<a href="#versions">Versions</a>', f'href="/p/{KEY}@v1.bib"', f'href="/p/{KEY}@v1.ris"',
-                 f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "How it is computed", "light-green"):
+                 f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "Reliability"):
         assert part in page, part
     bib = (out / "p" / f"{KEY}.bib").read_text()
     assert bib.startswith("@misc{entrylib2026.000001v1,") and f"{BASE}/p/{KEY}@v1" in bib

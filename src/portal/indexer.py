@@ -35,7 +35,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import crossref, ids, notices, reading, site
+from . import crossref, ids, notices, reading, scores, site
 
 
 def _write(path, text):
@@ -171,12 +171,18 @@ def write_static(conn, registry, folder, published_dir, base_url):
     current = docs[versions[-1]]
     key = ids.url_key(current["paper"]["id"])
     p = published_dir / "p"
-    listing, labs = [], {}
+    listing, labs, scored = [], {}, {}
     for n, doc in docs.items():
         text = (registry.version_dir(folder, n) / "claimset.json").read_text(encoding="utf-8")
         if docs[n] is not raws[n]:                       # retracted: the file with the status the platform assigned
             text = json.dumps(docs[n], indent=1, ensure_ascii=False) + "\n"
-        view = render(doc)
+        scored[n] = scores.compute(conn, doc)             # by the rubric (design §7.6); None without it
+        view = render(doc) + scores.text(scored[n])
+        if scored[n] is not None:
+            score_json = json.dumps(scored[n], indent=1, ensure_ascii=False) + "\n"
+            _write(p / f"{key}@v{n}.score.json", score_json)
+            if n == versions[-1]:
+                _write(p / f"{key}.score.json", score_json)
         _write(p / f"{key}@v{n}.json", text)
         _write(p / f"{key}@v{n}.txt", view)
         reading = site.reading_page(doc, view, base_url)       # the same text as a web page, for assistants
@@ -219,7 +225,8 @@ def write_static(conn, registry, folder, published_dir, base_url):
     written = crossref.texts(conn, dois)                 # asks Crossref about DOIs not seen before
     legacy = move_legacy_files(conn, docs, key, published_dir, base_url)
     site.write_claimset(published_dir, base_url, key, docs, listing, labs,
-                        ref_text=lambda b: written.get(crossref.normalise(b.get("target"))), legacy=legacy)
+                        ref_text=lambda b: written.get(crossref.normalise(b.get("target"))), legacy=legacy,
+                        scores=scored)
     write_index(conn, published_dir, base_url)
 
 
