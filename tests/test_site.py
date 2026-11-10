@@ -22,7 +22,8 @@ def test_claimset_page(env):
     out = ctx["published_dir"]
     page = (out / "p" / f"{KEY}.html").read_text()
     assert page == (out / "p" / f"{KEY}@v1.html").read_text()
-    assert page.count("<script") == 2 and 'src="/toc.js"' in page and 'class="cs-page"' in page
+    assert page.count("<script") == 1 and 'src="/page.js?v=' in page and 'class="cs-page"' in page
+    assert 'href="/site.css?v=' in page and 'href="/claimset.css?v=' in page
     for part in ('<span class="origin">native</span>', "status-ok", f"{concept}@v1", 'id="versions"',
                  '<a href="#versions">Versions</a>', f'href="/p/{KEY}@v1.bib"', f'href="/p/{KEY}@v1.ris"',
                  f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "How it is computed", "light-green"):
@@ -163,7 +164,7 @@ def test_specification_pages(env):
     current = cat["claimset"]["current"]
     page = (out / "spec" / "claimset.html").read_text()
     assert (out / "spec" / "claimset" / f"{current}.html").exists()
-    assert '<h3 id="2.6">' in page and 'href="#2.6"' in page and 'src="/toc.js"' in page
+    assert '<h3 id="2.6">' in page and 'href="#2.6"' in page and 'src="/page.js?v=' in page
     assert (out / "spec" / "claimset.md").read_text().startswith("# Claimset")
     assert (out / "spec" / "lab-record.html").exists() and (out / "spec" / "revision.html").exists()
     assert (out / "spec" / "extensions" / "qualitative.html").exists()
@@ -190,7 +191,8 @@ def test_robots_and_for_models(env):
     assert "User-agent: *" in robots and "Allow: /" in robots and f"{BASE}/llms.txt" in robots
     assert "Disallow" not in robots
     page = (out / "p" / f"{KEY}.html").read_text()
-    assert "Give your AI assistant this address" in page and f"<code>{BASE}/p/{KEY}@v1.txt</code>" in page
+    assert f'<a class="copy-link" href="{BASE}/p/{KEY}@v1.txt">Copy the link for your AI assistant</a>' in page
+    assert ", for programs" not in page
 
 
 def test_a_proposed_subfield_is_kept(env):

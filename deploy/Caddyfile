@@ -25,14 +25,34 @@
 	}
 	rewrite @wants_bibtex {path}.bib
 
+	# An AI assistant given a claimset's page by a person gets the reading view, written for models, at the same
+	# address: assistants often may not open the links they find in a page, so the .txt link alone does not reach
+	# them. Known assistant fetchers (their user agents), and any client asking for plain text or Markdown first.
+	# Search crawlers (Googlebot, Bingbot) are not among them and get the page.
+	@assistant {
+		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
+	}
+	rewrite @assistant {path}.txt
+	@wants_text {
+		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		header_regexp Accept ^\s*text/(plain|markdown)
+	}
+	rewrite @wants_text {path}.txt
+
 	# The website and the published files are static, written by the indexer (design §7.4): served from the published
-	# directory without touching the app. The pages load only this site's styles, fonts, images and two scripts
-	# (toc.js and figures.js, on claimset pages); every value from a claimset in them is escaped.
-	@published path / /index.html /lab /about /agents /privacy /all /feed.xml /site.css /toc.js /figures.js /claimset.css /spec /spec/* /fonts/* /p/* /index.jsonl /llms.txt /robots.txt /subfields.json
+	# directory without touching the app. The pages load only this site's styles, fonts, images and one script
+	# (page.js, on claimset and specification pages); every value from a claimset in them is escaped.
+	@published path / /index.html /lab /about /agents /privacy /all /feed.xml /site.css /page.js /claimset.css /spec /spec/* /fonts/* /p/* /index.jsonl /llms.txt /robots.txt /subfields.json
 	handle @published {
 		root * /srv/published
 		header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
-		header /p/* Vary Accept
+		header /p/* Vary "Accept, User-Agent"
+		# Every page names its reading view in a header too, which some fetching tools read when they skip the page.
+		@page path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		header @page Link "<{path}.txt>; rel=\"alternate\"; type=\"text/plain\""
+		@versioned path /site.css /page.js /claimset.css /fonts/fonts.css
+		header @versioned Cache-Control "public, max-age=31536000, immutable"
 		# Deferred, so that they replace the type file_server gives by the extension.
 		@markdown path /spec/*.md
 		@bibtex path *.bib
