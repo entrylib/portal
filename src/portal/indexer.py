@@ -11,6 +11,7 @@ Static files, under the published directory:
     p/<key>/v<n>/lab.jsonl                 the registry's copy of a version's lab record
     p/<key>/<claim>.json, .txt             the claim bundles of the current version (claimset spec §2.3)
     p/<key>.html, p/<key>@v<n>.html        the page for people (site.claimset_page), current and every version
+    p/<key>.read.html, p/<key>@v<n>.read.html  the reading view as a plain web page, for AI assistants (/p/<key>.read)
     p/<key>.bib, .ris, p/<key>@v<n>.bib    citations
     img/<sha256>.<ext>                     packaged images shown on the pages (links to files/<sha256>)
     index.jsonl                            one paper card per claimset, current versions
@@ -178,9 +179,12 @@ def write_static(conn, registry, folder, published_dir, base_url):
         view = render(doc)
         _write(p / f"{key}@v{n}.json", text)
         _write(p / f"{key}@v{n}.txt", view)
+        reading = site.reading_page(doc, view, base_url)       # the same text as a web page, for assistants
+        _write(p / f"{key}@v{n}.read.html", reading)
         if n == versions[-1]:
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
+            _write(p / f"{key}.read.html", reading)
             write_bundles(p / key, doc)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab = {}

@@ -34,9 +34,10 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 ## Fetch
 
 - {base}/p/<year>.<number>.json: the current version, the published file (JSON).
-- {base}/p/<year>.<number>.txt: its reading view (plain text): read this one to understand the paper. When a
-  person points an assistant at an entry, this is the address to give it: some assistants open only addresses they
-  are given, not the links they find in a page.
+- {base}/p/<year>.<number>.txt: its reading view (plain text): read this one to understand the paper.
+- {base}/p/<year>.<number>.read: the same reading view as a plain web page, for assistants that fetch web pages but
+  not text files. When a person points an assistant at an entry, this is the address to give it: some assistants
+  open only addresses they are given, not the links they find in a page.
 - {base}/p/<year>.<number>@v<n>.json and .txt: a given version.
 - {base}/p/<year>.<number>/C4.txt and .json: one claim of the current version, with the definitions, evidence,
   limitations, warrants and claims it rests on.

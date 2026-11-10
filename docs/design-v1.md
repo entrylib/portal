@@ -177,6 +177,7 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 | `/mcp` | The MCP server (§7.3) |
 | `/submit` | The upload page (§4.4) |
 | `/p/2026.000001.json` | Current version, published file |
+| `/p/2026.000001.read`, `@v1.read` | The reading view as a plain web page (escaped text in `<pre>`), for AI assistants: some fetch web pages but not text files. The page's "Copy the link for your AI assistant" copies it, and known assistant fetchers get it at the page's own address |
 | `/p/2026.000001.txt` | Current version, reading view (`claimset render`; plain text, claimset spec §2.3) |
 | `/p/2026.000001@v1.json`, `@v1.txt` | A given version |
 | `/p/2026.000001/versions.json` | Versions, dates, status, notices, lab record links (copy, author URL, SWHID) |

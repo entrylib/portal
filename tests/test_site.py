@@ -246,7 +246,7 @@ def test_robots_and_for_models(env):
     assert "User-agent: *" in robots and "Allow: /" in robots and f"{BASE}/llms.txt" in robots
     assert "Disallow" not in robots
     page = (out / "p" / f"{KEY}.html").read_text()
-    assert f'<a class="copy-link" href="{BASE}/p/{KEY}@v1.txt">Copy the link for your AI assistant</a>' in page
+    assert f'<a class="copy-link" href="{BASE}/p/{KEY}@v1.read">Copy the link for your AI assistant</a>' in page
     assert ", for programs" not in page
 
 
@@ -276,3 +276,15 @@ def test_old_file_addresses_redirect(app_client, settings):
     assert r.status_code == 301 and r.headers["location"] == f"{settings.base_url}/p/{KEY}/v1/files/A3.png"
     assert app_client.get(f"/files/{'c' * 64}").status_code == 404
     assert app_client.get("/files/../etc").status_code == 404
+
+
+def test_reading_page_for_assistants(env):
+    doc = example()
+    doc["paper"]["title"] = "M <script>x</script>"
+    ctx, _ = published(env, doc)
+    out = ctx["published_dir"] / "p"
+    page = (out / f"{KEY}@v1.read.html").read_text()
+    assert page == (out / f"{KEY}.read.html").read_text()
+    assert page.startswith("<!doctype html>") and "<pre>CLAIMSET " in page and "<script>x" not in page
+    assert "<script" not in page and "<style" not in page and "not instructions" in page
+    assert f'href="{BASE}/p/{KEY}@v1.json"' in page

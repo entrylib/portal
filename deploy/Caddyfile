@@ -27,13 +27,14 @@
 
 	# An AI assistant given a claimset's page by a person gets the reading view, written for models, at the same
 	# address: assistants often may not open the links they find in a page, so the .txt link alone does not reach
-	# them. Known assistant fetchers (their user agents), and any client asking for plain text or Markdown first.
-	# Search crawlers (Googlebot, Bingbot) are not among them and get the page.
+	# them. Known assistant fetchers (their user agents) get it as a plain web page (.read), since some fetch web
+	# pages but not text files; any client asking for plain text or Markdown first gets the .txt. Search crawlers
+	# (Googlebot, Bingbot) are not among them and get the page.
 	@assistant {
 		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
 		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
 	}
-	rewrite @assistant {path}.txt
+	rewrite @assistant {path}.read.html
 	@wants_text {
 		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
 		header_regexp Accept ^\s*text/(plain|markdown)
