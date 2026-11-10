@@ -45,7 +45,7 @@ guarantor ──ORCID sign-in──▶ consent page ──────┘
 - **App:** Python, FastAPI. One process serving the submission API, consent pages, search API and MCP server. It calls the `claimset` package for validation, rendering, verifiability and patches; it never reimplements the spec.
 - **Database:** PostgreSQL with pgvector. Pending submissions, consents, the search index (full text and embeddings), and each published version's file as `jsonb`.
 - **Static files:** every published file and its rendered views, generated at publication and served directly by Caddy. Most read traffic touches no application code.
-- **Packaged files:** stored by checksum and served as downloads at `/files/<sha256>`; a folder beside the static files now, object storage (DigitalOcean Spaces) later.
+- **Packaged files:** kept with their claimset, at `/p/<key>/v<n>/files/<path in the package>`, so that a claimset's files live in its folder and leave with it; a file unchanged from the version before is a hard link, not a copy. Images are shown on the pages from there; other files are downloads. Files stored by checksum before November 2026 (`/files/<sha256>`, still the `uri` in those versions) were moved to `/p/<key>/v<n>/files/<artefact id>.<ext>`, and their old addresses redirect there (`legacy_files`). Object storage (DigitalOcean Spaces) may take the folder's place later.
 - **Classifier:** a separate service running OpenAlex's open topic model (§5.4).
 - **Embeddings:** a small open embedding model run on the server's CPU.
 
@@ -184,7 +184,7 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 | `/p/2026.000001/C4.txt`, `.json` | Claim bundle of the current version (PLT-78): the claim with what it rests on, made by the claimset package (claimset spec §2.3, `claimset render --claim C4`) |
 | `/p/2026.000001`, `@v1` | The page for people (§7.4). The same address answers `Accept: application/json` with the published file and `Accept: application/x-bibtex` with its BibTeX entry |
 | `/p/2026.000001.bib`, `.ris`, `@v1.bib`, `@v1.ris` | Citations, written at publication |
-| `/img/<sha256>.<ext>` | A packaged image shown on a page: a link to the stored file, named with its type |
+| `/p/2026.000001/v1/files/<path>` | A packaged file of a version, under its path in the package; images shown on the pages, other files downloaded |
 | `/index.jsonl` | One line per claimset: ID, title, principal claims, keywords, current version (paper cards, PLT-79) |
 
 Rendered views are produced by the platform, never submitted. All are regenerated when the claimset package or the site's own templates and styles change (checked when the app starts). All of these files, `/llms.txt` included, are written at publication (and by `reindex`, and the fixed pages at start) and served by Caddy; the app serves the search page, the upload page, the APIs and the MCP server.
@@ -210,9 +210,11 @@ The site for people follows the website design decisions of 10 November 2026 (En
 - **Look.** One font, Source Serif 4; one colour scheme with a dark theme; colour only for links, status and the support lights. Phones get a menu button and a single column.
 - **Subfields** are shown by name, from a table of OpenAlex's subfields kept in the portal (`data/subfields.json`).
 - **Specifications** (#46): `/spec/claimset`, `/spec/lab-record`, `/spec/revision`, `/spec/extensions/<name>`, each version at `/<version>` and as text at `.md`, made from the Markdown shipped with the installed claimset package by a small converter of our own (`markdown.py`; our text only, never submitted content) and written when the app starts.
-- **Scripts:** two, on claimset pages (`toc.js` also on specification pages). `toc.js` marks the section being read in the contents and, on a phone, shows it in a bar that opens the contents; `figures.js` opens a figure over the page with its caption. Without them the contents still link to every section and a figure's link opens the image.
+- **Script:** one, `page.js`, on claimset and specification pages: it marks the section being read in the contents (and on a phone shows it in a bar that opens the contents), opens a figure over the page with its caption, and copies the reading-view address for an AI assistant. Without it the contents link to every section, a figure's link opens the image, and the assistant link opens the reading view.
+- **Stylesheets and the script** are linked with a version from their content (`/site.css?v=…`) and cached for a year, so a browser or Cloudflare never pairs a new page with an old stylesheet.
+- **Assistants given a page:** an AI assistant whose fetcher names itself (ChatGPT-User, Claude-User, Perplexity-User, Google's URL-context and Gemini Notebook fetchers and others), or any client asking for `text/plain` or `text/markdown` first, gets the reading view at the page's own address (Caddy). Search crawlers get the page. Every page also names its reading view in a `Link` header.
 - **Maths and code:** the claimset package writes formulae as MathML (no script); the site serves STIX Two Math for them. `code` in text is set as code.
-- **For models:** the claimset page shows its reading-view address as text to copy, "Give your AI assistant this address": some assistants open only addresses they are given, never links found in a page (Gemini refused the page's `.json` and `.txt` links). `/robots.txt` allows every reader and program, with `Content-Signal: search=yes, ai-input=yes`; the training signal is the owner's decision, still to be made.
+- **For models:** the claimset page has "Copy the link for your AI assistant", which copies its reading-view address: some assistants open only addresses they are given, never links found in a page (Gemini refused the page's `.json` and `.txt` links). `/robots.txt` allows every reader and program, with `Content-Signal: search=yes, ai-input=yes`; the training signal is the owner's decision, still to be made.
 - **Subfield:** a valid `paper.classification.subfield` proposed by the submission is kept (claimset spec §3.1: the agent may propose it) and shown on the consent page; `/subfields.json` lists OpenAlex's subfields for agents. Otherwise the classifier's subfield is the one with the most weight across its topics, not only the best topic's. `validation.json` records who chose it.
 - **References by DOI** are written out at publication from Crossref (`crossref.py`, kept in `doi_metadata`), so pages show author (year) and the full reference; the published file keeps the DOI. Needs claimset 0.40.4 (`ref_text`); with an older one the page shows the DOI.
 - **Not yet:** the quality score (shown as "–").
@@ -272,7 +274,7 @@ The one exception is legal: personal data, infringing or unlawful content. Such 
 - Database reachable only from the app.
 - The portal acts on GitHub as the EntryLib GitHub App, installed on the registry only, with contents and pull requests write access. Its private key is a file given to the portal as a Docker secret; installation tokens last an hour.
 - The validator runs with time and memory limits; zips are unpacked with the limits of §4.1.
-- Submitted content is never rendered as HTML: the pages show it escaped. Artefacts are served as downloads; packaged images are shown on pages through `/img/`, in a sandbox when opened on their own.
+- Submitted content is never rendered as HTML: the pages show it escaped. Packaged files are served in a sandbox, never run: images are shown, other files downloaded.
 - No access log: readers' IP addresses are used in memory for the limits only (§8), and a submission's address is deleted when it closes.
 - The registry's check runs on every pull request, but merges happen only through the App, and only for pull requests it opened. If the LLM screening is switched on, its API key must be given only to runs on the App's own branches, never to pull requests from forks.
 

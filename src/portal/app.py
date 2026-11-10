@@ -1,7 +1,7 @@
 """The web application: one FastAPI app serving the API, consent pages, the upload page, the search API and the MCP
 server (/mcp).
 
-Published files (`/p/...`, `/index.jsonl`, `/llms.txt`, `/files/...`) are static and served by Caddy from the
+Published files (`/p/...`, `/index.jsonl`, `/llms.txt`) are static and served by Caddy from the
 published directory; the app does not serve them in production.
 """
 
@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import ipaddress
 import logging
+import re
 import tempfile
 import urllib.parse
 from contextlib import asynccontextmanager
@@ -329,6 +330,18 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
     def _page(html_, status=200):
         return HTMLResponse(html_, status_code=status, headers={"Content-Security-Policy": removal_csp})
+
+    @app.get("/files/{sha256}", include_in_schema=False)
+    def legacy_file(sha256: str):
+        """A packaged file's address before November 2026 (stored by checksum): a permanent redirect to where it now
+        is, in its claimset's folder (storage.py)."""
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            return Response(status_code=404)
+        with pool.connection() as conn:
+            row = conn.execute("SELECT path FROM legacy_files WHERE sha256 = %s", (sha256,)).fetchone()
+        if row is None:
+            return Response(status_code=404)
+        return RedirectResponse(f"{settings.base_url}{row[0]}", status_code=301)
 
     @app.get("/confirm", response_class=HTMLResponse, include_in_schema=False)
     def confirm_page():

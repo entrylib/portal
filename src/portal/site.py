@@ -3,7 +3,8 @@ citation files and the feed.
 
 The claimset itself is rendered by the claimset package (`claimset.html.render_parts`); this module supplies the page
 around it. Every value taken from a claimset is escaped; nothing submitted is rendered as HTML. Pages carry no scripts
-but two, on claimset pages: toc.js marks the section being read, figures.js opens a figure over the page.
+but one, page.js, on claimset and specification pages: it marks the section being read, opens a figure over the page
+and copies the reading-view address for an AI assistant.
 
 The indexer writes all of it as static files at publication and when the app starts (`write_site`); search is the one
 page the app renders, on request (`search_page`).
@@ -17,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import urllib.parse
 from importlib import resources
 from pathlib import Path
 
@@ -82,7 +84,7 @@ def _write(path, text):
 def fingerprint():
     """A hash of everything here that shapes a page: when it changes, the pages are written again."""
     h = hashlib.sha256(Path(__file__).read_bytes())
-    for name in ("site.css", "toc.js", "figures.js"):
+    for name in ("site.css", "page.js", "fonts/fonts.css"):
         h.update(_static(name).read_bytes())
     for f in sorted((Path(str(_static("pages")))).glob("*.html")):
         h.update(f.read_bytes())
@@ -107,6 +109,17 @@ def _footer():
     return f'<footer class="site-footer"><div class="wrap">{links}</div></footer>'
 
 
+@functools.cache
+def asset(path):
+    """A stylesheet's or script's address with a version from its content (/site.css?v=1a2b3c4d), so that a browser
+    or Cloudflare never pairs a new page with an old stylesheet."""
+    if path == "/claimset.css":
+        data = cshtml.stylesheet().encode()
+    else:
+        data = _static(path.lstrip("/")).read_bytes()
+    return f"{path}?v={hashlib.sha256(data).hexdigest()[:10]}"
+
+
 def shell(title, main, *, active=None, description="", head="", canonical=None, script=None):
     """A whole page: head, site header, `main` (HTML), footer."""
     full = title if title == SITE else f"{title} · {SITE}"
@@ -115,12 +128,13 @@ def shell(title, main, *, active=None, description="", head="", canonical=None, 
     return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
             f"<title>{esc(full)}</title>{meta}{canon}"
-            '<link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/claimset.css">'
-            '<link rel="stylesheet" href="/site.css">'
+            f'<link rel="stylesheet" href="{asset("/fonts/fonts.css")}">'
+            f'<link rel="stylesheet" href="{asset("/claimset.css")}">'
+            f'<link rel="stylesheet" href="{asset("/site.css")}">'
             f'<link rel="alternate" type="application/atom+xml" title="{SITE}: recently published" href="/feed.xml">'
             f"{head}</head>\n<body>{_header(active)}<main>{main}</main>{_footer()}"
-            + "".join(f'<script src="{s}" defer></script>' for s in ([script] if isinstance(script, str) else
-                                                                      script or []))
+            + "".join(f'<script src="{asset(s)}" defer></script>' for s in ([script] if isinstance(script, str)
+                                                                             else script or []))
             + "</body></html>\n")
 
 
@@ -370,10 +384,10 @@ def _panel(doc, parts, base_url, key):
             f'<details class="cite"><summary>Citation</summary><p class="cite-text">{cite}</p></details>'
             f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
             f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}</div>'
-            f'<div class="panel-row"><h2>For models</h2><p class="small">Give your AI assistant this address:</p>'
-            f'<p class="for-models"><code>{esc(base_url)}/p/{key}@v{n}.txt</code></p>'
+            f'<div class="panel-row"><h2>For models</h2><p class="small"><a class="copy-link" '
+            f'href="{esc(base_url)}/p/{key}@v{n}.txt">Copy the link for your AI assistant</a></p>'
             f'<p class="small"><a href="/p/{key}@v{n}.txt">Reading view</a> · '
-            f'<a href="/p/{key}@v{n}.json">JSON</a>, for programs</p></div></aside>')
+            f'<a href="/p/{key}@v{n}.json">JSON</a></p></div></aside>')
 
 
 def _versions(listing, key, current):
@@ -428,7 +442,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'<link rel="alternate" type="application/x-bibtex" href="/p/{key}@v{n}.bib">')
     canonical = f"{base_url}/p/{key}" if not current or current == n else f"{base_url}/p/{key}@v{n}"
     return shell(p.get("title", ""), main, active="read", description=description, head=head, canonical=canonical,
-                 script=["/toc.js", "/figures.js"])
+                 script="/page.js")
 
 
 # --- cards, home, all, feed -------------------------------------------------------------------------------------------
@@ -691,38 +705,40 @@ def image_type(path):
     return None
 
 
-def file_url_for(published_dir, base_url):
-    """The `file_url` for claimset.html: an artefact stored here (its uri is <base>/files/<sha256>) whose file is an
-    image is shown from /img/<sha256>.<ext>, a link to the stored file written once, with its type in its name."""
-    published_dir = Path(published_dir)
-    prefix = f"{base_url.rstrip('/')}/files/"
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+
+
+def file_url_for(published_dir, base_url, legacy=None):
+    """The `file_url` for claimset.html: an artefact stored with its claimset (its uri is
+    <base>/p/<key>/v<n>/files/<path>, storage.py) whose file is an image, by its name and its content, is shown from
+    there. `legacy`: {sha256: path} for files stored by checksum before (<base>/files/<sha256>), moved since."""
+    published_dir = Path(published_dir).resolve()
+    base = base_url.rstrip("/")
+    legacy = legacy or {}
 
     def file_url(a):
         uri = a.get("uri")
-        if not isinstance(uri, str) or not uri.startswith(prefix):
+        if not isinstance(uri, str) or not uri.startswith(base + "/"):
             return None
-        digest = uri[len(prefix):]
-        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        path = uri[len(base):]
+        m = re.fullmatch(r"/files/([0-9a-f]{64})", path)
+        if m:
+            path = legacy.get(m.group(1))
+            if path is None:
+                return None
+        if not re.match(r"^/p/[0-9]{4}\.[0-9]+/v[1-9][0-9]*/files/", path):
             return None
-        stored = published_dir / "files" / digest
-        ext = image_type(stored)
-        if ext is None:
+        stored = (published_dir / urllib.parse.unquote(path).lstrip("/")).resolve()
+        if published_dir not in stored.parents or stored.suffix.lower() not in IMAGE_EXTENSIONS:
             return None
-        shown = published_dir / "img" / f"{digest}.{ext}"
-        if not shown.exists():
-            shown.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                os.link(stored, shown)
-            except OSError:
-                shutil.copyfile(stored, shown)
-        return f"/img/{digest}.{ext}"
+        return path if image_type(stored) else None
     return file_url
 
 
-def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None):
+def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=None, legacy=None):
     """The pages and citation files of one claimset: every version, and the current one at /p/<key>."""
     p = Path(published_dir) / "p"
-    file_url = file_url_for(published_dir, base_url)
+    file_url = file_url_for(published_dir, base_url, legacy)
     current = max(docs)
     for n, doc in docs.items():
         page = claimset_page(doc, base_url=base_url, listing=listing, lab=labs.get(n), file_url=file_url,
@@ -756,8 +772,7 @@ def write_fixed(published_dir, base_url):
         [{"id": f"openalex:subfields/{k}", "name": v} for k, v in sorted(subs.items(), key=lambda kv: kv[1])],
         indent=1, ensure_ascii=False) + "\n")
     _write(published_dir / "robots.txt", _static("robots.txt").read_text(encoding="utf-8").replace("{base}", base_url))
-    for name in ("toc.js", "figures.js"):
-        _write(published_dir / name, _static(name).read_text(encoding="utf-8"))
+    _write(published_dir / "page.js", _static("page.js").read_text(encoding="utf-8"))
     _write(published_dir / "claimset.css", cshtml.stylesheet())
     for folder in ("fonts", "img"):
         src = Path(str(_static(folder)))

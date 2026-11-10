@@ -71,8 +71,10 @@ def test_publish_a_package_with_files_and_a_lab_record(env):
     published = ctx["registry"].read("2026/000/entrylib_2026.000001", 1)
     by_id = {a["id"]: a for a in published["artefacts"]}
     digest = by_id["A3"]["version"].removeprefix("sha256:")
-    assert by_id["A3"]["uri"] == f"{BASE}/files/{digest}"
-    assert (ctx["published_dir"] / "files" / digest).read_bytes() == b"image bytes"
+    assert by_id["A3"]["uri"] == f"{BASE}/p/2026.000001/v1/files/files/fig1.png"
+    assert (ctx["published_dir"] / "p" / "2026.000001" / "v1" / "files" / "files" / "fig1.png").read_bytes() == \
+        b"image bytes"
+    assert len(digest) == 64 and not (ctx["published_dir"] / "files").exists()
     lab = ctx["registry"].version_dir("2026/000/entrylib_2026.000001", 1) / "lab.jsonl"
     assert lab.read_text() == '{"seq": 1}\n'
     versions = json.loads((ctx["published_dir"] / "p" / "2026.000001" / "versions.json").read_text())

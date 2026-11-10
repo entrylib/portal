@@ -191,7 +191,7 @@ main { min-height: 60vh; }
   font-size: 15px; }
 .error { color: var(--bad); }
 
-/* the section being read (toc.js) */
+/* the section being read (page.js) */
 .cs-toc a[aria-current] { font-weight: 600; color: var(--ink); }
 .cs-toc a[aria-current]::before { content: ""; display: inline-block; width: 3px; height: 1em; margin: 0 7px 0 -10px;
   vertical-align: -2px; background: var(--accent); }
@@ -246,7 +246,7 @@ main { min-height: 60vh; }
   overflow-y: auto; }
 .pending button { border: 0; font: inherit; cursor: pointer; }
 
-/* figures open over the page (figures.js) */
+/* figures open over the page (page.js) */
 .cs-figure > a { cursor: zoom-in; }
 dialog.zoom { border: 0; padding: 0; max-width: min(96vw, 1400px); max-height: 94vh; background: var(--ground);
   color: var(--ink); border-radius: 6px; box-shadow: 0 10px 40px rgb(0 0 0 / .35); }
@@ -261,5 +261,12 @@ dialog.zoom .zoom-close { position: absolute; top: 8px; right: 8px; width: 44px;
   dialog.zoom { max-width: 100vw; max-height: 100vh; width: 100vw; height: 100vh; border-radius: 0; }
   dialog.zoom img { max-height: calc(100vh - 90px); }
 }
-.for-models code { display: block; user-select: all; background: var(--ground); border: 1px solid var(--rule-light);
-  padding: 6px 8px; font-size: 13px; overflow-wrap: anywhere; }
+.copy-link.copied { color: var(--ok); text-decoration: none; }
+
+/* room between items, so that definitions and claims read one at a time */
+.cs-item { padding: 16px 0 !important; }
+.cs-item p + p, .cs-item p + ul, .cs-item ul + p { margin-top: 8px !important; }
+.cs-def p { margin-top: 10px !important; }
+.cs-statement { line-height: 1.6; }
+.cs-defs li, .cs-def { margin-bottom: 6px; }
+.cs-brief li { padding: 6px 0 !important; }

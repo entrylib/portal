@@ -87,7 +87,7 @@ def page(shell, address, entry, version):
             f'<article class="spec-body prose-like">{body}</article></div></div>')
     head = f'<link rel="alternate" type="text/markdown" href="{text}">'
     canonical = f"/spec/{address}" if current else f"/spec/{address}/{version}"
-    return shell(entry["title"], main, head=head, canonical=canonical, script="/toc.js",
+    return shell(entry["title"], main, head=head, canonical=canonical, script="/page.js",
                  description=f"{entry['label']} specification, version {version}.")
 
 
