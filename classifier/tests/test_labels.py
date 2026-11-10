@@ -34,6 +34,17 @@ class TestLabels(unittest.TestCase):
         self.assertEqual(out, {"subfield": "openalex:subfields/1408",
                                "topics": ["openalex:T10002", "openalex:T10001", "openalex:T10003"]})
 
+    def test_the_subfield_with_most_weight_wins(self):
+        table = {"risk": {"topic": "openalex:T10282", "subfield": "openalex:subfields/2003"},       # Finance
+                 "stats": {"topic": "openalex:T10243", "subfield": "openalex:subfields/2613"},
+                 "fcst": {"topic": "openalex:T11918", "subfield": "openalex:subfields/1803"},
+                 "stock": {"topic": "openalex:T11326", "subfield": "openalex:subfields/1803"}}
+        out = classify([("risk", 0.30), ("stats", 0.25), ("fcst", 0.20), ("stock", 0.15)], table)
+        self.assertEqual(out, {"subfield": "openalex:subfields/1803",
+                               "topics": ["openalex:T10282", "openalex:T10243", "openalex:T11918"]})
+        tie = classify([("risk", 0.30), ("fcst", 0.15), ("stock", 0.15)], table)
+        self.assertEqual(tie["subfield"], "openalex:subfields/2003")           # a tie: the better topic's
+
     def test_labels_match_topics_by_id_not_by_name(self):
         self.assertEqual(topic_id_of("2543: Mapping Groundwater Potential Zones Using GIS Techniques"), "T12543")
         table, _ = build_table(TOPICS, LABELS)

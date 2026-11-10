@@ -180,3 +180,31 @@ def test_markdown():
     assert '<a href="#2.1">§2.1</a>' in html_ and "<code>a|b</code>" in html_ and "<td><code>p|q</code></td>" in html_
     assert "<ul><li>a<ul><li>b</li></ul></li><li>c</li></ul>" in html_
     assert '&quot;&lt;v&gt;&quot;' in html_ and "javascript:" not in html_ and "&lt;i&gt;" in html_
+
+
+def test_robots_and_for_models(env):
+    ctx, _ = published(env)
+    out = ctx["published_dir"]
+    indexer.refresh_if_claimset_changed(ctx["conn"], ctx["registry"], out, BASE, "0.40.4")
+    robots = (out / "robots.txt").read_text()
+    assert "User-agent: *" in robots and "Allow: /" in robots and f"{BASE}/llms.txt" in robots
+    assert "Disallow" not in robots
+    page = (out / "p" / f"{KEY}.html").read_text()
+    assert "Give your AI assistant this address" in page and f"<code>{BASE}/p/{KEY}@v1.txt</code>" in page
+
+
+def test_a_proposed_subfield_is_kept(env):
+    from portal.publish import proposed_subfield
+    doc = example()
+    doc["paper"]["classification"] = {"subfield": "openalex:subfields/1803", "keywords": ["forecasting"]}
+    assert proposed_subfield(doc) == "openalex:subfields/1803"
+    for bad in ("openalex:subfields/0000", "Finance", 1803, None):
+        doc["paper"]["classification"]["subfield"] = bad
+        assert proposed_subfield(doc) is None
+    doc["paper"]["classification"]["subfield"] = "https://openalex.org/subfields/2613"
+    ctx, _ = published(env, doc)
+    import json as _json
+    served = _json.loads((ctx["published_dir"] / "p" / f"{KEY}.json").read_text())
+    assert served["paper"]["classification"]["subfield"] == "openalex:subfields/2613"
+    folder = ctx["registry"].folders()[0]
+    assert ctx["registry"].read(folder, 1, "validation.json")["subfield"]["chosen_by"] == "guarantor"

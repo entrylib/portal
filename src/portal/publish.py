@@ -19,6 +19,7 @@ registry pull request come in later steps; this is the part they all end in:
 import copy
 import datetime as dt
 import json
+import re
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -147,7 +148,8 @@ def prepare(source, *, conn, registry, store, classifier, today=None, concept=No
         p["id"] = concept
         p["version"] = version
         p["date"] = today.isoformat()
-        p["classification"] = {**(p.get("classification") or {}), "subfield": cls.subfield,
+        proposed = proposed_subfield(doc)                   # claimset spec §3.1: the agent may propose it
+        p["classification"] = {**(p.get("classification") or {}), "subfield": proposed or cls.subfield,
                                "topics": list(cls.topics)}
         for c in published.get("claims") or []:
             computed = rep.computed.get(c.get("id")) if isinstance(c, dict) else None
@@ -177,11 +179,28 @@ def prepare(source, *, conn, registry, store, classifier, today=None, concept=No
                   "screening": SCREENING_VERSION,
                   "submission": {"errors": [], "warnings": [{"rule": w["rule"], "where": w["where"],
                                                              "message": w["message"]} for w in rep.warnings]},
-                  "classifier": cls.classifier}
+                  "classifier": cls.classifier,
+                  "subfield": {"chosen_by": "guarantor" if proposed else "classifier",
+                               "classifier": cls.subfield}}
     files = {"claimset.json": dump(published), "validation.json": dump(validation)}
     if lab_copy is not None:
         files["lab.jsonl"] = lab_copy
     return Prepared(concept, version, folder, files)
+
+
+def proposed_subfield(doc):
+    """The OpenAlex subfield the submission proposes (`paper.classification.subfield`), normalised, if it is one;
+    the guarantor saw it on the consent page and confirmed it. None otherwise: the classifier's is used."""
+    from .site import subfield_name
+    cls = (doc.get("paper") or {}).get("classification")
+    sub = cls.get("subfield") if isinstance(cls, dict) else None
+    if not isinstance(sub, str):
+        return None
+    m = re.fullmatch(r"\s*(?:openalex:|https://openalex\.org/)?(?:subfields/)?(\d{4})\s*", sub)
+    if not m:
+        return None
+    norm = f"openalex:subfields/{m.group(1)}"
+    return norm if subfield_name({"paper": {"classification": {"subfield": norm}}}) else None
 
 
 def publish(source, *, conn, registry, store, classifier, published_dir, base_url, today=None):
