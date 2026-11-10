@@ -305,16 +305,19 @@ def test_a_correction_notice_is_folded():
 
 
 def test_numbers_are_shown_to_four_decimal_places(env, monkeypatch):
-    """The page asks the package for four decimal places when the package can round to them (claimset 0.40.8)."""
+    """The portal writes the numbers on its pages (site.number), through claimset 0.40.8's render_parts(number=)."""
     seen = {}
     real = site.cshtml.render_parts
 
-    def render_parts(doc, file_url=None, ref_text=None, decimals=None):
-        seen["decimals"] = decimals
+    def render_parts(doc, file_url=None, ref_text=None, number=None):
+        seen["number"] = number
         return real(doc, file_url=file_url)
 
     monkeypatch.setattr(site.cshtml, "render_parts", render_parts)
     doc = example()
     doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
     site.claimset_page(doc, base_url=BASE, listing=[])
-    assert seen["decimals"] == 4
+    assert seen["number"] is site.number
+    for v, shown in [(0.000680612, "0.0007"), (1.00193, "1.0019"), (0.5, "0.5"), (-0.00001, "0.0000"),
+                     (12345.678, "12345.678"), (300, None), (80.0, None), (True, None), (float("nan"), None)]:
+        assert site.number(v) == shown, v
