@@ -246,6 +246,7 @@ def test_robots_and_for_models(env):
     indexer.refresh_if_claimset_changed(ctx["conn"], ctx["registry"], out, BASE, "0.40.4")
     robots = (out / "robots.txt").read_text()
     assert "User-agent: *" in robots and "Allow: /" in robots and f"{BASE}/llms.txt" in robots
+    assert "ai-train=yes" in robots                                      # the owner's choice, design §7.4
     assert "Disallow" not in robots
     page = (out / "p" / f"{KEY}.html").read_text()
     assert f'<a class="copy-link" href="{BASE}/p/{KEY}@v1.read">Copy the link for your AI assistant</a>' in page
