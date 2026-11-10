@@ -22,7 +22,8 @@ def test_claimset_page(env):
     out = ctx["published_dir"]
     page = (out / "p" / f"{KEY}.html").read_text()
     assert page == (out / "p" / f"{KEY}@v1.html").read_text()
-    assert page.count("<script") == 1 and 'src="/page.js?v=' in page and 'class="cs-page entry"' in page
+    assert page.count("<script src=") == 1 and page.count("<script") == 2          # the script, and JSON-LD data
+    assert 'src="/page.js?v=' in page and 'class="cs-page entry"' in page
     assert 'href="/site.css?v=' in page and 'href="/claimset.css?v=' in page
     for part in ('<span class="origin">native</span>', "status-ok", f"{concept}@v1", 'id="versions"',
                  '<a href="#versions">Versions</a>', f'href="/p/{KEY}@v1.bib"', f'href="/p/{KEY}@v1.ris"',

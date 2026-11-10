@@ -55,6 +55,9 @@ services:
       GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github_app_key
       ORCID_CLIENT_ID: ${ORCID_CLIENT_ID:-}
       ORCID_CLIENT_SECRET: ${ORCID_CLIENT_SECRET:-}
+      PORTAL_INDEXNOW_KEY: ${PORTAL_INDEXNOW_KEY:-}
+      PORTAL_MAX_NEW_PER_WEEK: ${PORTAL_MAX_NEW_PER_WEEK:-}
+      PORTAL_MAX_VERSIONS_PER_DAY: ${PORTAL_MAX_VERSIONS_PER_DAY:-}
     volumes:
       - published:/srv/published
       - registry:/srv/registry

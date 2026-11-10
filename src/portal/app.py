@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import (
     __version__,
+    areas,
     consent,
     fetch,
     mcp_server,
@@ -208,7 +209,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 rows = conn.execute("SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                                     " AND v.version = p.current_version ORDER BY p.first_published DESC,"
                                     " p.concept_id DESC LIMIT %s", (site.RECENT,)).fetchall()
-            return HTMLResponse(site.home([r[0] for r in rows]), headers={"Content-Security-Policy": PAGE_CSP})
+            return HTMLResponse(site.home([r[0] for r in rows], settings.base_url),
+                                headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/search", response_class=HTMLResponse, include_in_schema=False)
     def search_page(q: str = "", kind: str = "papers", offset: int = 0):
@@ -234,14 +236,27 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return HTMLResponse(page, status_code=400 if error else 200, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/read", response_class=HTMLResponse, include_in_schema=False)
-    def read_page(request: Request):
-        """What EntryLib holds, by field, with its claims and claimsets filtered (design §7.7)."""
-        q = read.Query.parse(dict(request.query_params))
+    @app.get("/read/{rest:path}", response_class=HTMLResponse, include_in_schema=False)
+    def read_page(request: Request, rest: str = ""):
+        """What EntryLib holds, by field, with its claims and claimsets filtered (design §7.7). An area has its own
+        address (/read/social-sciences/decision-sciences); the older ?area= form is sent there."""
+        params = dict(request.query_params)
+        if rest.strip("/"):
+            area = areas.from_path(rest)
+            if area is None:
+                return HTMLResponse(site.message_page("Not found", "There is no such part of the library.",
+                                                      ("/read", "Read")), status_code=404,
+                                    headers={"Content-Security-Policy": PAGE_CSP})
+            params["area"] = area
+        elif "area" in params:
+            q = read.Query.parse(params)
+            return RedirectResponse(q.url().replace("&amp;", "&"), status_code=301)
+        q = read.Query.parse(params)
         with pool.connection() as conn:
             docs = [r[0] for r in conn.execute(
                 "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                 " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
-        return HTMLResponse(read.page(docs, q), headers={"Content-Security-Policy": PAGE_CSP})
+        return HTMLResponse(read.page(docs, q, settings.base_url), headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():
