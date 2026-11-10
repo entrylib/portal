@@ -415,11 +415,12 @@ def _panel(doc, parts, base_url, key, scores=None):
 def reading_page(doc, view, base_url):
     """The reading view (plain text written for models) as a minimal web page, at /p/<key>@v<n>.read: some AI
     assistants fetch web pages but not plain-text files, and every assistant can read this one whole. No styles,
-    no scripts, no navigation: the text, escaped, and where it comes from."""
+    no scripts, no navigation: the text, escaped, and where it comes from. Never `noindex`: some assistants (Perplexity)
+    refuse a page marked so, and the canonical link already names the claimset's page as the one to index."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
-            f"<title>{esc(p.get('title'))} · reading view</title><meta name=\"robots\" content=\"noindex\">"
+            f"<title>{esc(p.get('title'))} · reading view</title>"
             f'<link rel="canonical" href="{esc(base_url)}/p/{key}@v{n}">'
             f'<link rel="alternate" type="text/plain" href="{esc(base_url)}/p/{key}@v{n}.txt"></head>\n<body>'
             f"<p>The claimset {esc(p['id'])}@v{esc(n)} on EntryLib, as plain text written for AI models (its reading "
