@@ -307,17 +307,24 @@ def _notice(p):
 
 
 def _notice_box(status, date, who, reason_code, statement):
-    """A notice: what happened, when, by whom, and why (the reason, and the words of whoever asked, as text)."""
+    """A notice: what happened, when, by whom, and why (the reason, and the words of whoever asked, as text). A
+    correction is folded: its line shows "Corrected" and the date, and opens to the explanation. "platform" as the
+    issuer says nothing a reader can use, so it is not shown."""
     from .notices import REASONS, reason_label
     label = STATUS_LABELS.get(status, status)
-    bits = [esc(date), f"by {esc(who)}" if who else ""]
+    who = "" if not who or str(who).strip().lower() == "platform" else who
     known = any(reason_code in r for r in REASONS.values())
     why = esc(reason_label(reason_code)) if known else ""
     if statement and statement != (reason_label(reason_code) if known else None):
         why = f"{why}: {esc(statement)}" if why else esc(statement)
-    return (f'<div class="notice notice-{STATUS_CLASS.get(status, "warn")}" role="note">'
-            f'<p><strong>{esc(label[:1].upper() + label[1:])}</strong>'
-            f'{" · " + " · ".join(b for b in bits if b) if any(bits) else ""}</p>'
+    head = f'<strong>{esc(label[:1].upper() + label[1:])}</strong>' + (f" · {esc(date)}" if date else "")
+    cls = f'notice notice-{STATUS_CLASS.get(status, "warn")}'
+    if status == "corrected":
+        body = (f"<p>{why}</p>" if why else "") + (f"<p>By {esc(who)}</p>" if who else "")
+        if not body:
+            return f'<div class="{cls}" role="note"><p>{head}</p></div>'
+        return f'<details class="{cls}"><summary>{head}</summary>{body}</details>'
+    return (f'<div class="{cls}" role="note"><p>{head}{f" · by {esc(who)}" if who else ""}</p>'
             + (f"<p>{why}</p>" if why else "") + "</div>")
 
 

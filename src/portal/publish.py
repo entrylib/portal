@@ -165,10 +165,13 @@ def prepare(source, *, conn, registry, store, classifier, today=None, concept=No
             p["status"] = "active"
         else:
             reason = p.get("correction_reason", "")
+            from .submissions import guarantors
+            who = guarantors(doc)                           # who confirmed the correction, by name and ORCID iD
             p["status"] = "corrected"
             p["previous_version"] = f"{concept}@v{version - 1}"
             p["status_notice"] = {"date": today.isoformat(), "reason_code": "correction", "statement": reason,
-                                  "issued_by": "platform"}
+                                  "issued_by": (f"{who[0][1]} (ORCID {who[0][0]})" if who and who[0][1]
+                                                else f"ORCID {who[0][0]}" if who else "platform")}
             changes = [{**op, "reason": reason} for op, _ in raw_patch(previous, published)]
             if not changes:
                 raise PublishError("the correction changes nothing in the claimset")
