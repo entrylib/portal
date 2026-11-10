@@ -22,6 +22,7 @@ from pathlib import Path
 
 from claimset.validate import validate_path
 
+from . import limits
 from .indexer import title_key
 from .publish import load_submission
 from .screening import SCREENING_VERSION, screen
@@ -162,7 +163,13 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
         if current and [o for o, _ in people] != [o for o, _ in current]:
             raise SubmissionError(f"a correction is submitted by the guarantor of the current version of {target} "
                                   f"({current[0][0]}); this one names {people[0][0]}", status=403)
-    elif not new_paper:
+    for orcid in ([o for o, _ in people] if kind == "new" else [None]):       # the publication limits (design §8)
+        over = limits.reached(conn, kind, orcid, target, now)
+        if over:
+            why, from_, later = over
+            raise SubmissionError(f"Not accepted: the limit is reached. {why} You can submit again from "
+                                  f"{limits.when(from_, now)}{later}.", status=429)
+    if kind == "new" and not new_paper:
         same = duplicate(conn, title_key(paper.get("title")), [o for o, _ in people])
         if same:
             raise SubmissionError(f"this looks like a claimset already on EntryLib: {same}. If it is a different "
@@ -195,11 +202,11 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
 def status(conn, sub_id, base_url, registry_repo=None):
     """What may be told about a submission to whoever holds its ID: its state, never its content. While it is
     `publishing`, the registry pull request where its checks run (public)."""
-    row = conn.execute("SELECT id, received, expires, state, kind, target, published_id, detail, registry_pr,"
-                       " publish_after FROM submissions WHERE id = %s", (sub_id,)).fetchone()
+    row = conn.execute("SELECT id, received, expires, state, kind, target, published_id, detail, registry_pr"
+                       " FROM submissions WHERE id = %s", (sub_id,)).fetchone()
     if row is None:
         return None
-    sid, received, expires, state, kind, target, published, detail, pr, publish_after = row
+    sid, received, expires, state, kind, target, published, detail, pr = row
     people = conn.execute("SELECT orcid, confirmed IS NOT NULL FROM submission_guarantors WHERE submission_id = %s"
                           " ORDER BY orcid", (sid,)).fetchall()
     out = {"id": sid, "state": state, "kind": kind, "received": received.isoformat(), "expires": expires.isoformat(),
@@ -207,8 +214,6 @@ def status(conn, sub_id, base_url, registry_repo=None):
            "guarantors": [{"orcid": o, "confirmed": c} for o, c in people]}
     if state == "pending":                                  # the guarantor can confirm without the consent link
         out["confirm_url"] = f"{base_url}/confirm"
-    if state == "confirmed" and publish_after:              # waiting for the publication limit (design §8)
-        out["publish_after"] = publish_after.isoformat()
     if target:
         out["corrects"] = target
     if published:

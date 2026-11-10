@@ -24,7 +24,7 @@ from pathlib import Path
 
 from claimset import html as cshtml
 
-from . import ids, score_html, specs
+from . import ids, limits, score_html, specs
 from . import scores as score_data
 
 SITE = "EntryLib"
@@ -593,7 +593,9 @@ def feed(docs, base_url):
 
 def fixed_page(name, base_url):
     file, title, active, description = PAGES[name]
-    body = _static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
+    body = (_static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
+            .replace("{new_per_week}", str(limits.NEW_PER_WEEK))
+            .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)))
     return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description)
 
 
@@ -737,7 +739,8 @@ def confirm_list(items, orcid, name=None):
 def message_page(title, text, link=None):
     """A short page after an action: what happened, and where to go next."""
     more = f'<p><a href="{esc(link[0])}">{esc(link[1])}</a></p>' if link else ""
-    return shell(title, f'<div class="wrap prose"><h1>{esc(title)}</h1><p>{esc(text)}</p>{more}</div>')
+    paragraphs = "".join(f"<p>{esc(t)}</p>" for t in str(text).split("\n\n") if t.strip())   # blank lines part them
+    return shell(title, f'<div class="wrap prose"><h1>{esc(title)}</h1>{paragraphs}{more}</div>')
 
 
 def submit_page(body):

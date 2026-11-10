@@ -256,16 +256,11 @@ def test_archive_repositories_and_failure():
 
 
 def test_open_pull_requests_count_towards_the_weekly_limit(world, monkeypatch):
-    from portal import consent
-    monkeypatch.setattr(consent, "MAX_NEW_PER_WEEK", 2)
+    from portal import limits
+    monkeypatch.setattr(limits, "NEW_PER_WEEK", 2)
     w = world
-    for n in range(consent.MAX_NEW_PER_WEEK):
+    for n in range(2):
         assert status(w, submit_and_confirm(w["client"], titled(n)))["state"] == "publishing"
     r = w["client"].post("/api/submissions", content=json.dumps(titled("over")).encode(),
                          headers={"Content-Type": "application/json"})
-    token = r.json()["consent"][0]["consent_url"].rsplit("/", 1)[-1]
-    state = urllib.parse.parse_qs(urllib.parse.urlparse(
-        w["client"].get(f"/consent/{token}/start").headers["location"]).query)["state"][0]
-    page = w["client"].get("/consent/callback", params={"state": state, "code": GUARANTOR})
-    assert page.status_code == 200 and "will be published automatically" in page.text
-    assert status(w, r.json()["id"])["state"] == "confirmed" and "publish_after" in status(w, r.json()["id"])
+    assert r.status_code == 429 and "the limit is reached" in json.dumps(r.json())

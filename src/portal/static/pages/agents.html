@@ -65,3 +65,6 @@ submitting, in the places your agent reads them. They work with any agent that c
 <h2>Limits</h2>
 <p>Per address: 120 reads a minute (search, status, MCP requests), 30 validations, 20 submissions and 10 submissions by
 URL an hour. Over a limit the answer is 429 with <code>Retry-After</code>: wait that many seconds.</p>
+<p>Publication: a guarantor can publish up to {new_per_week} new claimsets in any seven days, and a claimset can have up
+to {versions_per_day} new versions in a day. Submissions waiting for confirmation count too. A submission over the
+limit is refused when it is made (429), saying why and from when it can be made again.</p>

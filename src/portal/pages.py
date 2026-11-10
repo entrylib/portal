@@ -24,15 +24,15 @@ def page(title, body):
 def message(title, text, status_url=None):
     link = f"<p class=\"muted\">Status: <a href=\"{escape(status_url)}\">{escape(status_url)}</a></p>" \
         if status_url else ""
-    return page(title, f"<p>{escape(text)}</p>{link}")
+    paragraphs = "".join(f"<p>{escape(t)}</p>" for t in str(text).split("\n\n") if t.strip())   # blank lines part them
+    return page(title, f"{paragraphs}{link}")
 
 
 def consent(ctx, start_url, status_url):
     """The page a guarantor opens from their consent link."""
     state = ctx["state"]
     if state != "pending":
-        texts = {"confirmed": "You have confirmed this claimset; it is being published, or waits for the "
-                              "publication limit (the status link says when).",
+        texts = {"confirmed": "You have confirmed this claimset; it is being published.",
                  "publishing": "You have confirmed this claimset. It is being checked in the public registry and "
                                "will be published when the checks pass; the status link shows progress.",
                  "published": f"This claimset is published as {ctx.get('published')}.",

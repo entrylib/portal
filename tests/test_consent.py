@@ -6,7 +6,7 @@ import psycopg
 from fastapi.testclient import TestClient
 from publishing import example, fake_classifier
 
-from portal import consent
+from portal import limits
 from portal.app import create_app
 from portal.db import make_pool, migrate
 from portal.orcid import OrcidError
@@ -117,28 +117,36 @@ def titled(n):
     return doc
 
 
-def test_weekly_limit_on_new_claimsets(app_client, settings, monkeypatch):
-    """Over the limit, a confirmation is kept and the claimset published when the limit allows (design §8)."""
-    monkeypatch.setattr(consent, "MAX_NEW_PER_WEEK", 2)
+def test_weekly_limit_on_new_claimsets(app_client, monkeypatch):
+    """At the limit, a new submission is refused when it is made, saying why and from when (design §8)."""
+    monkeypatch.setattr(limits, "NEW_PER_WEEK", 2)
     for n in range(2):
         _, token = submit(app_client, titled(n))
         assert sign_in(app_client, token).status_code == 200
-    out, token = submit(app_client, titled("over"))
-    r = sign_in(app_client, token)
-    assert r.status_code == 200 and "will be published automatically on" in r.text
-    assert "at most 2 new claimsets in any seven days" in r.text
-    st = app_client.get(f"/api/submissions/{out['id']}").json()
-    assert st["state"] == "confirmed" and "publish_after" in st and "published" not in st
-    when = dt.datetime.fromisoformat(st["publish_after"])
-    assert dt.timedelta(days=6) < when - dt.datetime.now(dt.UTC) <= dt.timedelta(days=7)
-    from portal import worker
-    with psycopg.connect(settings.database_url, autocommit=True) as conn:
-        assert out["id"] not in [r[0] for r in worker._confirmed(conn)]          # waits
-        conn.execute("UPDATE submissions SET publish_after = now() - interval '1 minute' WHERE id = %s",
-                     (out["id"],))
-        assert out["id"] in [r[0] for r in worker._confirmed(conn)]              # then is published
-    _, token = submit(app_client, titled("later"))                               # the next waits longer still
-    assert "will be published automatically" in sign_in(app_client, token).text
+    r = app_client.post("/api/submissions", content=json.dumps(titled("over")).encode(),
+                        headers={"Content-Type": "application/json"})
+    assert r.status_code == 429
+    text = r.json()["error"] if "error" in r.json() else json.dumps(r.json())
+    assert "Not accepted: the limit is reached" in text and "up to 2 new claimsets in any seven days" in text
+    assert "2 published in the last seven days and 0 waiting" in text and "You can submit again from" in text
+    from portal import site
+    assert "publish up to 2 new claimsets in any seven days" in site.fixed_page("agents", "https://e.org")
+
+
+def test_waiting_submissions_count_and_confirmation_is_refused_over_the_limit(app_client, monkeypatch):
+    monkeypatch.setattr(limits, "NEW_PER_WEEK", 2)
+    _, first = submit(app_client, titled("a"))
+    out, second = submit(app_client, titled("b"))
+    r = app_client.post("/api/submissions", content=json.dumps(titled("c")).encode(),
+                        headers={"Content-Type": "application/json"})
+    assert r.status_code == 429 and "2 waiting for your confirmation" in json.dumps(r.json())
+    assert sign_in(app_client, first).status_code == 200
+    monkeypatch.setattr(limits, "NEW_PER_WEEK", 1)                 # the limit lowered meanwhile
+    page = sign_in(app_client, second)
+    assert page.status_code == 429 and "be confirmed yet: the limit is reached" in page.text
+    assert "<p>Each person can" in page.text
+    assert "Its link expires before then" in page.text
+    assert app_client.get(f"/api/submissions/{out['id']}").json()["state"] == "pending"
 
 
 def test_correction_by_the_guarantor(app_client):
