@@ -1,0 +1,81 @@
+<h1>About EntryLib</h1>
+<p class="lead">Most research reaches readers as PDFs written for people to read from start to finish. More and more of
+it is now read first by AI, which has to guess where a finding is, what it rests on and how far it holds. EntryLib
+publishes research so that nothing has to be guessed: each finding is stated on its own, with its evidence, its
+assumptions and its limits, for people and for AI alike.</p>
+
+<h2>What an entry is</h2>
+<p>An entry is a claimset: a paper written as claims. Each claim says one thing and points to what supports it, the
+data, the proof or the experiment, and to what it assumes and where it may not hold. Its terms are defined, its numbers
+come in tables, and the earlier work it builds on is linked. The format is open and documented in the
+<a href="/spec/">Claimset specification</a>.</p>
+
+<h2>One format for every field, with extensions</h2>
+<p>The core of the format is what research in every field shares: claims, their evidence, assumptions and limits, and
+the terms they use. That is what lets a model compare findings across fields. What only one kind of work needs is added
+by an extension: the glosses of examples in linguistics, the coding of sources in qualitative research. An entry names
+the extensions it uses, and stays complete without them: a reader that does not know an extension still reads every
+claim. Extensions are specified and versioned like the core. Today there are two, <a href="/spec/">linguistics and
+qualitative research</a>; more come as fields need them.</p>
+
+<h2>Where entries come from</h2>
+<ul>
+<li><span class="origin">lab</span> Written from a record of the research kept while it was done, with
+<a href="/lab">claimset-lab</a>. The record is linked from the entry.</li>
+<li><span class="origin">native</span> Written directly as a claimset, usually with an AI agent.</li>
+<li><span class="origin">converted</span> Made from a paper already published elsewhere, which it links.</li>
+</ul>
+
+<h2>Who answers for an entry</h2>
+<p>Every entry has a guarantor: a named researcher who answers for it. Before anything is published, the guarantor
+confirms it by signing in with their ORCID iD. Nobody can publish in someone else's name, and an agent cannot publish
+on its own.</p>
+
+<h2>What EntryLib checks, and what it does not</h2>
+<p>Every submission is checked against the specification: its claims, support and references must fit together. Its
+text is screened for content aimed at manipulating AI readers. A lab record is checked for tampering, and each claim
+shows whether its support can be checked by a reader:</p>
+<ul class="legend">
+<li><span class="light light-green"></span><strong>Checkable</strong>: supported by evidence in the claimset that a
+reader can check.</li>
+<li><span class="light light-amber"></span><strong>Supported, not checkable</strong>: the data is restricted, or the
+support is cited work, argument or expert judgement.</li>
+<li><span class="light light-red"></span><strong>Unsupported</strong>: no stated support, or support nobody can
+check.</li>
+</ul>
+<p>Assumptions have no light: they are taken as given.</p>
+<p>EntryLib does not referee research. Publishing here is not peer review, and an entry is as good as the evidence it
+shows. That is why every entry shows it.</p>
+<h3 id="quality">Quality score</h3>
+<p>Each entry has a place for a quality score. How it is computed is still being worked out and will be published here;
+until then every entry shows –.</p>
+
+<h2>Citing, versions and corrections</h2>
+<p>Every entry has a permanent identifier, such as <code>entrylib:2026.000001</code>, and each version its own, such
+as <code>entrylib:2026.000001@v2</code>. Cite a claim by adding its number:
+<code>entrylib:2026.000001@v2#C4</code>. A published version is never changed. A correction is a new version, and a
+problem with an entry is shown in a notice at its top (<a href="/removal">retraction and removal</a>).</p>
+
+<h2>Open by design</h2>
+<p>Reading, searching and publishing are free. Entries carry open licences chosen by their guarantors. Every published
+version is also kept in a public registry on GitHub, and the specification, the tools and this site's code are open
+source.</p>
+
+<h2>Who we are</h2>
+<div class="person">
+<img src="/img/ivan-svetunkov.jpg" alt="Ivan Svetunkov" width="160" height="160">
+<div>
+<h3>Ivan Svetunkov</h3>
+<p class="muted">Founder</p>
+<p>A statistician working on forecasting methods. He is the author of the smooth package for R and of the book
+Forecasting and Analytics with the Augmented Dynamic Adaptive Model (ADAM), and spent many years in academic research
+at Lancaster University before founding EntryLib.</p>
+<p><a class="orcid orcid-verified" href="https://orcid.org/0000-0001-7826-0281">0000-0001-7826-0281</a> ·
+<a href="https://openforecast.org">openforecast.org</a></p>
+</div>
+</div>
+<p>EntryLib is independent and based in the United Kingdom. This website was created by Claude Opus 5.5.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:mail@entrylib.org">mail@entrylib.org</a> · <a href="/privacy">Privacy</a> ·
+<a href="/removal">Removal requests</a></p>

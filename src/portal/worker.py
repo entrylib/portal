@@ -50,14 +50,16 @@ def _refuse(conn, sid, path, exc_or_text):
                                             for e in exc_or_text.errors[:5])
     else:
         detail = exc_or_text
-    conn.execute("UPDATE submissions SET state = 'refused', detail = %s, file_name = NULL WHERE id = %s",
+    conn.execute("UPDATE submissions SET state = 'refused', detail = %s, file_name = NULL, client_ip = NULL"
+                 " WHERE id = %s",
                  (detail, sid))
     if path:
         path.unlink(missing_ok=True)
 
 
 def _published(conn, sid, path, published_id):
-    conn.execute("UPDATE submissions SET state = 'published', published_id = %s, file_name = NULL WHERE id = %s",
+    conn.execute("UPDATE submissions SET state = 'published', published_id = %s, file_name = NULL, client_ip = NULL"
+                 " WHERE id = %s",
                  (published_id, sid))
     if path:
         path.unlink(missing_ok=True)

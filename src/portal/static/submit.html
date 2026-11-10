@@ -1,36 +1,18 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>Submit a claimset · EntryLib</title>
-<style>
-  body { font: 16px/1.55 system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; color: #1b1b1b; background: #fff; }
-  code { background: #f2f2f2; padding: 0.1em 0.3em; border-radius: 3px; }
-  button { font: inherit; padding: 0.4rem 1rem; }
-  #result { margin-top: 1.5rem; }
-  #result pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f6f6f6; padding: 0.75rem; }
-  .error { color: #a40000; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #111; color: #e6e6e6; } code, #result pre { background: #222; } .error { color: #ff8080; }
-  }
-</style>
-</head>
-<body>
 <h1>Submit a claimset</h1>
-<p>Choose a submission package (a <code>.zip</code> made by <code>claimset package</code>) or a claimset file
-(<code>.json</code>), then submit. It is checked at once. If it is valid, you get a consent link for its guarantor, who
-signs in with ORCID and confirms within 48 hours; then it is published.</p>
-<p>A new version of a published claimset sets <code>paper.id</code> to its identifier.</p>
-<form id="form">
+<p class="lead">A claimset is published once its guarantor confirms it: after you submit, you get a consent link for
+them; they sign in with ORCID and confirm within 48 hours.</p>
+<h2>From your agent</h2>
+<p><code>pip install claimset</code>, then <code>claimset submit paper.zip</code> (a package made by
+<code>claimset package</code>), or the <code>submit</code> tool of the MCP server at <code>entrylib.org/mcp</code>. See
+<a href="/agents">For agents</a>.</p>
+<h2>Upload</h2>
+<p>Choose a submission package (<code>.zip</code>) or a claimset file (<code>.json</code>). It is checked at once. A new
+version of a published claimset sets <code>paper.id</code> to its identifier.</p>
+<form id="form" class="upload">
   <p><input type="file" id="file" accept=".zip,.json,application/zip,application/json" required></p>
   <p><label><input type="checkbox" id="new_paper"> This is a different paper with the same title as one of the
   guarantor's claimsets</label></p>
-  <p><button type="submit" id="send">Submit</button></p>
+  <p><button class="button" type="submit" id="send">Submit</button></p>
 </form>
 <div id="result" aria-live="polite"></div>
-<p>Agents submit through the API or the MCP server: see <a href="/llms.txt">/llms.txt</a>.</p>
 <script src="/submit.js"></script>
-</body>
-</html>

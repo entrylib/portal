@@ -19,7 +19,7 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, consent, fetch, mcp_server, pages, ratelimit, search, submissions, worker
+from . import __version__, consent, fetch, mcp_server, pages, ratelimit, search, site, submissions, worker
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -30,8 +30,12 @@ log = logging.getLogger("portal")
 EXPIRY_INTERVAL_SECONDS = 600
 
 #: The upload page runs only its own script and sends only to this site; nothing submitted is rendered.
-UPLOAD_PAGE_CSP = ("default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; "
-                   "form-action 'none'; frame-ancestors 'none'; base-uri 'none'")
+UPLOAD_PAGE_CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; "
+                   "connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+
+#: Pages the app renders (search): no scripts; the site's own styles, fonts and images.
+PAGE_CSP = ("default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; "
+            "frame-ancestors 'none'; base-uri 'none'")
 
 
 class UploadTooLarge(Exception):
@@ -178,12 +182,45 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def home():
-        return _static("index.html")
+        """The home page, as the indexer wrote it (in production Caddy serves it without the app)."""
+        try:
+            return HTMLResponse((settings.published_dir / "index.html").read_text(encoding="utf-8"),
+                                headers={"Content-Security-Policy": PAGE_CSP})
+        except FileNotFoundError:                           # not written yet: made now, from the index
+            with pool.connection() as conn:
+                rows = conn.execute("SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+                                    " AND v.version = p.current_version ORDER BY p.first_published DESC,"
+                                    " p.concept_id DESC LIMIT %s", (site.RECENT,)).fetchall()
+            return HTMLResponse(site.home([r[0] for r in rows]), headers={"Content-Security-Policy": PAGE_CSP})
+
+    @app.get("/search", response_class=HTMLResponse, include_in_schema=False)
+    def search_page(q: str = "", kind: str = "papers", offset: int = 0):
+        """Search for people (design §7.4): the search API's results as a page, rendered here, without scripts."""
+        kind = kind if kind in ("papers", "claims") else "papers"
+        q = q.strip()
+        offset = max(0, offset)
+        results, files, error = None, {}, None
+        if q:
+            try:
+                with pool.connection() as conn:
+                    if kind == "claims":
+                        results = search.search_claims(conn, settings.base_url, q, site.SEARCH_PAGE, offset)
+                    else:
+                        results = search.search_papers(conn, settings.base_url, q, site.SEARCH_PAGE, offset)
+                        ids_ = [r["id"] for r in results["results"]]
+                        files = dict(conn.execute(
+                            "SELECT p.concept_id, v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+                            " AND v.version = p.current_version WHERE p.concept_id = ANY(%s)", (ids_,)).fetchall())
+            except search.SearchError as exc:
+                error = str(exc)
+        page = site.search_page(q, kind, results, error=error, offset=offset, limit=site.SEARCH_PAGE, files=files)
+        return HTMLResponse(page, status_code=400 if error else 200, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():
         """The upload page (design §4.4): a file picker whose script posts the file to /api/submissions."""
-        return HTMLResponse(_static("submit.html"), headers={"Content-Security-Policy": UPLOAD_PAGE_CSP})
+        return HTMLResponse(site.submit_page(_static("submit.html")),
+                            headers={"Content-Security-Policy": UPLOAD_PAGE_CSP})
 
     @app.get("/submit.js", include_in_schema=False)
     def upload_script():

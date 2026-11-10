@@ -12,9 +12,9 @@ requires-python = ">=3.12"
 authors = [{name = "Claimset contributors"}]
 dependencies = [
   # The claimset package is the single source of the format's rules: the portal calls it, never reimplements it.
-  # Not pinned: the portal works with whatever claimset it is given, at least portal.MIN_CLAIMSET. On the server
-  # claimset is updated on its own, without rebuilding the portal (design §10).
-  "claimset @ git+https://github.com/entrylib/claimset",
+  # From PyPI, not pinned: the portal works with whatever claimset it is given, at least portal.MIN_CLAIMSET. On the
+  # server claimset is updated on its own, without rebuilding the portal (design §10).
+  "claimset>=0.40.1",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "psycopg[binary,pool]>=3.2",
@@ -37,7 +37,7 @@ Homepage = "https://github.com/entrylib/portal"
 where = ["src"]
 
 [tool.setuptools.package-data]
-portal = ["migrations/*.sql", "static/*"]
+portal = ["migrations/*.sql", "static/*", "static/pages/*", "static/fonts/*", "static/img/*"]
 
 [tool.ruff]
 line-length = 120

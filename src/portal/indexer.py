@@ -10,9 +10,13 @@ Static files, under the published directory:
     p/<key>/versions.json                  versions, dates, status, notices, lab record links
     p/<key>/v<n>/lab.jsonl                 the registry's copy of a version's lab record
     p/<key>/<claim>.json, .txt             the claim bundles of the current version (claimset spec §2.3)
-    p/<key>.html                           the current reading view as a minimal page, for a human given an ID
+    p/<key>.html, p/<key>@v<n>.html        the page for people (site.claimset_page), current and every version
+    p/<key>.bib, .ris, p/<key>@v<n>.bib    citations
+    img/<sha256>.<ext>                     packaged images shown on the pages (links to files/<sha256>)
     index.jsonl                            one paper card per claimset, current versions
     llms.txt                               the entry point for agents (reading.llms_txt)
+    index.html, all.html, feed.xml         the home page, all claimsets and the Atom feed
+    lab.html, about.html, ..., spec/       the fixed pages, stylesheets, fonts and specifications (at start)
 
 Each version's claims and paper get the weighted text full-text search runs on (design §7.2).
 """
@@ -28,7 +32,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import ids, reading
+from . import ids, reading, site
 
 
 def _write(path, text):
@@ -161,7 +165,7 @@ def write_static(conn, registry, folder, published_dir, base_url):
     current = docs[versions[-1]]
     key = ids.url_key(current["paper"]["id"])
     p = published_dir / "p"
-    listing = []
+    listing, labs = [], {}
     for n, doc in docs.items():
         text = (registry.version_dir(folder, n) / "claimset.json").read_text(encoding="utf-8")
         view = render(doc)
@@ -170,17 +174,20 @@ def write_static(conn, registry, folder, published_dir, base_url):
         if n == versions[-1]:
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
-            _write(p / f"{key}.html", reading.html_page(f"{doc['paper']['id']}@v{n}", view))
             write_bundles(p / key, doc)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab = {}
         if lab_copy.exists():
-            _write(p / key / f"v{n}" / "lab.jsonl", lab_copy.read_text(encoding="utf-8"))
+            record = lab_copy.read_text(encoding="utf-8")
+            _write(p / key / f"v{n}" / "lab.jsonl", record)
             lab["copy"] = f"{base_url}/p/{key}/v{n}/lab.jsonl"
+            labs[n] = {"copy": f"/p/{key}/v{n}/lab.jsonl", "summary": _lab_summary(record), "verified": True}
         lab_artefacts = [a.get("uri") for a in doc.get("artefacts") or []
                          if isinstance(a, dict) and a.get("kind") == "lab_record" and a.get("uri")]
         if lab_artefacts:
             lab["artefact"] = lab_artefacts[0]
+            if n not in labs and str(lab_artefacts[0]).startswith("https://"):
+                labs[n] = {"copy": lab_artefacts[0], "summary": None}
         pp = doc["paper"]
         entry = {"id": f"{pp['id']}@v{n}", "version": n, "date": pp["date"], "status": pp["status"],
                  "hash": doc_hash(doc), "json": f"{base_url}/p/{key}@v{n}.json",
@@ -195,7 +202,16 @@ def write_static(conn, registry, folder, published_dir, base_url):
     _write(p / key / "versions.json",
            json.dumps({"id": current["paper"]["id"], "current_version": versions[-1], "versions": listing},
                       indent=1, ensure_ascii=False) + "\n")
+    site.write_claimset(published_dir, base_url, key, docs, listing, labs)
     write_index(conn, published_dir, base_url)
+
+
+def _lab_summary(record):
+    try:
+        events = [json.loads(line) for line in record.splitlines() if line.strip()]
+    except ValueError:
+        return None
+    return site.lab_summary(events)
 
 
 def write_bundles(directory, doc):
@@ -231,6 +247,7 @@ def write_index(conn, published_dir, base_url):
     lines = [json.dumps(paper_card(r[0], base_url), ensure_ascii=False) for r in rows]
     _write(Path(published_dir) / "index.jsonl", "".join(line + "\n" for line in lines))
     _write(Path(published_dir) / "llms.txt", reading.llms_txt(base_url))
+    site.write_listings(published_dir, base_url, [r[0] for r in reversed(rows)])
 
 
 def reindex(conn, registry, published_dir, base_url):
@@ -262,9 +279,12 @@ RENDERED_BY = ".rendered-by"
 def refresh_if_claimset_changed(conn, registry, published_dir, base_url, version):
     """At the app's start, after it installed the newest claimset: write /llms.txt and /index.jsonl, and rebuild the
     index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views are
-    regenerated when the renderer changes). Returns True if it rebuilt."""
+    regenerated when the renderer changes, and the pages when the site's look changes). Returns True if it
+    rebuilt."""
+    site.write_fixed(published_dir, base_url)
     write_index(conn, published_dir, base_url)          # /llms.txt and /index.jsonl exist before anything is published
     marker = Path(published_dir) / RENDERED_BY
+    version = f"{version} site {site.fingerprint()}"
     try:
         if marker.read_text(encoding="utf-8").strip() == version:
             return False

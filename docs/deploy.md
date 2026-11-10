@@ -134,8 +134,8 @@ real paper you want published, or skip this until you have one.
   Containers stopped by hand stay stopped until `launch.sh` is run again.
 - **Updates to the portal:** `sudo /opt/entrylib/portal/deploy/launch.sh --update` (fetches the newest code, rebuilds,
   restarts). After changing `.env`: `sudo /opt/entrylib/portal/deploy/launch.sh`.
-- **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset (design §10),
-  and rebuilds the reading views if the claimset changed. At once: `cd /opt/entrylib/portal && sudo docker compose
+- **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
+  and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
   restart app`.
 - **Logs:** `cd /opt/entrylib/portal && sudo docker compose logs --tail 100 app` (or `caddy`, `db`, `classifier`).
 - **The server's Ubuntu** (24.04 LTS, supported to 2029) is not upgraded in place: a new release means a new Droplet

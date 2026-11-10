@@ -30,7 +30,8 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert [c["id"] for c in bundle["claims"]] == ["C2", "C1", "C3"]
     assert {f.name for f in (out / "p" / KEY).glob("C*")} == {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")}
     page = (out / "p" / f"{KEY}.html").read_text()
-    assert page.startswith("<!doctype html>") and "<script" not in page and "CLAIMSET Method M" in page
+    assert page.startswith("<!doctype html>") and "<script" not in page and 'class="cs-page"' in page
+    assert "<title>Method M" in page and f'href="/p/{KEY}@v1.json"' in page
     llms = (out / "llms.txt").read_text()
     assert f"{BASE}/api/search/claims?q=" in llms and "data" in llms and "{base}" not in llms
     assert f"{BASE}/mcp" in llms and f"{BASE}/api/submissions/from-url" in llms and "new_paper" in llms
@@ -142,7 +143,7 @@ def test_reading_views_follow_claimset_updates(env, monkeypatch):
     out = ctx["published_dir"]
     args = (ctx["conn"], ctx["registry"], out, BASE)
     assert indexer.refresh_if_claimset_changed(*args, "0.39.2")              # no marker yet: rebuilt
-    assert (out / indexer.RENDERED_BY).read_text() == "0.39.2\n"
+    assert (out / indexer.RENDERED_BY).read_text().startswith("0.39.2 site ")
     (out / "p" / f"{KEY}.txt").write_text("stale rendering")
     assert not indexer.refresh_if_claimset_changed(*args, "0.39.2")          # same claimset: left alone
     assert (out / "p" / f"{KEY}.txt").read_text() == "stale rendering"

@@ -91,8 +91,9 @@ def main(argv=None):
     import uvicorn
 
     from .app import create_app
+    # No access log: it would keep every reader's IP address (the privacy page says addresses are used in memory only).
     uvicorn.run(create_app(settings), host=args.host, port=args.port, proxy_headers=True,
-                forwarded_allow_ips="*")
+                forwarded_allow_ips="*", access_log=False)
     return 0
 
 
