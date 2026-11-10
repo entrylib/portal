@@ -220,7 +220,7 @@ def expire(conn, submissions_dir, now=None):
     """Delete the content of pending submissions past their window, and forget closed ones after KEEP_CLOSED.
     Returns the IDs expired."""
     now = now or dt.datetime.now(dt.UTC)
-    rows = conn.execute("UPDATE submissions SET state = 'expired', file_name = NULL, title = NULL,"
+    rows = conn.execute("UPDATE submissions SET state = 'expired', file_name = NULL, title = NULL, client_ip = NULL,"
                         " title_key = NULL,"
                         " detail = 'not every guarantor confirmed within 48 hours'"
                         " WHERE state = 'pending' AND expires <= %s RETURNING id", (now,)).fetchall()

@@ -4,7 +4,7 @@ __version__ = "0.1.0"
 
 #: The oldest claimset package the portal works with. There is no upper bound: newer releases are expected to
 #: accept everything older ones accepted.
-MIN_CLAIMSET = "0.39.4"                  # the baseline, v0.39 (claimset spec §2.6)
+MIN_CLAIMSET = "0.40.1"                  # the page view (claimset.html); accepts claimset spec v0.40 and older
 
 
 def claimset_ok(version):

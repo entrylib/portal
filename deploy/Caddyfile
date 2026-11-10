@@ -12,14 +12,53 @@
 {$PORTAL_DOMAIN:localhost} {
 	encode zstd gzip
 
-	# Published files are static: served from the published directory without touching the app.
-	@published path /p/* /index.jsonl /llms.txt
+	# One address per claimset (design §7.1): people get the page, programs asking for JSON get the published file,
+	# reference managers asking for BibTeX get its entry. The .json, .txt, .bib and .ris addresses stay explicit.
+	@wants_json {
+		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		header Accept *application/json*
+	}
+	rewrite @wants_json {path}.json
+	@wants_bibtex {
+		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		header Accept *application/x-bibtex*
+	}
+	rewrite @wants_bibtex {path}.bib
+
+	# The website and the published files are static, written by the indexer (design §7.4): served from the published
+	# directory without touching the app. The pages carry no scripts and load only this site's styles, fonts and
+	# images; every value from a claimset in them is escaped.
+	@published path / /index.html /lab /about /agents /privacy /removal /all /feed.xml /site.css /claimset.css /spec /spec/* /fonts/* /p/* /index.jsonl /llms.txt
 	handle @published {
 		root * /srv/published
-		header X-Content-Type-Options nosniff
-		# /p/<id> is the reading view as a minimal page (p/<id>.html): escaped text, no scripts, nothing loaded.
+		header Content-Security-Policy "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+		header /p/* Vary Accept
+		# Deferred, so that they replace the type file_server gives by the extension.
+		@markdown path /spec/*.md
+		@bibtex path *.bib
+		@ris path *.ris
+		header @markdown {
+			Content-Type "text/plain; charset=utf-8"
+			defer
+		}
+		header @bibtex {
+			Content-Type "application/x-bibtex; charset=utf-8"
+			defer
+		}
+		header @ris {
+			Content-Type "application/x-research-info-systems; charset=utf-8"
+			defer
+		}
+		header /fonts/* Cache-Control "public, max-age=604800"
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+
+	# Images shown on the pages: links to packaged files, named with their type so they display (site.file_url_for).
+	handle /img/* {
+		root * /srv/published
 		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox"
-		try_files {path} {path}.html
+		header Cache-Control "public, max-age=86400"
 		file_server
 	}
 

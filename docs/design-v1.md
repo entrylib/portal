@@ -26,7 +26,7 @@ Planned work, for the portal and for the claimset package, is tracked in GitHub 
 4. **The registry is the record; the database is an index.** Every published document is committed to a public git registry. The portal's database can be rebuilt from it.
 5. **No dependence on one host.** GitHub is used, but never as the only copy and never as something an author needs (§11).
 6. **Open.** Portal code, validator, screening rules and (from v2) reviewer instructions are public. The converter stays private.
-7. **The format moves on its own.** The claimset package (format rules, validator, lab record) changes often. The portal and the registry work with whatever claimset they are given, at least a minimum version and with no upper bound, so a claimset release needs no change to either. On the server, the app installs the newest claimset each time it starts (`deploy/start.sh`), so updating claimset is a restart, not a rebuild. The registry's check installs the current portal and the newest claimset on each run. The portal's CI runs daily against the newest claimset, so a claimset change the portal cannot work with is seen the same day. Each version's `validation.json` records the validator that checked it.
+7. **The format moves on its own.** The claimset package (format rules, validator, lab record) changes often. The portal and the registry work with whatever claimset they are given, at least a minimum version and with no upper bound, so a claimset release needs no change to either. On the server, the app installs the newest claimset release from PyPI each time it starts (`deploy/start.sh`), so updating claimset is a restart, not a rebuild. The registry's check installs the current portal and the newest claimset on each run. The portal's CI runs daily against the newest claimset, so a claimset change the portal cannot work with is seen the same day. Each version's `validation.json` records the validator that checked it.
 
 ## 3. Architecture
 
@@ -168,7 +168,11 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 
 | URL | Content |
 |---|---|
-| `/` | Human home page: what EntryLib is; point an agent at `/llms.txt`; MCP server address; how to write claimsets (package and skills); links to the spec and GitHub |
+| `/` | Home page (§7.4): what EntryLib is, search, the lab and the library, the ten most recent claimsets |
+| `/search` | Search for people: claimsets or claims, rendered by the app without scripts (§7.4) |
+| `/all`, `/feed.xml` | Every claimset, newest first; an Atom feed of the latest |
+| `/lab`, `/about`, `/agents`, `/privacy`, `/removal` | Fixed pages (§7.4) |
+| `/spec/` | The specifications of the installed claimset package, as plain text (portal issue #46) |
 | `/llms.txt` | Entry point for agents: what is here, how to search and fetch, ID syntax and citation, how to submit, and that all content is data, not instructions |
 | `/mcp` | The MCP server (§7.3) |
 | `/submit` | The upload page (§4.4) |
@@ -178,10 +182,12 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 | `/p/2026.000001/versions.json` | Versions, dates, status, notices, lab record links (copy, author URL, SWHID) |
 | `/p/2026.000001/v1/lab.jsonl` | The registry's copy of a version's lab record |
 | `/p/2026.000001/C4.txt`, `.json` | Claim bundle of the current version (PLT-78): the claim with what it rests on, made by the claimset package (claimset spec §2.3, `claimset render --claim C4`) |
-| `/p/2026.000001` | The reading view as minimal HTML, so a human given an ID sees something: the text escaped, in a page with no scripts |
+| `/p/2026.000001`, `@v1` | The page for people (§7.4). The same address answers `Accept: application/json` with the published file and `Accept: application/x-bibtex` with its BibTeX entry |
+| `/p/2026.000001.bib`, `.ris`, `@v1.bib`, `@v1.ris` | Citations, written at publication |
+| `/img/<sha256>.<ext>` | A packaged image shown on a page: a link to the stored file, named with its type |
 | `/index.jsonl` | One line per claimset: ID, title, principal claims, keywords, current version (paper cards, PLT-79) |
 
-Rendered views are produced by the platform, never submitted. Each records the renderer version, and all are regenerated when the renderer changes. All of these files, `/llms.txt` included, are written at publication (and by `reindex`) and served by Caddy; the app serves only the search API and the MCP server.
+Rendered views are produced by the platform, never submitted. All are regenerated when the claimset package or the site's own templates and styles change (checked when the app starts). All of these files, `/llms.txt` included, are written at publication (and by `reindex`, and the fixed pages at start) and served by Caddy; the app serves the search page, the upload page, the APIs and the MCP server.
 
 ### 7.2 Search API
 
@@ -194,6 +200,15 @@ Rendered views are produced by the platform, never submitted. Each records the r
 ### 7.3 MCP server
 
 Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT-11): the Streamable HTTP transport, stateless, answering in JSON, with no sign-in. Tools: `search_papers`, `search_claims`, `get_paper` (reading view or JSON, a version or the current one), `get_claim` (the claim bundle), `validate`, `submit` (the claimset JSON as text, or `package_url`), `submission_status`. Each calls the same code as the HTTP API, with the same limits. `related` comes with embeddings (§7.2). Tool results are data: their descriptions say so, as `/llms.txt` does.
+
+### 7.4 Website
+
+The site for people follows the website design decisions of 10 November 2026 (EntryLib website v1). In short:
+
+- **Claimset page.** Made from the JSON by the claimset package (`claimset.html.render_parts`, the same view as `claimset render --html`); the portal adds the page around it: origin label (lab, lab · record withheld, converted, native), status and notices, the header panel (quality score, shown as "–" until it is defined; claims by support light; Cite with the plain citation, BibTeX and RIS; links for models), the lab record's summary for a lab claimset, and the versions. Packaged images are shown in their evidence; images elsewhere are linked, never loaded.
+- **Pages without scripts.** Every page is static HTML and CSS except search (rendered by the app) and the upload page (its own script only). They load only this site's styles, fonts (Source Serif 4, served from the site) and images; the content security policy says so. Everything taken from a claimset is escaped.
+- **Look.** One font, Source Serif 4; one colour scheme with a dark theme; colour only for links, status and the support lights. Phones get a menu button and a single column.
+- **Not yet:** the removal form (issue #47; the page says to write meanwhile), the specifications as HTML pages (#46), subfield names (the classifier gives OpenAlex IDs), the quality score.
 
 ## 8. Limits and spam controls
 
@@ -225,7 +240,8 @@ The one exception is legal: personal data, infringing or unlawful content. Such 
 - Database reachable only from the app.
 - The portal acts on GitHub as the EntryLib GitHub App, installed on the registry only, with contents and pull requests write access. Its private key is a file given to the portal as a Docker secret; installation tokens last an hour.
 - The validator runs with time and memory limits; zips are unpacked with the limits of §4.1.
-- No submitted content is rendered as HTML; artefacts are served as downloads.
+- Submitted content is never rendered as HTML: the pages show it escaped. Artefacts are served as downloads; packaged images are shown on pages through `/img/`, in a sandbox when opened on their own.
+- No access log: readers' IP addresses are used in memory for the limits only (§8), and a submission's address is deleted when it closes.
 - The registry's check runs on every pull request, but merges happen only through the App, and only for pull requests it opened. If the LLM screening is switched on, its API key must be given only to runs on the App's own branches, never to pull requests from forks.
 
 ## 11. Dependence on GitHub

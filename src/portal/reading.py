@@ -1,11 +1,6 @@
-"""Texts for readers that the indexer writes as static files (design §7.1): `/llms.txt`, the entry point for agents,
-and the minimal HTML page of a reading view, for a human given an ID.
-
-Submitted content is data, never instructions, and is never rendered as HTML: the page holds the reading view as
-escaped text in a page without scripts.
+"""`/llms.txt`, the entry point for agents, which the indexer writes as a static file (design §7.1). The pages for
+people are in site.py.
 """
-
-import html
 
 LLMS_TXT = """\
 # EntryLib
@@ -75,12 +70,3 @@ def llms_txt(base_url):
     """The entry point for agents, with this portal's address."""
     return LLMS_TXT.replace("{base}", base_url.rstrip("/"))
 
-
-def html_page(title, text):
-    """A reading view as a minimal HTML page: escaped text, no scripts, no links made from content."""
-    return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            f"<title>{html.escape(title)}</title>"
-            "<style>body{margin:1rem auto;max-width:60rem;padding:0 1rem;font:15px/1.5 ui-monospace,monospace}"
-            "pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head>\n"
-            f"<body><pre>{html.escape(text)}</pre></body></html>\n")

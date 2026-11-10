@@ -1,0 +1,79 @@
+<p class="kicker">claimset-lab</p>
+<h1>Research with your agent that anyone can check</h1>
+<p class="lead">claimset-lab keeps a record of your research while it happens: what you asked, what you planned before
+you saw any data, every run of code with its inputs and outputs, every decision and every result, including the ones
+that did not work. Your agent writes it as it works; at the end it becomes a claimset whose claims trace back to the
+record.</p>
+<p class="actions"><a class="button" href="#start">Get started</a></p>
+
+<h2>The problem</h2>
+<p>An agent can run a hundred analyses in an afternoon and report the one that worked. Nothing in the finished paper
+shows whether a test was planned or chosen after the fact, how many attempts came before the reported one, or whether a
+number came from code or from memory. Readers, and the models that read for them, have to take it on trust.</p>
+<p>claimset-lab makes those things part of the record, so they can be checked instead of trusted.</p>
+
+<h2>What the record makes checkable</h2>
+<div class="grid">
+<div><h3>Planned before tested</h3><p>A test counts as confirmatory only if its plan, with the significance level,
+sample and the rule for each outcome, was recorded and pushed before the run. Anything else is reported as
+exploration.</p></div>
+<div><h3>Every number from code</h3><p>Each run records its command, code commit, environment, seeds, parameters,
+input-file hashes and outputs. Results enter the record from the files the code wrote, never retyped.</p></div>
+<div><h3>Failures counted</h3><p>Refuted and abandoned hypotheses stay in the record with their reasons. A planned
+test gets one attempt, so it cannot be rerun until it comes out right. Negative results are published like positive
+ones.</p></div>
+<div><h3>Hard to rewrite</h3><p>The record is append-only and hash-chained, kept on its own git branch and pushed after
+every step. Corrections are new entries that point at what they replace; nothing is edited in place.</p></div>
+<div><h3>People decide</h3><p>Every actor is registered: agents with their model, people with their ORCID iD. A
+supervisor's approval of a plan is recorded in their own words, with when they gave it; an agent never approves its own
+plan.</p></div>
+<div><h3>Checks by others</h3><p>Another agent or a colleague can reproduce runs and re-derive results in their own
+log. Their verdicts, confirmed or disputed, travel with the claims they checked.</p></div>
+</div>
+
+<h2>How it works</h2>
+<p>Your agent runs the commands as it works; you approve plans and answer its questions.</p>
+<ol class="steps">
+<li><strong>Frame</strong>: questions, hypotheses with what they are about, the terms the study uses, the assumptions it
+makes.</li>
+<li><strong>Plan</strong>: design, analysis and decision rule, fixed before the data is seen, and approved by the
+supervisor when there is one.</li>
+<li><strong>Run and record</strong>: exploratory and confirmatory runs, deviations from the plan, decisions, and the
+verdict the plan's rule gives.</li>
+<li><strong>Export and publish</strong>: the record becomes a claimset: hypotheses become claims, plans and runs their
+evidence. Submit it to EntryLib with the record attached.</li>
+</ol>
+<h3>From exploration to a planned test</h3>
+<div class="table-wrap"><table class="commands">
+<thead><tr><th scope="col">Your agent runs</th><th scope="col">The record gets</th></tr></thead>
+<tbody>
+<tr><td><code>claimset lab hypothesis "M helps most at horizons 7–12." --from-exploration --prompted-by RN1</code></td>
+<td>H2, marked as suggested by RN1</td></tr>
+<tr><td><code>claimset lab plan --kind confirmatory --hypotheses H2 --supported "p &lt; alpha and d &gt; 0" …</code></td>
+<td>PL1, pushed before any run</td></tr>
+<tr><td><code>claimset lab run --plan PL1 -- python3 confirm.py --holdout</code></td><td>RN2, with results RS2–RS3</td></tr>
+<tr><td><code>claimset lab verdict PL1</code></td><td>p = 0.004, d = 0.031: supported</td></tr>
+</tbody></table></div>
+
+<h2>Beyond computation</h2>
+<p>The lab records any research that can be planned and logged: experiments, simulations, benchmarks, data analyses,
+and studies of documents and other sources. What one kind of work needs beyond that comes as an extension. The
+qualitative extension records sources as they were read, codes assigned to passages with the rules for each code, and
+counts that a planned test can use; the record then shows that the sampling was fixed before the coding, and the coding
+before the counting.</p>
+
+<h2>What readers see</h2>
+<p>A claimset from the lab is labelled <span class="origin">lab</span> and links to its record. Each claim says whether
+it was planned, under which plan and runs, and what deviated from the plan. Readers and models can tell a tested
+prediction from a pattern found by looking.</p>
+
+<h2 id="start">Get started</h2>
+<p>claimset-lab is a command-line tool and a set of instructions for research agents. It works with any agent that can
+run commands in your project; it needs Python 3.10 or later and git, and nothing else. Free and open source.</p>
+<ol class="steps">
+<li><strong>Install the tool</strong><br><code>pip install claimset</code></li>
+<li><strong>Give your agent the instructions</strong><br><code>claimset skill install</code></li>
+<li><strong>Ask your agent to start a study</strong><br>"Start a lab record for this study and keep it as we work."</li>
+</ol>
+<p><a href="/spec/">Read the lab record specification</a> · <a href="https://github.com/entrylib/claimset">The tool on
+GitHub</a></p>
