@@ -71,6 +71,23 @@ def plain(text):
     return TERM_MARKUP.sub(r"\1", text or "")
 
 
+INLINE_MATH = re.compile(r"\$\$(.+?)\$\$|\$([^$\s][^$]*?)\$", re.S)
+
+
+def plain_html(text):
+    """A statement as escaped text without its term markup, its mathematics as MathML from the claimset package
+    (shown in the line), for cards."""
+    out, last, text = [], 0, plain(text)
+    to_mathml = getattr(cshtml, "math", None)
+    for m in INLINE_MATH.finditer(text):
+        out.append(esc(text[last:m.start()]))
+        tex = m.group(1) or m.group(2)
+        out.append(to_mathml(tex) if to_mathml else esc(tex))
+        last = m.end()
+    out.append(esc(text[last:]))
+    return "".join(out)
+
+
 def _static(name):
     return resources.files("portal") / "static" / name
 
@@ -384,7 +401,7 @@ def _panel(doc, parts, base_url, key, scores=None):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
     return (f'<aside class="panel" aria-label="About this entry">'
-            f'{score_html.panel_rows(scores, parts.get("lights"))}'
+            f'{score_html.panel_rows(scores, parts.get("lights"), f"/p/{key}@v{n}.issues.txt")}'
             f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(p["id"])}@v{n}</code></p>'
             f'<details class="cite"><summary>Citation</summary><p class="cite-text">{cite}</p></details>'
             f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
@@ -468,11 +485,12 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     score_item = '<li><a href="#score">Score</a></li>' if scores else ""
     nav = parts["nav"].replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
                                               f'<span class="count">{len(listing)}</span></li></ol></nav>')
+    issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     main = (f'<div class="cs-page"><div class="entry-head"><div class="cs-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p)}{parts["header"]}'
             f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key, scores)}</div>'
             f'<div class="cs-layout">{nav}<article class="cs-body">{score_html.decorate(parts["body"], scores)}'
-            f'{score_html.section(scores)}{_versions(listing, key, n)}</article></div></div>')
+            f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div></div>')
     first = _principal(doc)[:1]
     description = plain(first[0].get("statement")) if first else ""
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
@@ -502,17 +520,25 @@ def card(doc):
     if src:
         who += f" · from {esc(src)}"
     principal = _principal(doc)
-    first = f'<p class="card-claim">{esc(plain(principal[0].get("statement")))}</p>' if principal else ""
+    first = f'<p class="card-claim">{plain_html(principal[0].get("statement"))}</p>' if principal else ""
     claims = _claims(doc)
     counts = [f"{len(principal)} principal claim{'s' if len(principal) != 1 else ''}",
               f"{len(claims)} claim{'s' if len(claims) != 1 else ''}"]
     ev = len([e for e in doc.get("evidence") or [] if isinstance(e, dict)])
     if ev:
         counts.append(f"{ev} piece{'s' if ev != 1 else ''} of evidence")
-    return (f'<article class="card"><p class="card-top">{" · ".join(top)}</p>'
+    body = (f'<p class="card-top">{" · ".join(top)}</p>'
             f'<h3><a href="/p/{key}">{esc(p.get("title"))}</a></h3>'
             + (f'<p class="card-who">{who}</p>' if who else "") + first
-            + f'<p class="card-counts">{" · ".join(counts)}</p></article>')
+            + f'<p class="card-counts">{" · ".join(counts)}</p>')
+    paper = (score_data.rubric.score(doc)["paper"] if score_data.rubric else None)   # reliability (design §7.6)
+    if not paper:
+        return f'<article class="card"><div class="card-body">{body}</div></article>'
+    word = score_html.BANDS[paper["band"]]
+    return (f'<article class="card card-scored"><a class="card-score band-{paper["band"]}" href="/p/{key}#score" '
+            f'aria-label="Reliability {paper["score"]}, {word.lower()}"><span class="card-score-num">'
+            f'{paper["score"]}</span><span class="card-score-band">{word}</span></a>'
+            f'<div class="card-body">{body}</div></article>')
 
 
 def _search_form(q="", kind="papers", big=False):
