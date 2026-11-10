@@ -133,7 +133,8 @@ real paper you want published, or skip this until you have one.
 - **Reboots and power cuts** need nothing: Docker starts at boot and every container has `restart: unless-stopped`.
   Containers stopped by hand stay stopped until `launch.sh` is run again.
 - **Updates to the portal:** `sudo /opt/entrylib/portal/deploy/launch.sh --update` (fetches the newest code, rebuilds,
-  restarts). After changing `.env`: `sudo /opt/entrylib/portal/deploy/launch.sh`.
+  restarts, and reloads Caddy so a changed Caddyfile takes effect). After changing `.env`:
+  `sudo /opt/entrylib/portal/deploy/launch.sh`.
 - **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
   and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
   restart app`.

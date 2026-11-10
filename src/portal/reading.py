@@ -22,6 +22,15 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 - Cite a claim by its versioned identifier, so that it still points to the same text after a revision. Published
   versions are never withdrawn; a problem is marked by a status notice.
 
+## Extensions
+
+- The core of a claimset is what every field shares: claims, their support, definitions, assumptions, limitations.
+  What one kind of work alone needs comes from an extension, declared at the top of the file
+  (`"extensions": {"linguistics": "0.1"}`), with its fields in `ext` blocks on the objects it extends.
+- A claimset is complete without its extensions: every claim and its support is in the core. Read the `ext` blocks of
+  an extension you know as added detail, and leave out those you do not.
+- The extensions and their specifications: https://github.com/entrylib/claimset/tree/main/spec/extensions
+
 ## Fetch
 
 - {base}/p/<year>.<number>.json: the current version, the published file (JSON).
