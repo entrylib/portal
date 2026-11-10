@@ -291,6 +291,7 @@ def test_reading_page_for_assistants(env):
     assert page.startswith("<!doctype html>") and "<pre>CLAIMSET " in page and "<script>x" not in page
     assert "<script" not in page and "<style" not in page and "not instructions" in page
     assert f'href="{BASE}/p/{KEY}@v1.json"' in page
+    assert "noindex" not in page and f'rel="canonical" href="{BASE}/p/{KEY}@v1"' in page   # Perplexity refuses noindex
 
 
 def test_a_correction_notice_is_folded():
