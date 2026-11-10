@@ -54,31 +54,41 @@
   document.documentElement.classList.add("toc-js");
 })();
 
-// Claimset pages: a figure opens enlarged over the page, with its caption; Esc, the close button or a click outside
-// closes it. Without this script the figure's link opens the image itself.
+// Pop-ups: one dialog shape for the whole site, with its close button in the top right corner; Esc, the button or a
+// click outside closes it. window.entrylibPopup(className, label) gives {dialog, body, open}.
+window.entrylibPopup = function (className, label) {
+  "use strict";
+  var dialog = document.createElement("dialog");
+  dialog.className = "popup " + className;
+  dialog.setAttribute("aria-label", label);
+  var body = document.createElement("div");
+  body.className = "popup-body";
+  var close = document.createElement("button");
+  close.type = "button";
+  close.className = "popup-close";
+  close.setAttribute("aria-label", "Close");
+  close.textContent = "\u00d7";                         // the multiplication sign, written so it survives any encoding
+  dialog.appendChild(body);
+  dialog.appendChild(close);
+  document.body.appendChild(dialog);
+  close.addEventListener("click", function () { dialog.close(); });
+  dialog.addEventListener("click", function (e) { if (e.target === dialog) dialog.close(); });
+  return { dialog: dialog, body: body, open: function () { dialog.showModal(); close.focus(); } };
+};
+
+// Claimset pages: a figure opens enlarged over the page, with its caption. Without this script the figure's link
+// opens the image itself.
 (function () {
   "use strict";
   if (!window.HTMLDialogElement) return;
-  var dialog = document.createElement("dialog");
-  dialog.className = "zoom";
-  dialog.setAttribute("aria-label", "Figure");
+  var popup = window.entrylibPopup("zoom", "Figure");
   var figure = document.createElement("figure");
   var img = document.createElement("img");
   var caption = document.createElement("figcaption");
-  var close = document.createElement("button");
-  close.type = "button";
-  close.className = "zoom-close";
-  close.setAttribute("aria-label", "Close");
-  close.textContent = "×";
   figure.appendChild(img);
   figure.appendChild(caption);
-  dialog.appendChild(figure);
-  dialog.appendChild(close);
-  document.body.appendChild(dialog);
-
-  close.addEventListener("click", function () { dialog.close(); });
-  dialog.addEventListener("click", function (e) { if (e.target === dialog) dialog.close(); });
-  dialog.addEventListener("close", function () { img.removeAttribute("src"); });
+  popup.body.appendChild(figure);
+  popup.dialog.addEventListener("close", function () { img.removeAttribute("src"); });
 
   document.addEventListener("click", function (e) {
     var link = e.target.closest(".cs-figure > a");
@@ -90,8 +100,7 @@
     caption.replaceChildren();
     var text = link.parentNode.querySelector("figcaption");
     if (text) Array.prototype.forEach.call(text.childNodes, function (n) { caption.appendChild(n.cloneNode(true)); });
-    dialog.showModal();
-    close.focus();
+    popup.open();
   });
 })();
 
