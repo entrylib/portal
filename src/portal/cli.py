@@ -79,6 +79,7 @@ def main(argv=None):
         registry, store, classifier = _context(settings)
         with psycopg.connect(settings.database_url, autocommit=True) as conn:
             if args.command == "reindex":
+                registry = _rebuild_registry(settings) or registry
                 folders = reindex(conn, registry, settings.published_dir, settings.base_url)
                 print(f"reindexed {len(folders)} claimset(s)")
                 return 0
@@ -131,17 +132,30 @@ def _requests(settings, args):
         return 0
 
 
+def _rebuild_registry(settings):
+    """The registry a rebuild of the index reads. In github mode, the clone, first brought to the registry's main on
+    GitHub, so that the index is never rebuilt from a copy behind the record (a failure to update raises, and nothing
+    is rebuilt); otherwise the local registry, or None when nothing was published yet."""
+    from .registry import Registry
+    if settings.registry_mode == "github":
+        from .github import ensure_clone, update_clone
+        registry = ensure_clone(settings.registry_dir, settings.github_registry,
+                                lambda path: Registry(path, settings.git_name, settings.git_email))
+        update_clone(registry)
+        return registry
+    if (settings.registry_dir / ".git").exists():                 # nothing published before the registry exists
+        return Registry(settings.registry_dir, settings.git_name, settings.git_email)
+    return None
+
+
 def _refresh(settings, version):
     """At start: rebuild the reading views if claimset changed since they were written. A failure is reported and
     the app starts anyway; the next start tries again."""
     import psycopg
 
     from .indexer import refresh_if_claimset_changed
-    from .registry import Registry
-    registry = None
-    if (settings.registry_dir / ".git").exists():                 # nothing published before the registry exists
-        registry = Registry(settings.registry_dir, settings.git_name, settings.git_email)
     try:
+        registry = _rebuild_registry(settings)
         with psycopg.connect(settings.database_url, autocommit=True) as conn:
             if refresh_if_claimset_changed(conn, registry, settings.published_dir, settings.base_url, version):
                 print(f"reading views rebuilt with claimset {version}")

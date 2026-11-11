@@ -264,3 +264,47 @@ def test_open_pull_requests_count_towards_the_weekly_limit(world, monkeypatch):
     r = w["client"].post("/api/submissions", content=json.dumps(titled("over")).encode(),
                          headers={"Content-Type": "application/json"})
     assert r.status_code == 429 and "the limit is reached" in json.dumps(r.json())
+
+
+def _github_registry(tmp_path):
+    """A bare repository standing for the registry on GitHub, a clone of it as the portal's, and the settings."""
+    bare = tmp_path / "registry.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    seed = tmp_path / "seed"
+    subprocess.run(["git", "clone", "-q", str(bare), str(seed)], check=True, capture_output=True)
+    (seed / "README.md").write_text("The EntryLib registry\n")
+    git(seed, "add", "README.md")
+    git(seed, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
+    git(seed, "push", "-q", "origin", "main")
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(bare), str(clone)], check=True, capture_output=True)
+    settings = Settings.from_env({"DATABASE_URL": "postgresql://nobody@127.0.0.1:1/none",
+                                  "PORTAL_PUBLISHED_DIR": str(tmp_path / "published"),
+                                  "PORTAL_REGISTRY_DIR": str(clone), "PORTAL_REGISTRY_MODE": "github"})
+    return seed, clone, settings
+
+
+def test_a_rebuild_reads_the_registry_as_it_is_on_github(tmp_path):
+    from portal.cli import _rebuild_registry
+    seed, clone, settings = _github_registry(tmp_path)
+    (seed / "2026").mkdir()
+    (seed / "2026" / "new.txt").write_text("published after the portal's clone was last updated\n")
+    git(seed, "add", "2026")
+    git(seed, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "Publish")
+    git(seed, "push", "-q", "origin", "main")
+    assert not (clone / "2026").exists()
+
+    registry = _rebuild_registry(settings)
+    assert registry.path == clone
+    assert (clone / "2026" / "new.txt").exists()
+
+
+def test_no_rebuild_at_start_from_a_registry_that_cannot_be_updated(tmp_path, monkeypatch, capsys):
+    from portal import cli, indexer
+    _, clone, settings = _github_registry(tmp_path)
+    git(clone, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+    called = []
+    monkeypatch.setattr(indexer, "refresh_if_claimset_changed", lambda *args: called.append(args))
+    cli._refresh(settings, "0.41.3")
+    assert called == []
+    assert "could not rebuild" in capsys.readouterr().err

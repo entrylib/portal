@@ -202,3 +202,26 @@ def test_registry_folders_are_found_by_year_and_block(tmp_path):
     assert reg.folders() == ["2026/000/entrylib_2026.000002", "2026/001/entrylib_2026.001350",
                              "2027/000/entrylib_2027.000001"]
     assert "entrylib_2026.001350-v1" in reg.git("tag").split()
+
+
+def test_a_failed_reindex_leaves_the_index_as_it_was(env, monkeypatch):
+    ctx, tmp = env
+    publish(write(tmp, example()), **ctx)
+    publish(write(tmp, example(), "b.claimset.json"), **ctx)
+    conn = ctx["conn"]
+    before = conn.execute("SELECT concept_id, current_version, title FROM papers ORDER BY 1").fetchall()
+    claims = conn.execute("SELECT count(*) FROM claims").fetchone()
+
+    from portal import indexer
+    index_version = indexer.index_version
+
+    def failing(conn, registry, folder, n, *args):
+        if folder.endswith("000002"):
+            raise RuntimeError("indexing failed")
+        return index_version(conn, registry, folder, n, *args)
+
+    monkeypatch.setattr(indexer, "index_version", failing)
+    with pytest.raises(RuntimeError):
+        reindex(conn, ctx["registry"], ctx["published_dir"], BASE)
+    assert conn.execute("SELECT concept_id, current_version, title FROM papers ORDER BY 1").fetchall() == before
+    assert conn.execute("SELECT count(*) FROM claims").fetchone() == claims

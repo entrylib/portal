@@ -388,7 +388,8 @@ def write_index(conn, published_dir, base_url):
 
 
 def reindex(conn, registry, published_dir, base_url):
-    """Rebuild the database index, the identifier counters and the static files from the registry alone."""
+    """Rebuild the database index, the identifier counters and the static files from the registry alone, in one
+    transaction: a rebuild that fails leaves the index as it was."""
     with conn.transaction():
         conn.execute("DELETE FROM papers")
         conn.execute("DELETE FROM removed")
@@ -406,15 +407,15 @@ def reindex(conn, registry, published_dir, base_url):
         for year, last in counters.items():
             conn.execute("INSERT INTO id_counters (year, last) VALUES (%s, %s) ON CONFLICT (year)"
                          " DO UPDATE SET last = GREATEST(id_counters.last, EXCLUDED.last)", (year, last))
-    folders = registry.folders()
-    for folder in folders:
-        for n in registry.versions(folder):
-            index_version(conn, registry, folder, n, published_dir, base_url)
-    for folder in registry.removed_folders():
-        write_removed(conn, registry.notices(folder), published_dir, base_url)
-    write_index(conn, published_dir, base_url)
-    tidy_legacy_files(conn, published_dir)
-    return folders
+        folders = registry.folders()
+        for folder in folders:
+            for n in registry.versions(folder):
+                index_version(conn, registry, folder, n, published_dir, base_url)
+        for folder in registry.removed_folders():
+            write_removed(conn, registry.notices(folder), published_dir, base_url)
+        write_index(conn, published_dir, base_url)
+        tidy_legacy_files(conn, published_dir)
+        return folders
 
 
 #: In the published directory: which claimset rendered the static files.
