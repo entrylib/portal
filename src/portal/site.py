@@ -27,6 +27,9 @@ from claimset.claim import claim_bundle
 
 from . import areas, ids, indexnow, limits, score_html, specs
 from . import scores as score_data
+from .text import html as plain_html
+from .text import one_line as plain_text
+from .text import plain
 
 SITE = "EntryLib"
 CONTACT = "mail@entrylib.org"
@@ -56,38 +59,16 @@ PAGES = {
     "privacy": ("privacy.html", "Privacy", None, "What EntryLib records about people, and why."),
 }
 
-STATUS_LABELS = {"active": "active", "corrected": "corrected", "retracted": "retracted", "removed": "removed",
+STATUS_LABELS = {"active": "active", "corrected": "updated", "retracted": "retracted", "removed": "removed",
                  "withdrawn": "withdrawn",
                  "expression_of_concern": "expression of concern"}
-STATUS_CLASS = {"active": "ok", "corrected": "warn", "retracted": "bad", "removed": "bad", "withdrawn": "bad",
+STATUS_CLASS = {"active": "ok", "corrected": "neutral", "retracted": "bad", "removed": "bad", "withdrawn": "bad",
                 "expression_of_concern": "bad"}
 
-TERM_MARKUP = re.compile(r"\[\[D\d+:([^\]]*)\]\]")
 
 
 def esc(x):
     return html.escape("" if x is None else str(x), quote=True)
-
-
-def plain(text):
-    return TERM_MARKUP.sub(r"\1", text or "")
-
-
-INLINE_MATH = re.compile(r"\$\$(.+?)\$\$|\$([^$\s][^$]*?)\$", re.S)
-
-
-def plain_html(text):
-    """A statement as escaped text without its term markup, its mathematics as MathML from the claimset package
-    (shown in the line), for cards."""
-    out, last, text = [], 0, plain(text)
-    to_mathml = getattr(cshtml, "math", None)
-    for m in INLINE_MATH.finditer(text):
-        out.append(esc(text[last:m.start()]))
-        tex = m.group(1) or m.group(2)
-        out.append(to_mathml(tex) if to_mathml else esc(tex))
-        last = m.end()
-    out.append(esc(text[last:]))
-    return "".join(out)
 
 
 def _static(name):
@@ -164,7 +145,8 @@ def shell(title, main, *, active=None, description="", head="", canonical=None, 
             f'<link rel="stylesheet" href="{asset("/claimset.css")}">'
             f'<link rel="stylesheet" href="{asset("/site.css")}">'
             f'<link rel="alternate" type="application/atom+xml" title="{SITE}: recently published" href="/feed.xml">'
-            f"{head}</head>\n<body id=\"top\">{_header(active)}<main>{main}</main>{_footer()}"
+            f'{head}</head>\n<body id="top"><a class="skip-link" href="#content">Skip to content</a>{_header(active)}'
+            f'<main id="content">{main}</main>{_footer()}'
             + "".join(f'<script src="{asset(s)}" defer></script>' for s in ([script] if isinstance(script, str)
                                                                              else script or []))
             + "</body></html>\n")
@@ -388,12 +370,13 @@ def _notice_box(status, date, who, reason_code, statement):
     correction is folded: its line shows "Corrected" and the date, and opens to the explanation. "platform" as the
     issuer says nothing a reader can use, so it is not shown."""
     from .notices import REASONS, reason_label
-    label = STATUS_LABELS.get(status, status)
+    label = "corrected" if status == "corrected" else STATUS_LABELS.get(status, status)   # the tag says "updated"
     who = "" if not who or str(who).strip().lower() == "platform" else who
     known = any(reason_code in r for r in REASONS.values())
     why = esc(reason_label(reason_code)) if known else ""
     if statement and statement != (reason_label(reason_code) if known else None):
-        why = f"{why}: {esc(statement)}" if why else esc(statement)
+        words = plain_html(statement) if status == "corrected" else esc(statement)   # a correction's words are the
+        why = f"{why}: {words}" if why else words                                    # file's: maths rendered
     head = f'<strong>{esc(label[:1].upper() + label[1:])}</strong>' + (f" · {esc(date)}" if date else "")
     cls = f'notice notice-{STATUS_CLASS.get(status, "warn")}'
     if status == "corrected":
@@ -462,11 +445,11 @@ def ask_ai(doc, base_url, cid=None):
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     if cid:
-        what, url = "claim", f"{base_url}/p/{key}/{cid}"
+        what, url, text_url = "claim", f"{base_url}/p/{key}/{cid}", f"/p/{key}/{cid}.txt"
         message = (f"Read {url}, one claim of a research paper with the evidence it rests on. Tell me briefly what it "
                    "says and how well it is supported.")
     else:
-        what, url = "paper", f"{base_url}/p/{key}@v{n}.read"
+        what, url, text_url = "paper", f"{base_url}/p/{key}@v{n}.read", f"/p/{key}@v{n}.txt"
         message = (f"Read {url}, a research paper written as claims with their evidence. Give me a brief summary of "
                    "its main findings and how well each is supported.")
     message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
@@ -474,7 +457,9 @@ def ask_ai(doc, base_url, cid=None):
             f'data-copied="Copied: now paste it into your AI chat" hidden>Ask your AI about this {what}</button>'
             '<p class="small">Copies a message for ChatGPT, Claude or Gemini: paste it there.</p>'
             f'<details><summary>The message</summary><p class="cite-text" id="ask-message">{esc(message)}</p>'
-            "</details></div>")
+            f'<p class="small">Your assistant cannot open links? <a class="button-quiet" href="{esc(text_url)}" '
+            f'data-copy-url="{esc(text_url)}" data-copied="Copied: paste the whole {what} into your AI chat">Copy '
+            f"the whole {what} instead</a></p></details></div>")
 
 
 def _panel(doc, parts, base_url, key, scores=None):
@@ -486,12 +471,14 @@ def _panel(doc, parts, base_url, key, scores=None):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
     return (f'<aside class="panel" aria-label="About this entry">'
-            f'{score_html.panel_rows(scores, parts.get("lights"), f"/p/{key}@v{n}.issues.txt")}'
+            f'{score_html.panel_rows(scores, parts.get("lights"))}'
             + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
                         f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
                         f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}')
             + '<div class="panel-row"><h2>For models</h2>'
-            f'<p class="small"><a href="/p/{key}@v{n}.txt">Reading view</a> · '
+            + (f'<p class="small"><a href="/p/{key}@v{n}.issues.txt">Issues as text, for an agent</a></p>'
+               if scores else "")
+            + f'<p class="small"><a href="/p/{key}@v{n}.txt">Reading view</a> · '
             f'<a href="/p/{key}@v{n}.json">JSON</a></p></div></aside>')
 
 
@@ -650,11 +637,6 @@ def claim_pages(doc):
             and not any(isinstance(x, dict) and x.get("kind") == "assumption" for x in c.get("support") or [])]
 
 
-def plain_text(text):
-    """A statement as one line of plain text: no term markup, mathematics as its TeX without dollars."""
-    return re.sub(r"\s+", " ", INLINE_MATH.sub(lambda m: m.group(1) or m.group(2), plain(text))).strip()
-
-
 def _shorten(text, limit):
     if len(text) <= limit:
         return text
@@ -701,15 +683,17 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     top = [f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
            esc(p.get("date"))]
     if item:
-        reliability = (f'<div class="panel-row score-row"><h2>Reliability</h2>'
+        reliability = (f'<div class="panel-row score-row"><h2>{score_html.NAME}</h2>'
                        f'<p class="score-big band-{item["band"]}"><a href="#score" data-popup="score-{esc(cid)}">'
                        f'<span class="score-num">{item["score"]}</span> <span class="score-band">'
-                       f'{score_html.BANDS[item["band"]]}</span></a></p>{score_html.dots(scores, cid)}'
-                       f'<p class="small"><a href="#score" data-popup="score-{esc(cid)}">Why</a> · '
-                       f'<a href="{score_html.RUBRIC_URL}">How scores are given</a></p></div>')
+                       f'{score_html.BANDS[item["band"]]}</span></a></p>'
+                       f'<p class="small caption">{score_html.CAPTION}</p>{score_html.dots(scores, cid)}'
+                       f'{score_html.legend()}<p class="small"><a href="#score" data-popup="score-{esc(cid)}">What '
+                       'lowered it</a> · <a href="/about#quality">How scores are given</a></p></div>')
     else:
-        reliability = ('<div class="panel-row"><h2>Reliability</h2><p class="score">–</p>'
-                       f'<p class="small"><a href="{score_html.RUBRIC_URL}">How scores are given</a></p></div>')
+        reliability = (f'<div class="panel-row"><h2>{score_html.NAME}</h2><p class="score">–</p>'
+                       f'<p class="small">{score_html.CAPTION} <a href="/about#quality">How scores are given</a>'
+                       '</p></div>')
     panel = (f'<aside class="panel" aria-label="About this claim">{reliability}'
              + _cite_row(f'{p["id"]}@v{n}#{cid}', citation_text(doc, base_url, cid)) +
              f'<div class="panel-row"><h2>The claimset</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
@@ -751,7 +735,7 @@ def claim_meta(doc, cid, base_url, url, statement, item=None):
             "publisher": {"@type": "Organization", "name": SITE, "url": base_url}}
     extra = ""
     if item:
-        extra = ('<meta name="twitter:label1" content="Reliability">'
+        extra = (f'<meta name="twitter:label1" content="{score_html.NAME}">'
                  f'<meta name="twitter:data1" content="{item["score"]}, {item["band"]}">')
     return _ld(data) + _og(name, _shorten(statement, 300), url, base_url, "article", extra)
 
@@ -836,7 +820,7 @@ def claimset_meta(doc, base_url, url, first_date=None, scores=None):
     paper = (scores or {}).get("paper") if scores else None
     extra = f'<meta property="article:published_time" content="{esc(first_date)}">'
     if paper:
-        extra += ('<meta name="twitter:label1" content="Reliability">'
+        extra += (f'<meta name="twitter:label1" content="{score_html.NAME}">'
                   f'<meta name="twitter:data1" content="{paper["score"]}, {paper["band"]}">')
     return highwire + _ld(article) + _og(title, description, url, base_url, "article", extra)
 
@@ -875,8 +859,10 @@ def card(doc):
     counts = [f"{len(principal)} principal claim{'s' if len(principal) != 1 else ''}",
               f"{len(claims)} claim{'s' if len(claims) != 1 else ''}"]
     ev = len([e for e in doc.get("evidence") or [] if isinstance(e, dict)])
-    if ev:
-        counts.append(f"{ev} piece{'s' if ev != 1 else ''} of evidence")
+    args = len([w for w in doc.get("warrants") or [] if isinstance(w, dict)])
+    if ev or args:                                          # the page's Evidence section holds both
+        counts.append(" and ".join(x for x in (f"{ev} piece{'s' if ev != 1 else ''} of evidence" if ev else "",
+                                               f"{args} argument{'s' if args != 1 else ''}" if args else "") if x))
     body = (f'<p class="card-top">{" · ".join(top)}</p>'
             f'<h3><a href="/p/{key}">{esc(p.get("title"))}</a></h3>'
             + (f'<p class="card-who">{who}</p>' if who else "") + first
@@ -886,7 +872,7 @@ def card(doc):
         return f'<article class="card"><div class="card-body">{body}</div></article>'
     word = score_html.BANDS[paper["band"]]
     return (f'<article class="card card-scored"><a class="card-score band-{paper["band"]}" href="/p/{key}#score" '
-            f'aria-label="Reliability {paper["score"]}, {word.lower()}" title="{esc(RELIABILITY)}">'
+            f'aria-label="{score_html.NAME} {paper["score"]}, {word.lower()}" title="{esc(RELIABILITY)}">'
             '<span class="card-score-num">'
             f'{paper["score"]}</span><span class="card-score-band">{word}</span></a>'
             f'<div class="card-body">{body}</div></article>')
@@ -902,9 +888,10 @@ def _search_form(q="", kind="papers", big=False):
 
 
 #: What reliability means, for people meeting it for the first time (design §7.4): the home page and each card.
-RELIABILITY = ("Reliability (0–100) says how well a claim is backed by what the paper itself shows: points are lost "
-               "for unchecked evidence, untested assumptions, missing scope and similar gaps, by a public rubric. It "
-               "is not a verdict on whether the claim is true.")
+RELIABILITY = (f"{score_html.NAME} (0–100) says how well a claim is backed by what the paper itself shows: points "
+               "are lost for unchecked evidence, untested assumptions, missing scope and similar gaps, by a public "
+               "rubric. It checks the record, not the science: it does not say whether the claim is true, and it is "
+               "not peer review.")
 
 
 def home(docs, base_url=None):
@@ -912,8 +899,9 @@ def home(docs, base_url=None):
     cards = "".join(card(d) for d in docs[:RECENT]) or '<p class="muted">Nothing is published yet.</p>'
     intro = _static("pages/home.html").read_text(encoding="utf-8")
     intro = intro.replace("{search}", _search_form(big=True)).replace("{rubric}", score_html.RUBRIC_URL)
-    intro = intro.replace("{reliability}", esc(RELIABILITY).replace("Reliability (0–100)",
-                                                                    "<strong>Reliability (0–100)</strong>", 1))
+    intro = intro.replace("{reliability}", esc(RELIABILITY).replace(f"{score_html.NAME} (0–100)",
+                                                                    f"<strong>{score_html.NAME} (0–100)</strong>", 1))
+    intro = intro.replace("{score_name}", score_html.NAME)
     main = (f'<div class="wrap home">{intro}'
             f'<section class="recent"><div class="section-head"><h2>Recently published</h2>'
             f'<p><a href="/all">All claimsets</a> · <a href="/feed.xml">RSS</a></p></div>'
@@ -957,7 +945,8 @@ def fixed_page(name, base_url):
     body = (_static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
             .replace("{new_per_week}", str(limits.NEW_PER_WEEK))
             .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)))
-    return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description)
+    return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,
+                 script="/page.js" if "data-copy" in body else None)       # its copy buttons
 
 
 # --- search -----------------------------------------------------------------------------------------------------------
@@ -983,17 +972,23 @@ def search_page(q, kind, results=None, error=None, offset=0, limit=SEARCH_PAGE, 
         rows = results.get("results") or []
         if not rows:
             out.append('<p class="muted">Nothing found. Search matches words, not meaning: try the words a paper '
-                       "would use, and synonyms.</p>")
-        elif kind == "papers":
+                       'would use, and synonyms. Or <a href="/all">browse all claimsets</a>, or '
+                       '<a href="/read">read by field</a>.</p>')
+        else:
+            what = "claimset" if kind == "papers" else "claim"
+            out.append(f'<p class="muted">{len(rows)} {what}{"s" if len(rows) != 1 else ""}'
+                       + (f", from number {offset + 1}" if offset else "")
+                       + (" (more on the next page)" if len(rows) == limit else "") + "</p>")
+        if rows and kind == "papers":
             out.append('<div class="cards">' + "".join(card(files[r["id"]]) for r in rows if r["id"] in (files or {}))
                        + "</div>")
-        else:
+        elif rows:
             items = []
             for r in rows:
                 key = ids.url_key(r["paper"])
                 meta = [esc(r["claim"]), esc(r.get("type")), esc(r.get("role"))]
                 items.append(f'<li class="result"><p class="card-top">{" · ".join(m for m in meta if m)}</p>'
-                             f'<p class="card-claim">{esc(plain(r.get("statement")))}</p>'
+                             f'<p class="card-claim">{plain_html(r.get("statement"))}</p>'
                              f'<p class="card-who"><a href="/p/{key}#{esc(r["claim"])}">{esc(r.get("paper_title"))}'
                              f'</a> · {esc(r["paper"])}@v{esc(r.get("version"))}</p></li>')
             out.append(f'<ol class="results">{"".join(items)}</ol>')
@@ -1062,13 +1057,13 @@ def _sign_in(path, orcid_ready):
 
 def confirm_page(orcid_ready=True):
     """/confirm: sign in with ORCID to see the submissions waiting for you, without the consent link."""
-    main = ('<div class="wrap prose"><h1>Confirm a claimset</h1><p class="lead">When an agent submits a claimset, '
+    main = ('<div class="wrap prose"><h1>Confirm a submission</h1><p class="lead">When an agent submits a claimset, '
             "its guarantor confirms it before it is published. The consent link the agent was given leads straight "
             "to it; without the link, sign in here with your ORCID iD to see every submission waiting for you, and "
             f"confirm or cancel each.</p>{_sign_in('/confirm', orcid_ready)}<p class=\"muted\">Submissions wait 48 "
             "hours for confirmation; then they are deleted and can be submitted again. "
             '<a href="/submissions">Your submissions</a> shows everything you submitted.</p></div>')
-    return shell("Confirm a claimset", main, head='<meta name="robots" content="noindex">')
+    return shell("Confirm a submission", main, head='<meta name="robots" content="noindex">')
 
 
 def submissions_page(orcid_ready=True):
@@ -1120,8 +1115,8 @@ def confirm_list(items, orcid, name=None):
         body = (f"<p>Signed in as {who}. {len(items)} submission{'s' if len(items) != 1 else ''} "
                 f"name{'s' if len(items) == 1 else ''} you as guarantor.</p><p>{esc(CONSENT)}</p>" + _pending(items)
                 + '<p class="muted">These buttons work for 30 minutes; then sign in again.</p>')
-    main = f'<div class="wrap prose"><h1>Confirm a claimset</h1>{body}</div>'
-    return shell("Confirm a claimset", main, head='<meta name="robots" content="noindex">')
+    main = f'<div class="wrap prose"><h1>Confirm a submission</h1>{body}</div>'
+    return shell("Confirm a submission", main, head='<meta name="robots" content="noindex">')
 
 
 SUBMISSION_STATES = {"pending": "waiting for another guarantor", "confirmed": "confirmed, being published",
@@ -1181,6 +1176,15 @@ def person_page(orcid, docs, base_url=""):
                              "rests on.", canonical=f"{base_url}/people/{orcid}" if base_url else None)
 
 
+def not_found_page():
+    """An address that does not exist (any mistyped link): search, the library and the way home."""
+    main = ('<div class="wrap prose"><h1>We could not find that page</h1><p class="lead">The address may be mistyped, '
+            "or the page may have moved. A claimset's address looks like <code>entrylib.org/p/2026.000001</code>.</p>"
+            f'{_search_form()}<p><a href="/all">Browse all claimsets</a> · <a href="/read">Read by field</a> · '
+            '<a href="/">Home</a></p></div>')
+    return shell("Page not found", main, head='<meta name="robots" content="noindex">')
+
+
 def message_page(title, text, link=None):
     """A short page after an action: what happened, and where to go next."""
     more = f'<p><a href="{esc(link[0])}">{esc(link[1])}</a></p>' if link else ""
@@ -1193,7 +1197,9 @@ def submit_page(body):
     waiting = ('<p class="small">Waiting for your confirmation as a guarantor? '
                '<a href="/confirm">See your submissions</a>: sign in with ORCID to confirm them, without the '
                'consent link.</p>')
-    return shell("Submit a claimset", f'<div class="wrap prose">{waiting}{body}</div>',
+    intro_end = body.find("</p>") + len("</p>")                     # the guarantor's note after the introduction
+    body = body[:intro_end] + waiting + body[intro_end:] if intro_end > 3 else waiting + body
+    return shell("Submit a claimset", f'<div class="wrap prose">{body}</div>',
                  description="Submit a claimset to "
                  "EntryLib: upload a package or a claimset file; its guarantor confirms with ORCID.")
 
@@ -1328,6 +1334,7 @@ def write_fixed(published_dir, base_url):
     for name in PAGES:
         _write(published_dir / f"{name}.html", fixed_page(name, base_url))
     _write(published_dir / "site.css", _static("site.css").read_text(encoding="utf-8"))
+    _write(published_dir / "404.html", not_found_page())               # Caddy's answer to a missing static file
     subs = _subfields()                                     # for agents proposing a subfield (claimset spec §3.1)
     _write(published_dir / "subfields.json", json.dumps(
         [{"id": f"openalex:subfields/{k}", "name": v} for k, v in sorted(subs.items(), key=lambda kv: kv[1])],

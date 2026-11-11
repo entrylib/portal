@@ -294,9 +294,35 @@ window.entrylibOpen = (function () {
 
 // Copy buttons: a button names the element whose text it copies (data-copy) and what to say once it has
 // (data-copied). Without the script, or without a clipboard, the button stays hidden and the text is selected by hand.
+// A link with data-copy-url copies the text at its address (the whole reading view); without the script, or if
+// fetching or copying fails, it opens the text instead.
 (function () {
   "use strict";
   if (!navigator.clipboard) return;
+  document.querySelectorAll("a[data-copy-url]").forEach(function (a) {
+    var label = a.textContent;
+    a.addEventListener("click", function (e) {
+      if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+      e.preventDefault();
+      var copied = fetch(a.getAttribute("data-copy-url")).then(function (r) {
+        if (!r.ok) throw new Error(r.status);
+        return r.text();
+      });
+      var done = function () {
+        a.textContent = a.getAttribute("data-copied") || "Copied";
+        setTimeout(function () { a.textContent = label; }, 4000);
+      };
+      var open = function () { window.location.href = a.href; };
+      // Safari copies only within the click: hand it the pending text as a ClipboardItem.
+      if (window.ClipboardItem && navigator.clipboard.write) {
+        navigator.clipboard.write([new ClipboardItem({ "text/plain": copied.then(function (t) {
+          return new Blob([t], { type: "text/plain" });
+        }) })]).then(done, open);
+      } else {
+        copied.then(function (t) { return navigator.clipboard.writeText(t); }).then(done, open);
+      }
+    });
+  });
   document.querySelectorAll("button[data-copy]").forEach(function (b) {
     var from = document.getElementById(b.getAttribute("data-copy"));
     if (!from) return;

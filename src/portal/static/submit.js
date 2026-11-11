@@ -46,6 +46,10 @@ document.getElementById("form").addEventListener("submit", async (event) => {
     const body = await response.json();
     if (!response.ok) {
       show(problems(body.error || `Refused (${response.status}).`, body.errors));
+      // A claimset with the title of one the guarantor already has: offer to submit it as a different paper.
+      if (response.status === 409 && /new_paper/.test(body.error || "")) {
+        document.getElementById("new_paper_row").hidden = false;
+      }
       return;
     }
     const nodes = [el("p", "Received. It is waiting for the guarantor's consent.")];

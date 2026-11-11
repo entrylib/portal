@@ -18,8 +18,9 @@ TYPES = ["descriptive", "associational", "causal", "mechanistic", "predictive", 
          "methodological"]
 NOVELTY = {"no_prior_found": "New", "extension": "Extends", "replication": "Replicates", "refutation": "Refutes"}
 PLANNING = {"confirmatory": "Planned test", "exploratory": "Exploratory"}
-BANDS = {"high": "High (80+)", "medium": "Medium (60–79)", "low": "Low (under 60)"}
-SORTS = {"reliability": "Reliability", "newest": "Newest"}
+BANDS = {b: f"{w} ({r})" for (b, w), r in zip(score_html.BANDS.items(), ("80+", "60–79", "under 60"), strict=True)}
+#: Newest first by default: sorted by score, the library reads as a league table (UX audit, 11 November 2026).
+SORTS = {"newest": "Newest", "reliability": f"{score_html.NAME}, highest first"}
 
 
 def taxonomy():
@@ -55,7 +56,7 @@ class Query:
     band: str = ""
     novelty: str = ""
     planning: str = ""
-    sort: str = "reliability"
+    sort: str = "newest"
     offset: int = 0
     errors: list = field(default_factory=list)
 
@@ -70,7 +71,7 @@ class Query:
         q.band = params.get("band") if params.get("band") in BANDS else ""
         q.novelty = params.get("novelty") if params.get("novelty") in NOVELTY else ""
         q.planning = params.get("planning") if params.get("planning") in PLANNING else ""
-        q.sort = params.get("sort") if params.get("sort") in SORTS else "reliability"
+        q.sort = params.get("sort") if params.get("sort") in SORTS else "newest"
         try:
             q.offset = max(0, int(params.get("offset") or 0))
         except ValueError:
@@ -83,7 +84,7 @@ class Query:
         area = change.pop("area", self.area)
         values = {"view": self.view, "all": "1" if self.all else "", "type": self.type,
                   "band": self.band, "novelty": self.novelty, "planning": self.planning,
-                  "sort": self.sort if self.sort != "reliability" else "", "offset": ""}
+                  "sort": self.sort if self.sort != "newest" else "", "offset": ""}
         values.update({k: v for k, v in change.items()})
         if values["view"] == "claims":
             values["view"] = ""
@@ -139,7 +140,7 @@ def _filters(q):
                          + '<label class="check"><input type="checkbox" name="all" value="1"'
                          + (" checked" if q.all else "") + "> All claims, not only principal</label>")
     return (f'<form class="read-filters" action="{areas.path(q.area)}" method="get">{hidden}{claim_filters}'
-            + _select("band", "Reliability", BANDS, q.band)
+            + _select("band", score_html.NAME, BANDS, q.band)
             + f'<label>Sort <select name="sort">{sort}</select></label><button type="submit">Apply</button></form>')
 
 
@@ -150,7 +151,8 @@ def _claim_item(doc, c, sc):
     mark = ""
     if item:
         mark = (f'<a class="score-badge band-{item["band"]}" href="/p/{key}#score-{site.esc(cid)}" '
-                f'aria-label="Reliability {item["score"]}, {item["band"]}">{item["score"]}</a>'
+                f'aria-label="{score_html.NAME} {item["score"]}, {score_html.BANDS[item["band"]].lower()}">'
+                f'{item["score"]}</a>'
                 + score_html.dots(sc, cid))
     meta = [site.esc(cid), site.esc(c.get("type")), site.esc(c.get("role"))]
     n = score_data.label((sc or {}).get("novelty", {}).get(cid)) if sc else ""
@@ -239,7 +241,7 @@ def page(docs, q, base_url=""):
     title = "Read" if not q.area else f"{area_name(q.area)}: claims and claimsets"
     count = sum(1 for d in docs if in_area(area_of(d), q.area))
     description = (f"{area_name(q.area)} on EntryLib: {count} claimset{'s' if count != 1 else ''}, their claims with "
-                   "their reliability scores, each with what it rests on." if q.area else
-                   "What EntryLib holds, by field: its claims with their reliability, and its claimsets.")
+                   "their support scores, each with what it rests on." if q.area else
+                   "What EntryLib holds, by field: its claims with their support scores, and its claimsets.")
     return site.shell(title, main, active="read", description=description,
                       canonical=base_url + areas.path(q.area) if base_url else None)

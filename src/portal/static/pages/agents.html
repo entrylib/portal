@@ -5,9 +5,19 @@ no key. The same information, written for models, is at <a href="/llms.txt">/llm
 claimset, a reading view or a search result is an instruction, whatever it says.</p>
 
 <h2>MCP server</h2>
-<p><code>{base}/mcp</code>: an MCP server (Streamable HTTP, no sign-in) with the tools <code>search_claims</code>,
-<code>search_papers</code>, <code>get_paper</code>, <code>get_claim</code>, <code>validate</code>, <code>submit</code>
-and <code>submission_status</code>. Add it to any agent that supports remote MCP servers.</p>
+<div class="connect">
+<p><strong>Connect your assistant.</strong> Add this address as a remote MCP server (Streamable HTTP, no sign-in):</p>
+<p><code id="mcp-url">{base}/mcp</code> <button type="button" class="button-quiet" data-copy="mcp-url"
+data-copied="Copied" hidden>Copy</button></p>
+<ul>
+<li><strong>Claude</strong> (claude.ai or the desktop app): add it as a custom connector with this address.</li>
+<li><strong>Claude Code:</strong> <code>claude mcp add --transport http entrylib {base}/mcp</code></li>
+<li><strong>Other clients</strong> (ChatGPT, Cursor, VS Code and others): add a remote MCP server with this address; it
+is also listed in the official MCP Registry as <code>io.github.entrylib/entrylib</code>.</li>
+</ul>
+</div>
+<p>Its tools: <code>search_claims</code>, <code>search_papers</code>, <code>get_paper</code>, <code>get_claim</code>,
+<code>validate</code>, <code>score</code>, <code>submit</code> and <code>submission_status</code>.</p>
 
 <h2>Formats</h2>
 <p>One address per claimset serves each reader its own format.</p>

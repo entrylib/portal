@@ -9,9 +9,15 @@ its support lights; with an older package the lights stay and the scores remain 
 import html
 
 from . import scores as sc
+from . import text
 
 RUBRIC_URL = "https://github.com/entrylib/rubric/blob/main/RUBRIC.md"
-BANDS = {"high": "High", "medium": "Medium", "low": "Low"}
+#: The score's name on the site: the rubric's reliability score, named for what it measures (design §7.6). The files
+#: and the API keep `reliability`.
+NAME = "Support"
+#: What a band means in words (rubric §4.1), and what the score does not say, shown beside it.
+BANDS = {"high": "Well supported", "medium": "Partly supported", "low": "Weakly supported"}
+CAPTION = "Checks the record, not the science."
 DOT_WORDS = {"green": "nothing lost", "amber": "some points lost", "red": "many points lost"}
 
 
@@ -31,7 +37,7 @@ def dots(scores, cid=None):
     for name, label in _groups():
         mine = [p for p in item["problems"] if scores["problems"][p]["group"] == name and costs.get(p)]
         if mine:
-            why = "; ".join(f"−{costs[p]} {scores['problems'][p]['text']}" for p in mine)
+            why = "; ".join(f"−{costs[p]} {text.readable(scores['problems'][p]['text'])}" for p in mine)
             title = f"{label}: −{sum(costs[p] for p in mine)}. {why}"
         else:
             title = f"{label}: nothing lost"
@@ -43,7 +49,7 @@ def dots(scores, cid=None):
 
 def badge(scores, cid, small=False):
     c = scores["claims"][cid]
-    label = f"Reliability {c['score']}, {BANDS[c['band']].lower()}: why"
+    label = f"{NAME} {c['score']}, {BANDS[c['band']].lower()}: why"
     return (f'<a class="score-badge band-{c["band"]}{" small" if small else ""}" href="#score-{esc(cid)}" '
             f'data-popup="score-{esc(cid)}" aria-label="{esc(label)}">{c["score"]}</a>')
 
@@ -64,15 +70,22 @@ def marker(scores):
     return mark
 
 
-def panel_rows(scores, lights=None, issues_url=None):
+def legend():
+    """What the dots mean, in words on the page (hover does not reach touch screens or keyboards)."""
+    names = ", ".join(label.lower() for _, label in _groups())
+    return (f'<p class="dot-legend small">Dots, in order: {esc(names)}. Green: nothing lost; amber: some points; '
+            "red: many.</p>")
+
+
+def panel_rows(scores, lights=None):
     """The panel's first rows: reliability and novelty, then the claims by band (without scores: by support
     light, from the page view)."""
     if not scores or not scores.get("paper"):
         names = {"green": "checkable", "amber": "not checkable", "red": "unsupported"}
         rows = "".join(f'<li><span class="light light-{k}"></span>{(lights or {}).get(k, 0)} {v}</li>'
                        for k, v in names.items())
-        return ('<div class="panel-row"><h2>Reliability</h2><p class="score">–</p>'
-                f'<p class="small"><a href="{RUBRIC_URL}">How scores are given</a></p></div>'
+        return (f'<div class="panel-row"><h2>{NAME}</h2><p class="score">–</p>'
+                f'<p class="small">{CAPTION} <a href="/about#quality">How scores are given</a></p></div>'
                 f'<div class="panel-row"><h2>Claims</h2><ul class="lights">{rows}</ul></div>')
     p = scores["paper"]
     counts = {b: 0 for b in BANDS}
@@ -85,21 +98,17 @@ def panel_rows(scores, lights=None, issues_url=None):
             word = sc.LABELS.get(n["label"], n["label"]).split(" ")[0]
             labels[word] = labels.get(word, 0) + 1
     checks = {n["check"] for n in principal if n and n.get("checked")}
-    check = ("in question: a close match on EntryLib is not acknowledged" if "unacknowledged" in checks
-             else "no close match on EntryLib" if checks == {"none"} else
-             "close matches on EntryLib, acknowledged" if checks else "")
+    # Only a close match the authors do not acknowledge says something while the library is small.
+    check = "in question: a close match on EntryLib is not acknowledged" if "unacknowledged" in checks else ""
     novelty = ", ".join(f"{v} {k}" for k, v in labels.items()) or "–"
     rows = "".join(f'<li><span class="score-badge small band-{b}">{counts[b]}</span>{w.lower()}</li>'
                    for b, w in BANDS.items())
-    return (f'<div class="panel-row score-row"><h2>Reliability</h2>'
+    return (f'<div class="panel-row score-row"><h2>{NAME}</h2>'
             f'<p class="score-big band-{p["band"]}"><a href="#score" data-popup="score-paper">'
             f'<span class="score-num">{p["score"]}</span> <span class="score-band">{BANDS[p["band"]]}</span></a></p>'
-            f'{dots(scores)}'
-            f'<p class="small">The lowest of the principal claims: <a href="#{esc(p["lowest"])}">'
-            f'{esc(p["lowest"])}</a>. <a href="#score" data-popup="score-paper">Why</a></p>'
-            + (f'<p class="small"><a href="{esc(issues_url)}">Issues as text, for your agent</a></p>'
-               if issues_url else "")
-            +
+            f'<p class="small caption">{CAPTION}</p>{dots(scores)}{legend()}'
+            f'<p class="small">The paper scores as its weakest principal claim, <a href="#{esc(p["lowest"])}">'
+            f'{esc(p["lowest"])}</a>. <a href="#score" data-popup="score-paper">What lowered it</a></p>'
             f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
             + (f'<span class="small"> · {esc(check)}</span>' if check else "") + "</p></div>"
             f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
@@ -115,9 +124,9 @@ def _problem(scores, pid, cost=None):
     groups = dict(_groups())
     claims = ", ".join(f'<a href="#{esc(c)}">{esc(c)}</a>' for c in p["claims"])
     return (f'<li><span class="cost">−{cost if cost is not None else p["cost"]}</span> '
-            f'<span class="group">{esc(groups.get(p["group"], p["group"]))}</span> {esc(_sentence(p["text"]))}'
+            f'<span class="group">{esc(groups.get(p["group"], p["group"]))}</span> {text.html(_sentence(p["text"]))}'
             + (f' <span class="small">In {claims}.</span>' if claims and cost is None else "")
-            + f' <span class="fix">To remove it: {esc(p["fix"])}</span></li>')
+            + f' <span class="fix">To remove it: {text.html(p["fix"])}</span></li>')
 
 
 def _claim_explain(scores, cid):
@@ -154,7 +163,7 @@ def section(scores, issues_url=None):
     p = scores.get("paper")
     if p:
         problems = "".join(_problem(scores, pid) for pid in p["problems"])
-        out.append(f'<div class="score-explain" id="score-paper"><h3>Reliability of the paper: '
+        out.append(f'<div class="score-explain" id="score-paper"><h3>{NAME} of the paper: '
                    f'<span class="band-{p["band"]}">{p["score"]}, {BANDS[p["band"]]}</span></h3>{note}'
                    f'<p>The paper scores as its lowest principal claim, <a href="#{esc(p["lowest"])}">'
                    f'{esc(p["lowest"])}</a>. Open problems in the principal claims and what they rest on, each '
