@@ -123,7 +123,7 @@ main { min-height: 60vh; }
   border-top: 2px solid var(--ink); padding-top: 10px; }
 .section-head h2 { margin: 0; font-size: 26px; }
 .section-head p { margin: 0; }
-.cards { display: grid; gap: 0; }
+.cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }   /* a card never wider than the page */
 .card { padding: 18px 0; border-bottom: 1px solid var(--rule-light); }
 .card h3 { margin: 6px 0 4px; font-size: 21px; }
 .card h3 a { color: var(--ink); text-decoration: none; }
