@@ -66,7 +66,7 @@ def test_without_scores_the_page_shows_a_dash():
     doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
     page = site.claimset_page(doc, base_url="https://entrylib.org", listing=[])
     assert '<p class="score">–</p>' in page and 'id="score"' not in page and 'class="lights"' in page
-    assert score_html.decorate("<p>x</p>", None) == "<p>x</p>"
+    assert score_html.marker(None)({"id": "C1"}, "claim") is None              # the package's light then
 
 
 def test_close_match_with_an_earlier_claimset(env):

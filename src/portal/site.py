@@ -587,15 +587,28 @@ def person(c, where):
     return f'<span class="who">{ICON["human"]}{name}{ident}</span>'
 
 
-def render(doc, file_url=None, ref_text=None):
-    """The claimset package's page view of `doc`, with the site's choices: how numbers are written, how people are
-    shown, how references given by DOI are written out (each where the installed package takes it)."""
+def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
+    """The claimset package's page view of `doc`, with the site's choices (each where the installed package takes
+    it): how numbers are written, how people are shown, how references given by DOI are written out, what marks a
+    claim (its score and dots, and its novelty, design §7.6) and which claims link to a page of their own (`pages`,
+    the current version's principal claims, design §7.8)."""
     extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
     if _accepts(cshtml.render_parts, "number"):                           # claimset 0.40.8
         extra["number"] = number
     if _accepts(cshtml.render_parts, "person"):                           # claimset 0.41.5
         extra["person"] = person
+    if _accepts(cshtml.render_parts, "marker"):                           # claimset 0.41.6
+        extra["marker"] = score_html.marker(scores)
+        key = ids.url_key(doc["paper"]["id"])
+        extra["claim_url"] = lambda cid: f"/p/{key}/{cid}" if cid in pages else None
     return cshtml.render_parts(doc, file_url=file_url, **extra)
+
+
+def contents(sections, more=""):
+    """The contents of a page: back to the top, then the package's sections (id, title, count) and `more`."""
+    return ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+            + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
+                                + "</li>" for sid, t, c in sections) + f"{more}</ol></nav>")
 
 
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
@@ -604,7 +617,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     scores (scores.compute), or None to show "–"."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
-    parts = render(doc, file_url, ref_text)
+    parts = render(doc, file_url, ref_text, scores, claim_pages(doc) if not current or current == n else ())
     origin = parts["origin"]
     top = [f'<span class="origin">{esc(origin)}</span>', _status(p), f'<span class="id">{esc(p["id"])}</span>',
            f"version {esc(n)} · {esc(p.get('date'))}"]
@@ -614,18 +627,15 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     if current and current != n:
         newer = (f'<p class="notice notice-warn">This is version {esc(n)}. '
                  f'<a href="/p/{key}">The current version is {esc(current)}</a>.</p>')
-    score_item = '<li><a href="#score">Score</a></li>' if scores else ""
-    nav = parts["nav"].replace("<ol>", "<ol>" + TOC_TOP, 1)
-    nav = nav.replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
-                                              f'<span class="count">{len(listing)}</span></li></ol></nav>')
-    body = link_claims(parts["body"], key, claim_pages(doc)) if not current or current == n else parts["body"]
+    nav = contents(parts["sections"], ('<li><a href="#score">Score</a></li>' if scores else "")
+                   + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>')
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
-            f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
+            f'{nav}<article class="cs-body">{parts["body"]}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
     first = _principal(doc)[:1]
     description = plain(first[0].get("statement")) if first else ""
@@ -645,7 +655,6 @@ CLAIM_ID = re.compile(r"C[0-9]+")
 #: The order of a claim page's sections: the claim first, then what it rests on.
 CLAIM_SECTIONS = ("principal", "supporting", "evidence", "limitations", "assumptions", "definitions", "context",
                   "references", "artefacts")
-SECTION_START = re.compile(r'\n(?=<section class="cs-section" id=")')
 
 
 def claim_pages(doc):
@@ -653,16 +662,6 @@ def claim_pages(doc):
     return [c["id"] for c in _principal(doc)
             if c.get("role") == "principal" and isinstance(c.get("id"), str) and CLAIM_ID.fullmatch(c["id"])
             and not any(isinstance(x, dict) and x.get("kind") == "assumption" for x in c.get("support") or [])]
-
-
-def link_claims(body, key, cids):
-    """The page view with the ID of each claim in `cids` linked to the claim's page."""
-    if not cids:
-        return body
-    pattern = re.compile(r'(<div class="cs-item cs-claim[^"]*" id="(' + "|".join(map(re.escape, cids))
-                         + r')"><p class="cs-claim-meta">(?:<span class="light[^"]*"[^>]*></span>)?)\2(?= ·|<)')
-    return pattern.sub(lambda m: f'{m.group(1)}<a class="claim-page" href="/p/{key}/{m.group(2)}" '
-                                 f'title="This claim on its own page">{m.group(2)}</a>', body)
 
 
 def plain_text(text):
@@ -676,25 +675,27 @@ def _shorten(text, limit):
     return text[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
+#: How a claim page names the sections that differ from a claimset page's.
+CLAIM_TITLES = {"principal": ("Principal claims", "The claim"),
+                "supporting": ("Supporting claims", "Claims it rests on")}
+
+
 def _claim_sections(parts):
-    """The sections of a claim bundle's page view, the claim first; the In brief section left out, since the page's
-    heading is the claim. As rendered if the sections cannot be told apart."""
-    shown = [sid for sid, _, _ in parts.get("sections") or []]
-    pieces = SECTION_START.split(parts["body"])
-    if not shown or len(pieces) != len(shown) or any(
-            not piece.startswith(f'<section class="cs-section" id="{sid}"')
-            for sid, piece in zip(shown, pieces, strict=True)):
-        return parts["body"], []
-    by = dict(zip(shown, pieces, strict=True))
-    order = [sid for sid in CLAIM_SECTIONS if sid in by]
-    titles = {sid: (title, n) for sid, title, n in parts["sections"]}
-    by["principal"] = by["principal"].replace("<h2>Principal claims</h2>", "<h2>The claim</h2>", 1) \
-        if "principal" in by else None
-    titles["principal"] = ("The claim", 0)
-    titles["supporting"] = ("Claims it rests on", titles.get("supporting", ("", 0))[1])
-    if "supporting" in by:
-        by["supporting"] = by["supporting"].replace("<h2>Supporting claims</h2>", "<h2>Claims it rests on</h2>", 1)
-    return "\n".join(by[sid] for sid in order), [(sid, *titles[sid]) for sid in order]
+    """The sections of a claim bundle's page view (the package's blocks), the claim first; In brief is left out,
+    since the page's heading is the claim."""
+    blocks = parts.get("blocks") or {}
+    titles = {sid: (title, n) for sid, title, n in parts.get("sections") or []}
+    order = [sid for sid in CLAIM_SECTIONS if sid in blocks]
+    out, shown = [], []
+    for sid in order:
+        block, (title, n) = blocks[sid], titles[sid]
+        if sid in CLAIM_TITLES:
+            old, title = CLAIM_TITLES[sid]
+            block = block.replace(f"<h2>{old}</h2>", f"<h2>{title}</h2>", 1)
+            n = 0 if sid == "principal" else n
+        out.append(block)
+        shown.append((sid, title, n))
+    return "\n".join(out), shown
 
 
 def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None):
@@ -705,15 +706,12 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     key, n = ids.url_key(p["id"]), p.get("version")
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
     bundle = claim_bundle(doc, cid)
-    parts = render(bundle, file_url, ref_text)
+    parts = render(bundle, file_url, ref_text, scores, claim_pages(doc))
     body, sections = _claim_sections(parts)
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""
     item = (scores or {}).get("claims", {}).get(cid) if scores else None
-    score_item = '<li><a href="#score">Score</a></li>' if item else ""
-    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
-           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
-                     + "</li>" for sid, t, c in sections) + f"{score_item}</ol></nav>")
+    nav = contents(sections, '<li><a href="#score">Score</a></li>' if item else "")
     top = [f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
            esc(p.get("date"))]
     if item:
@@ -740,7 +738,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
             f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}'
             f'{ask_ai(doc, base_url, cid)}</div>'
             f'{panel}'
-            f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
+            f'{nav}<article class="cs-body">{body}'
             f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}</article></div>')
     statement = plain_text(claim.get("statement"))
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}/{esc(cid)}.json">'
