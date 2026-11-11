@@ -4,7 +4,7 @@ __version__ = "0.1.0"
 
 #: The oldest claimset package the portal works with. There is no upper bound: newer releases are expected to
 #: accept everything older ones accepted.
-MIN_CLAIMSET = "0.41.4"                  # package.build_from: the MCP tools build a package from files sent inline
+MIN_CLAIMSET = "0.41.6"                  # render_parts person, marker, claim_url, blocks: the site draws people, claims
 
 
 def claimset_ok(version):

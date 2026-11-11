@@ -2,13 +2,11 @@
 that explains them. The numbers come from the rubric (scores.py); this module only shows them. Everything taken from
 a claimset (limitation and assumption statements in a problem's text) is escaped.
 
-The claim markers are put into the page view the claimset package rendered, in place of its support lights, by the
-package's stable markup (`cs-item cs-claim … id`, `cs-claim-meta`, `light`); if that markup changes, the lights stay
-and the scores remain in the panel and the section.
+The claim markers are given to the claimset package as its `marker` (claimset 0.41.6), which puts them in place of
+its support lights; with an older package the lights stay and the scores remain in the panel and the section.
 """
 
 import html
-import re
 
 from . import scores as sc
 
@@ -50,32 +48,20 @@ def badge(scores, cid, small=False):
             f'data-popup="score-{esc(cid)}" aria-label="{esc(label)}">{c["score"]}</a>')
 
 
-CLAIM = re.compile(r'(<div class="cs-item cs-claim[^"]*" id="([^"]+)"><p class="cs-claim-meta">)'
-                   r'(<span class="light[^"]*"[^>]*></span>)?((?:(?!</p>).)*)</p>', re.S)
-BRIEF = re.compile(r'<li><span class="light[^"]*"[^>]*></span>(<span>(?:(?!</li>).)*?'
-                   r'<a class="cs-id" href="#([^"]+)">[^<]*</a></span></li>)', re.S)
-
-
-def decorate(body, scores):
-    """The page view with each scored claim's light replaced by its score and dots, and its novelty added."""
-    if not scores:
-        return body
-
-    def claim(m):
-        cid = m.group(2)
-        if cid not in scores["claims"]:
-            return m.group(0)
+def marker(scores):
+    """What marks a claim on the page (claimset's render_parts `marker`): its score and dots before its meta line and
+    its novelty after it; In brief, its score. None for a claim without a score: the package then shows its support
+    light (an assumption has neither)."""
+    def mark(c, where):
+        cid = c.get("id")
+        if not scores or cid not in scores["claims"]:
+            return None
+        if where == "brief":
+            return badge(scores, cid, small=True)
         n = sc.label(scores["novelty"].get(cid))
-        novelty = f'<span class="novelty"> · novelty: {esc(n)}</span>' if n else ""
-        return f'{m.group(1)}{badge(scores, cid)}{dots(scores, cid)}{m.group(4)}{novelty}</p>'
-
-    def brief(m):
-        cid = m.group(2)
-        if cid not in scores["claims"]:
-            return m.group(0)
-        return f"<li>{badge(scores, cid, small=True)}{m.group(1)}"
-
-    return BRIEF.sub(brief, CLAIM.sub(claim, body))
+        after = f'<span class="novelty"> · novelty: {esc(n)}</span>' if n else ""
+        return badge(scores, cid) + dots(scores, cid), after
+    return mark
 
 
 def panel_rows(scores, lights=None, issues_url=None):

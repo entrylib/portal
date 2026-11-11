@@ -187,7 +187,7 @@ def test_claim_pages(env):
     assert f'href="/p/{KEY}/C2.txt"' in body and f'href="/p/{KEY}#C2"' in body
     sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', body)
     assert sections[0] == "principal" and "brief" not in sections and "definitions" in sections
-    assert (out / "p" / f"{KEY}.html").read_text().count(f'class="claim-page" href="/p/{KEY}/C2"') == 1
+    assert (out / "p" / f"{KEY}.html").read_text().count(f'class="cs-claim-page" href="/p/{KEY}/C2"') == 1
     sitemap = (out / "sitemap.xml").read_text()
     assert f"<loc>{BASE}/p/{KEY}/C2</loc>" in sitemap and f"<loc>{BASE}/p/{KEY}/C1</loc>" not in sitemap
 
@@ -204,6 +204,8 @@ def test_claim_pages_follow_the_principal_claims(tmp_path):
     assert site.claim_pages(doc) == ["C2"]
 
 
-def test_claim_page_sections_as_rendered_when_unrecognised():
-    parts = {"body": "<p>one</p>", "sections": [("principal", "Principal claims", 1)]}
-    assert site._claim_sections(parts) == ("<p>one</p>", [])
+def test_claim_page_sections_come_from_the_packages_blocks():
+    parts = {"blocks": {"brief": "<b/>", "principal": "<h2>Principal claims</h2>x", "evidence": "<h2>Evidence</h2>e"},
+             "sections": [("brief", "In brief", 0), ("principal", "Principal claims", 1), ("evidence", "Evidence", 2)]}
+    assert site._claim_sections(parts) == ("<h2>The claim</h2>x\n<h2>Evidence</h2>e",
+                                           [("principal", "The claim", 0), ("evidence", "Evidence", 2)])
