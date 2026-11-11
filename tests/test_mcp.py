@@ -131,3 +131,13 @@ def test_search_and_read(app_client):
                        (f"{concept}@vx#C1", "version"), (f"{concept}@v9#C1", "not published")):
         err, text = call(app_client, "get_claim", id=bad)
         assert err and words in text, (bad, text)
+
+
+def test_registry_listing():
+    """server.json (the official MCP Registry's listing, docs/deploy.md) names the server's address and stays within
+    the registry's limits."""
+    from pathlib import Path
+    listing = json.loads((Path(__file__).parent.parent / "server.json").read_text())
+    assert listing["name"] == "io.github.entrylib/entrylib" and listing["$schema"].endswith("server.schema.json")
+    assert listing["remotes"] == [{"type": "streamable-http", "url": "https://entrylib.org/mcp"}]
+    assert 0 < len(listing["description"]) <= 100 and listing["version"]
