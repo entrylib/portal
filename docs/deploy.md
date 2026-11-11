@@ -134,6 +134,22 @@ real paper you want published, or skip this until you have one.
   `.env` as `PORTAL_INDEXNOW_KEY=<key>` and run `sudo /opt/entrylib/portal/deploy/launch.sh`. The portal serves it at
   `https://entrylib.org/indexnow.txt`. Without the key nothing is sent.
 
+## MCP directories
+
+`server.json` at the repository's root lists the MCP server in the official MCP Registry
+(https://registry.modelcontextprotocol.io), from which MCP clients and other directories take their lists. Its name,
+`io.github.entrylib/entrylib`, is proved by signing in to GitHub as an owner of the `entrylib` organisation. From a
+clone of this repository, on any computer:
+
+1. Install the publisher: `brew install mcp-publisher`, or the binary for your system from
+   https://github.com/modelcontextprotocol/registry/releases.
+2. `mcp-publisher login github`: it prints a code to enter at https://github.com/login/device.
+3. `mcp-publisher publish`.
+4. Check: `curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.entrylib/entrylib"`.
+
+When the listing changes (the description, or the server's address), raise `version` in `server.json` and publish
+again: a version can be published once. `tests/test_mcp.py` keeps the address and the name in step with the portal.
+
 ## Running it
 
 - **Reboots and power cuts** need nothing: Docker starts at boot and every container has `restart: unless-stopped`.
