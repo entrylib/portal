@@ -12,3 +12,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # The image's Python is chosen with the CI's (tests run on 3.12): a new Python is a change of our own, made when
+    # both move together and its wheels exist, not a weekly update. Fixes within a version still come.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
