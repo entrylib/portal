@@ -265,6 +265,14 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 - **Filters:** claim type, novelty label, planned or exploratory, reliability band; **sort** by reliability or newest; 50 a page. Search (`/search`) stays at the top.
 - Scores come from the rubric over each current file, kept in memory per version and rubric version; when the library grows, the indexer should store them in the database instead.
 
+### 7.8 Search engines and link previews
+
+- **Google Scholar:** every claimset page carries the Highwire tags Scholar reads (`citation_title`, `citation_author` for the people a citation names, publication and online dates, publisher EntryLib, keywords, the page as abstract and full text, `citation_reference` for references with a DOI).
+- **schema.org (JSON-LD):** a claimset is a `ScholarlyArticle` (authors with their ORCID iDs, dates, licence, identifier, subfield, keywords, references, the JSON file as associated media); the home page names the `Organization` and the `WebSite`. JSON-LD is data in the page, never run; "<" in it is escaped.
+- **Link previews:** Open Graph and Twitter tags, with one card for the site (`/og-card.png`, 1200×630); a claimset's preview also gives its reliability.
+- **Areas** of the Read page have their own addresses, `/read/<domain>/<field>/<subfield>` by name, each with its own title, description and canonical address (filters never make a new canonical page), listed in the sitemap when they hold a claimset; `/read?area=` answers with a redirect.
+- **IndexNow:** when a version is published the portal tells IndexNow (Bing, Yandex and others) its addresses at once, if `PORTAL_INDEXNOW_KEY` is set; the key is served at `/indexnow.txt`. Best effort; the sitemap lists everything anyway.
+
 ## 8. Limits and spam controls
 
 | Limit | Value (initial) |

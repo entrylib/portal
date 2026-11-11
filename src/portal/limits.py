@@ -13,8 +13,8 @@ import os
 
 #: The design's values (§8) are 2 new claimsets per guarantor in any seven days and 3 versions per claimset in any
 #: day. Raised while the library is seeded with its owner's claimsets: issue #64 returns them to the design's.
-NEW_PER_WEEK = int(os.environ.get("PORTAL_MAX_NEW_PER_WEEK", "20"))
-VERSIONS_PER_DAY = int(os.environ.get("PORTAL_MAX_VERSIONS_PER_DAY", "10"))
+NEW_PER_WEEK = int(os.environ.get("PORTAL_MAX_NEW_PER_WEEK") or "20")         # empty (compose.yaml): the default
+VERSIONS_PER_DAY = int(os.environ.get("PORTAL_MAX_VERSIONS_PER_DAY") or "10")
 
 WEEK, DAY = dt.timedelta(days=7), dt.timedelta(days=1)
 

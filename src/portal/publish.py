@@ -36,7 +36,7 @@ from claimset.validate import (
     with_verifiability,
 )
 
-from . import ids
+from . import ids, indexnow
 from .indexer import index_version
 from .registry import dump
 from .screening import SCREENING_VERSION
@@ -214,4 +214,5 @@ def publish(source, *, conn, registry, store, classifier, published_dir, base_ur
     prep = prepare(source, conn=conn, registry=registry, store=store, classifier=classifier, today=today)
     registry.write_version(prep.folder, prep.version, prep.files, prep.message)
     index_version(conn, registry, prep.folder, prep.version, published_dir, base_url)
+    indexnow.notify(indexnow.claimset_urls(prep.concept, prep.version, base_url), base_url)   # search engines
     return prep.concept, prep.version

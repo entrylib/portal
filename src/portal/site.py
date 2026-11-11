@@ -25,7 +25,7 @@ from pathlib import Path
 
 from claimset import html as cshtml
 
-from . import ids, limits, score_html, specs
+from . import areas, ids, indexnow, limits, score_html, specs
 from . import scores as score_data
 
 SITE = "EntryLib"
@@ -509,8 +509,105 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">'
             f'<link rel="alternate" type="application/x-bibtex" href="/p/{key}@v{n}.bib">')
     canonical = f"{base_url}/p/{key}" if not current or current == n else f"{base_url}/p/{key}@v{n}"
+    head += claimset_meta(doc, base_url, canonical, first_date=(listing[0].get("date") if listing else None),
+                          scores=scores)
     return shell(p.get("title", ""), main, active="read", description=description, head=head, canonical=canonical,
                  script="/page.js")
+
+
+# --- what search engines and link previews read (design §7.8) ---------------------------------------------------------
+
+#: The card a shared link shows (static/icons/og-card.png, written at the site's root).
+OG_IMAGE = "/og-card.png"
+
+
+def _ld(data):
+    """A JSON-LD block: data, never run (no script is executed for application/ld+json); "<" escaped so that no text
+    in it can close the element."""
+    return ('<script type="application/ld+json">' + json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+            + "</script>")
+
+
+def _og(title, description, url, base_url, kind="website", extra=""):
+    return (f'<meta property="og:site_name" content="{SITE}"><meta property="og:type" content="{kind}">'
+            f'<meta property="og:title" content="{esc(title)}">'
+            f'<meta property="og:description" content="{esc(description)}">'
+            f'<meta property="og:url" content="{esc(url)}">'
+            f'<meta property="og:image" content="{esc(base_url)}{OG_IMAGE}">'
+            '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">'
+            f'<meta property="og:image:alt" content="{SITE}: The Open Library of Machine Readable Entries">'
+            '<meta name="twitter:card" content="summary_large_image">' + extra)
+
+
+def _licence_url(licence):
+    return f"https://spdx.org/licenses/{licence}.html" if isinstance(licence, str) and licence else None
+
+
+def claimset_meta(doc, base_url, url, first_date=None, scores=None):
+    """The head of a claimset page for search engines, Google Scholar and link previews: Highwire citation tags (what
+    Scholar reads), schema.org ScholarlyArticle as JSON-LD, Open Graph."""
+    p = doc["paper"]
+    title = p.get("title") or ""
+    people, _ = cited_people(doc)
+    first = _principal(doc)[:1]
+    description = plain(first[0].get("statement")) if first else ""
+    date = str(p.get("date") or "")[:10]
+    first_date = str(first_date or date)[:10]
+    kw = (p.get("classification") or {}).get("keywords") if isinstance(p.get("classification"), dict) else None
+    kw = [k for k in kw if isinstance(k, str)] if isinstance(kw, list) else []
+    tags = [("citation_title", title)] + [("citation_author", c.get("name")) for c in people if c.get("name")]
+    tags += [("citation_publication_date", first_date.replace("-", "/")),
+             ("citation_online_date", date.replace("-", "/")),
+             ("citation_publisher", SITE), ("citation_language", "en"), ("citation_abstract_html_url", url),
+             ("citation_fulltext_html_url", url)]
+    if kw:
+        tags.append(("citation_keywords", "; ".join(kw)))
+    for b in doc.get("references") or []:
+        if isinstance(b, dict) and b.get("id_type") == "doi" and b.get("target"):
+            tags.append(("citation_reference", f"citation_doi={b['target']}"))
+    highwire = "".join(f'<meta name="{k}" content="{esc(v)}">' for k, v in tags if v)
+
+    def person(c):
+        d = {"@type": "Person", "name": c.get("name")}
+        if c.get("orcid"):
+            d["identifier"] = d["sameAs"] = f"https://orcid.org/{c['orcid']}"
+        return d
+    article = {"@context": "https://schema.org", "@type": "ScholarlyArticle", "headline": title[:110], "name": title,
+               "url": url, "identifier": f"{p.get('id')}@v{p.get('version')}", "inLanguage": "en",
+               "datePublished": first_date, "dateModified": date, "author": [person(c) for c in people],
+               "publisher": {"@type": "Organization", "name": SITE, "url": base_url,
+                             "logo": {"@type": "ImageObject", "url": f"{base_url}/img/entrylib-logo.png"}},
+               "isAccessibleForFree": True, "description": description,
+               "abstract": " ".join(plain(c.get("statement")) for c in _principal(doc)[:3]),
+               "encodingFormat": "text/html",
+               "associatedMedia": {"@type": "MediaObject", "contentUrl": url + ".json",
+                                   "encodingFormat": "application/json"}}
+    if _licence_url(p.get("licence")):
+        article["license"] = _licence_url(p.get("licence"))
+    if kw:
+        article["keywords"] = kw
+    if subfield_name(doc):
+        article["about"] = {"@type": "Thing", "name": subfield_name(doc)}
+    refs = [f"https://doi.org/{b['target']}" for b in doc.get("references") or []
+            if isinstance(b, dict) and b.get("id_type") == "doi" and b.get("target")]
+    if refs:
+        article["citation"] = [{"@type": "CreativeWork", "sameAs": r} for r in refs]
+    paper = (scores or {}).get("paper") if scores else None
+    extra = f'<meta property="article:published_time" content="{esc(first_date)}">'
+    if paper:
+        extra += ('<meta name="twitter:label1" content="Reliability">'
+                  f'<meta name="twitter:data1" content="{paper["score"]}, {paper["band"]}">')
+    return highwire + _ld(article) + _og(title, description, url, base_url, "article", extra)
+
+
+def home_meta(base_url):
+    """The home page's head: who publishes the site (schema.org Organization and WebSite) and its link preview."""
+    org = {"@context": "https://schema.org", "@type": "Organization", "name": SITE, "url": base_url,
+           "logo": f"{base_url}/img/entrylib-logo.png", "email": CONTACT, "sameAs": [SOURCE_CODE]}
+    web = {"@context": "https://schema.org", "@type": "WebSite", "name": SITE, "url": base_url,
+           "description": "The Open Library of Machine Readable Entries: research papers as claims with what each "
+                          "rests on, for people and AI."}
+    return _ld(org) + _ld(web) + _og(SITE, web["description"], base_url + "/", base_url)
 
 
 # --- cards, home, all, feed -------------------------------------------------------------------------------------------
@@ -562,7 +659,7 @@ def _search_form(q="", kind="papers", big=False):
             '<button type="submit">Search</button></form>')
 
 
-def home(docs):
+def home(docs, base_url=None):
     """The home page; `docs` are the current versions, newest first."""
     cards = "".join(card(d) for d in docs[:RECENT]) or '<p class="muted">Nothing is published yet.</p>'
     intro = _static("pages/home.html").read_text(encoding="utf-8")
@@ -571,7 +668,8 @@ def home(docs):
             f'<p><a href="/all">All claimsets</a> · <a href="/feed.xml">RSS</a></p></div>'
             f'<div class="cards">{cards}</div></section></div>')
     return shell(SITE, main, description="EntryLib publishes research in a form that both people and AI can read "
-                 "and check: each paper broken down into its findings, each with what it rests on.")
+                 "and check: each paper broken down into its findings, each with what it rests on.",
+                 head=home_meta(base_url) if base_url else "", canonical=f"{base_url}/" if base_url else None)
 
 
 def all_page(docs):
@@ -839,7 +937,7 @@ def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=N
 def write_listings(published_dir, base_url, docs):
     """The pages that list claimsets: home, all claimsets and the feed. `docs`: current versions, newest first."""
     published_dir = Path(published_dir)
-    _write(published_dir / "index.html", home(docs))
+    _write(published_dir / "index.html", home(docs, base_url))
     _write(published_dir / "all.html", all_page(docs))
     _write(published_dir / "feed.xml", feed(docs, base_url))
     _write(published_dir / "sitemap.xml", sitemap(docs, base_url))
@@ -851,7 +949,7 @@ SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/spec/"]
 
 def sitemap(docs, base_url):
     """/sitemap.xml: the site's pages and the current page of every claimset, with the date it last changed."""
-    urls = [f"<url><loc>{esc(base_url + path)}</loc></url>" for path in SITEMAP_PAGES]
+    urls = [f"<url><loc>{esc(base_url + path)}</loc></url>" for path in SITEMAP_PAGES + areas.paths(docs)]
     for d in docs:
         p = d["paper"]
         urls.append(f"<url><loc>{esc(base_url)}/p/{ids.url_key(p['id'])}</loc>"
@@ -882,6 +980,8 @@ def write_fixed(published_dir, base_url):
     _write(published_dir / "robots.txt", _static("robots.txt").read_text(encoding="utf-8").replace("{base}", base_url))
     _write(published_dir / "page.js", _static("page.js").read_text(encoding="utf-8"))
     _write(published_dir / ".well-known" / "security.txt", security_txt(base_url))
+    if indexnow.key():                                       # IndexNow checks the key against this file
+        _write(published_dir / "indexnow.txt", indexnow.key() + "\n")
     _write(published_dir / "claimset.css", cshtml.stylesheet())
     for f in Path(str(_static("icons"))).iterdir():          # favicons and the manifest, at the site's root
         if f.is_file():
