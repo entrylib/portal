@@ -29,7 +29,7 @@ from . import areas, ids, indexnow, limits, score_html, specs
 from . import scores as score_data
 from .text import html as plain_html
 from .text import one_line as plain_text
-from .text import plain
+from .text import plain, readable
 
 SITE = "EntryLib"
 CONTACT = "mail@entrylib.org"
@@ -57,6 +57,8 @@ PAGES = {
     "agents": ("agents.html", "For agents", "agents",
                "The MCP server, the API, the formats and the limits for programs and AI agents."),
     "privacy": ("privacy.html", "Privacy", None, "What EntryLib records about people, and why."),
+    "convert": ("convert.html", "Turn your paper into a claimset", "about",
+                "How an author turns their own paper into a claimset with their AI agent, and why."),
     "how-to-judge": ("how-to-judge.html", "How to judge an entry", "about",
                      "What to look at before relying on a claim on EntryLib, and what its scores do not say."),
     "before-you-submit": ("before-you-submit.html", "Before you submit", "about",
@@ -65,7 +67,8 @@ PAGES = {
 
 #: How a claimset's page works, shown in the pop-up of its first line and on About (design §7.4): written once.
 HOW_TO_READ = """<ol>
-<li><strong>In brief</strong> gives the paper's main findings, its principal claims, in a few sentences.</li>
+<li><strong>In brief</strong> gives the paper in a few sentences of plain language, or, without them, its main
+findings: its principal claims.</li>
 <li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
 the record, not the science. Click the score to see what lowered it.</li>
 <li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
@@ -372,6 +375,22 @@ def when(iso):
     return f"{t.day} {t:%B %Y} at {t:%H:%M} UTC"
 
 
+def _summary(doc):
+    """The authors' plain-language summary (claimset spec v0.41 §3.1, `paper.summary`), or None."""
+    text = (doc.get("paper") or {}).get("summary")
+    return " ".join(text.split()) if isinstance(text, str) and text.strip() else None
+
+
+def _lead_text(doc):
+    """What a paper is about, in a line or two, for search engines and link previews: its summary if it has one,
+    else its first principal claim."""
+    summary = _summary(doc)
+    if summary:
+        return _shorten(readable(summary), 300)
+    first = _principal(doc)[:1]
+    return plain(first[0].get("statement")) if first else ""
+
+
 def day(iso):
     """'10 November 2026' from an ISO 8601 date, or the text as given."""
     try:
@@ -671,8 +690,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{parts["body"]}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
-    first = _principal(doc)[:1]
-    description = plain(first[0].get("statement")) if first else ""
+    description = _lead_text(doc)
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
             f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">'
             f'<link rel="alternate" type="application/x-bibtex" href="/p/{key}@v{n}.bib">')
@@ -835,8 +853,7 @@ def claimset_meta(doc, base_url, url, first_date=None, scores=None):
     p = doc["paper"]
     title = p.get("title") or ""
     people, _ = cited_people(doc)
-    first = _principal(doc)[:1]
-    description = plain(first[0].get("statement")) if first else ""
+    description = _lead_text(doc)
     date = str(p.get("date") or "")[:10]
     first_date = str(first_date or date)[:10]
     kw = (p.get("classification") or {}).get("keywords") if isinstance(p.get("classification"), dict) else None
@@ -916,7 +933,9 @@ def card(doc):
     if src:
         who += f" · from {esc(src)}"
     principal = _principal(doc)
-    first = f'<p class="card-claim">{plain_html(principal[0].get("statement"))}</p>' if principal else ""
+    summary = _summary(doc)
+    first = (f'<p class="card-claim card-summary">{plain_html(summary)}</p>' if summary else
+             f'<p class="card-claim">{plain_html(principal[0].get("statement"))}</p>' if principal else "")
     claims = _claims(doc)
     counts = [f"{len(principal)} principal claim{'s' if len(principal) != 1 else ''}",
               f"{len(claims)} claim{'s' if len(claims) != 1 else ''}"]
@@ -1365,7 +1384,8 @@ def write_listings(published_dir, base_url, docs):
 
 
 #: The site's own pages that search engines should know, besides the claimsets.
-SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/how-to-judge", "/before-you-submit", "/spec/"]
+SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/how-to-judge", "/before-you-submit", "/convert",
+                 "/spec/"]
 
 
 def sitemap(docs, base_url):

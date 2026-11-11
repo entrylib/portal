@@ -1,0 +1,49 @@
+<h1>Turn your paper into a claimset</h1>
+<p class="lead">You have written a paper, perhaps already published. Your AI agent can turn it into a claimset: the
+same research as separate claims, each with its evidence, conditions and limits, which you check and publish here.
+It takes your agent the work and you the checking. Only the paper's authors do this.</p>
+
+<h2>Why bother</h2>
+<ul>
+<li><strong>AI assistants read it right.</strong> People increasingly meet research through an assistant. Given a
+PDF, it summarises what it guesses matters; given a claimset, it finds each of your findings with the conditions it
+holds under and what it rests on, and cites it exactly (<code>entrylib:2026.000001@v1#C3</code>).</li>
+<li><strong>Each finding has its own page and score.</strong> Every principal claim gets a page and a Support score
+showing how fully the paper's record backs it, and what would back it more (<a href="/about#quality">how</a>).</li>
+<li><strong>It is found where research is now searched.</strong> Claimsets are listed for search engines and answer
+engines, and any assistant can search and read them through EntryLib's <a href="/agents">MCP server</a>.</li>
+<li><strong>It stays yours and stays current.</strong> You are its responsible researcher. A correction is a new
+version, every version is kept, and the claimset links to the published paper. Publishing is free, with no account
+beyond your ORCID iD.</li>
+</ul>
+
+<h2>How</h2>
+<ol>
+<li>Give your agent the paper (the published or accepted version, with its supplementary material) and the message
+below.</li>
+<li>Answer its questions: that you are an author, which author answers for the claimset, its licence, which findings
+matter most.</li>
+<li>Check what it gives you: every claim, with where in the paper it comes from. This is the part only you can do.</li>
+<li>Approve the short plain-language summary it drafts; it is shown first on the paper's page.</li>
+<li>Let it submit, then confirm by signing in with ORCID within 48 hours. See <a href="/before-you-submit">Before
+you submit</a>.</li>
+</ol>
+
+<h2>The message for your agent</h2>
+<div class="connect">
+<pre id="convert-prompt">I am an author of the attached paper and want to publish it on EntryLib (https://entrylib.org) as a claimset.
+
+Follow the claimset-from-paper skill. If you can run commands: pip install claimset, then claimset guide claimset-from-paper, and the skills and specification it names. If you cannot: read https://github.com/entrylib/claimset/blob/main/skills/claimset-from-paper/SKILL.md and what it names.
+
+- Ask me its questions before you build anything.
+- Use only what the paper says: add nothing, drop no condition, and keep results where the method did worse.
+- Draft a plain-language summary of at most 150 words for me to approve.
+- Before submitting, give me every claim with where it comes from in the paper, so I can check it.
+- Validate the file, and submit only when I say so.</pre>
+<p><button type="button" class="button-quiet" data-copy="convert-prompt" data-copied="Copied" hidden>Copy the
+message</button></p>
+</div>
+<p>Agents that can run commands (Claude Code, Codex, Cursor and others) do all of it. A chat assistant without them
+can still write the claimset; connect EntryLib's <a href="/agents">MCP server</a> so it can check and submit it, or
+upload the file it gives you at <a href="/submit">Submit</a>, which checks it first.</p>
+<p>Not an author? A paper by others is not submitted here.</p>

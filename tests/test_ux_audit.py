@@ -151,3 +151,25 @@ def test_the_two_new_pages():
         assert f"/{name}" in site.SITEMAP_PAGES and f" /{name} " in caddy
     assert "nothing on EntryLib is peer review" in site.fixed_page("how-to-judge", BASE)
     assert "within 48 hours" in site.fixed_page("before-you-submit", BASE)
+
+
+# Summaries and the convert page
+
+def test_a_summary_leads_the_card_and_the_description():
+    doc = example()
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active",
+                         "summary": "Method  M forecasts\nbetter, with error $e_t$ lower."})
+    card = site.card(doc)
+    assert 'class="card-claim card-summary"' in card and "<math" in card
+    assert site._lead_text(doc) == "Method M forecasts better, with error et lower."
+    del doc["paper"]["summary"]
+    assert "card-summary" not in site.card(doc)
+
+
+def test_the_convert_page():
+    page = site.fixed_page("convert", BASE)
+    assert 'id="convert-prompt"' in page and 'data-copy="convert-prompt"' in page and "page.js" in page
+    assert "claimset-from-paper" in page and "Only the paper's authors" in page
+    caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
+    assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy
+    assert 'href="/convert"' in (Path(site.__file__).parent / "static" / "pages" / "home.html").read_text()
