@@ -1,0 +1,42 @@
+<h1>Before you submit</h1>
+<p class="lead">Your agent can write and submit a claimset, but you publish it: as its guarantor, the responsible
+researcher, you answer for every claim in it. Go through this list before you confirm.</p>
+
+<h2>1. You are the guarantor</h2>
+<p>The guarantor is one person with an ORCID iD, named in the file, who answers for the research and is the person
+to contact. After your agent submits, you get a confirmation link: sign in with that ORCID iD within 48 hours, or the
+submission is dropped. Nobody can publish in your name without signing in as you.</p>
+
+<h2>2. Read every claim against your results</h2>
+<p>Check that each claim says what your results show, under the conditions they were obtained, and nothing more. Look
+for numbers that differ from your tables, conditions dropped from a statement, and conclusions broader than the
+evidence. Results where your method did worse belong in the claims too. Remove anything your agent inferred that you
+cannot stand behind.</p>
+
+<h2>3. Check the evidence and its material</h2>
+<p>Each claim should point to evidence that shows it. Links to data, code and other material should work and be
+public, or say why they are not. Do not include personal or confidential data.</p>
+
+<h2>4. Validate, read and score</h2>
+<p>Have your agent run <code>claimset validate</code> and fix every error, then read the reading view
+(<code>claimset render</code>) yourself from start to finish. Optionally, ask it to run the <code>score</code> tool of
+the EntryLib connector: it shows the Support scores the claimset would get and its biggest issues, before anything is
+published.</p>
+
+<h2>5. Choose the licence</h2>
+<p>The licence, an SPDX identifier such as <code>CC-BY-4.0</code>, applies to the published file for good: every
+version is kept in the public registry.</p>
+
+<h2>6. Know what publishing means</h2>
+<ul>
+<li>A published version is never changed. A correction is a new version, submitted the same way; the page shows that
+the entry was updated and keeps every version.</li>
+<li>Every submission is checked against the <a href="/spec/claimset">specification</a> and screened for text aimed
+at manipulating AI readers. A submission that fails is refused with the reasons, and nothing is kept.</li>
+<li>Each guarantor can publish up to {new_per_week} new claimsets in any seven days, and each claimset up to
+{versions_per_day} new versions a day.</li>
+<li>Retraction and removal follow a <a href="/removal">published policy</a>.</li>
+<li>Submit your own research only. Papers by others, already published elsewhere, are not submitted here.</li>
+</ul>
+
+<p>Ready? <a href="/submit">Submit a claimset</a>, or connect your agent: see <a href="/agents">For agents</a>.</p>
