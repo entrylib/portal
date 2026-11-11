@@ -128,6 +128,12 @@ Submit a test claimset, confirm it with your ORCID iD, and see the registry pull
 and the claimset appear at `https://entrylib.org/p/<year>.<number>.txt`. Published claimsets are never withdrawn, so use a
 real paper you want published, or skip this until you have one.
 
+## Search engines
+
+- **IndexNow** (Bing and others learn of new claimsets at once): make a key, e.g. `openssl rand -hex 16`, put it in
+  `.env` as `PORTAL_INDEXNOW_KEY=<key>` and run `sudo /opt/entrylib/portal/deploy/launch.sh`. The portal serves it at
+  `https://entrylib.org/indexnow.txt`. Without the key nothing is sent.
+
 ## Running it
 
 - **Reboots and power cuts** need nothing: Docker starts at boot and every container has `restart: unless-stopped`.

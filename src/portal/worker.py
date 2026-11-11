@@ -12,7 +12,7 @@ is still published. Two modes:
 import logging
 from pathlib import Path
 
-from . import notices
+from . import indexnow, notices
 from .archive import archive_version
 from .classify import ClassifierError
 from .indexer import index_version
@@ -165,6 +165,7 @@ def _settle_open(conn, *, settings, remote, archive):
             continue
         index_version(conn, remote.registry, folder, version, settings.published_dir, settings.base_url)
         _published(conn, sid, path, published_id)
+        indexnow.notify(indexnow.claimset_urls(concept, version, settings.base_url), settings.base_url)
         done.append((sid, published_id))
         if archive is not None:
             try:

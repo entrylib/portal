@@ -9,9 +9,8 @@ version. Fine while the library has hundreds of claimsets; past that, the indexe
 import functools
 import json
 from dataclasses import dataclass, field
-from importlib import resources
 
-from . import ids, score_html, site
+from . import areas, ids, score_html, site
 from . import scores as score_data
 
 PAGE = 50
@@ -23,41 +22,16 @@ BANDS = {"high": "High (80+)", "medium": "Medium (60–79)", "low": "Low (under 
 SORTS = {"reliability": "Reliability", "newest": "Newest"}
 
 
-@functools.cache
 def taxonomy():
-    data = json.loads(resources.files("portal").joinpath("data/fields.json").read_text(encoding="utf-8"))
-    return data["domains"], data["fields"]
+    domains, fields, _ = areas.taxonomy()
+    return domains, fields
 
 
-def area_of(doc):
-    """(domain, field, subfield) numbers of a claimset, by its subfield; (None, None, None) without one."""
-    c = doc["paper"].get("classification")
-    sub = c.get("subfield") if isinstance(c, dict) else None
-    sub = sub.rsplit("/", 1)[-1] if isinstance(sub, str) else None
-    domains, fields = taxonomy()
-    if not sub or sub[:2] not in fields:
-        return None, None, None
-    return fields[sub[:2]]["domain"], sub[:2], sub
+area_of, in_area = areas.area_of, areas.in_area
 
 
 def area_name(area):
-    domains, fields = taxonomy()
-    if not area:
-        return "Everything"
-    if area.startswith("d"):
-        return domains.get(area[1:], area)
-    if len(area) == 2:
-        return fields.get(area, {}).get("name", area)
-    return site._subfields().get(area, area)
-
-
-def in_area(where, area):
-    domain, fld, sub = where
-    if not area:
-        return True
-    if area.startswith("d"):
-        return domain == area[1:]
-    return fld == area if len(area) == 2 else sub == area
+    return areas.name(area)
 
 
 @functools.lru_cache(maxsize=2048)
@@ -88,11 +62,8 @@ class Query:
     @classmethod
     def parse(cls, params):
         q = cls()
-        domains, fields = taxonomy()
         area = str(params.get("area") or "")
-        if area and not (area in {f"d{d}" for d in domains} or area in fields or area in site._subfields()):
-            area = ""
-        q.area = area
+        q.area = area if areas.valid(area) else ""
         q.view = "claimsets" if params.get("view") == "claimsets" else "claims"
         q.all = params.get("all") in ("1", "on", "true")
         q.type = params.get("type") if params.get("type") in TYPES else ""
@@ -107,17 +78,21 @@ class Query:
         return q
 
     def url(self, **change):
-        values = {"area": self.area, "view": self.view, "all": "1" if self.all else "", "type": self.type,
+        """The address of this view with `change`: the area as a path (/read/social-sciences/decision-sciences),
+        the rest as parameters."""
+        area = change.pop("area", self.area)
+        values = {"view": self.view, "all": "1" if self.all else "", "type": self.type,
                   "band": self.band, "novelty": self.novelty, "planning": self.planning,
                   "sort": self.sort if self.sort != "reliability" else "", "offset": ""}
         values.update({k: v for k, v in change.items()})
+        if values["view"] == "claims":
+            values["view"] = ""
         parts = [f"{k}={site.esc(v)}" for k, v in values.items() if v not in ("", None, 0, "0")]
-        return "/read" + ("?" + "&amp;".join(parts) if parts else "")
+        return areas.path(area) + ("?" + "&amp;".join(parts) if parts else "")
 
 
 def _tree(docs, q):
-    domains, fields = taxonomy()
-    subs = site._subfields()
+    domains, fields, subs = areas.taxonomy()
     count = {}
     for d in docs:
         dom, fld, sub = area_of(d)
@@ -153,8 +128,7 @@ def _select(name, label, options, value):
 
 
 def _filters(q):
-    hidden = f'<input type="hidden" name="area" value="{site.esc(q.area)}">' if q.area else ""
-    hidden += f'<input type="hidden" name="view" value="{q.view}">' if q.view != "claims" else ""
+    hidden = f'<input type="hidden" name="view" value="{q.view}">' if q.view != "claims" else ""
     sort = "".join(f'<option value="{k}"' + (" selected" if k == q.sort else "") + f">{v}</option>"
                    for k, v in SORTS.items())
     claim_filters = ""
@@ -164,7 +138,7 @@ def _filters(q):
                          + _select("planning", "Plan", PLANNING, q.planning)
                          + '<label class="check"><input type="checkbox" name="all" value="1"'
                          + (" checked" if q.all else "") + "> All claims, not only principal</label>")
-    return (f'<form class="read-filters" action="/read" method="get">{hidden}{claim_filters}'
+    return (f'<form class="read-filters" action="{areas.path(q.area)}" method="get">{hidden}{claim_filters}'
             + _select("band", "Reliability", BANDS, q.band)
             + f'<label>Sort <select name="sort">{sort}</select></label><button type="submit">Apply</button></form>')
 
@@ -234,8 +208,9 @@ def claimsets(docs, q):
     return [d for d, _ in out]
 
 
-def page(docs, q):
-    """The Read page. `docs`: the current version of every published claimset."""
+def page(docs, q, base_url=""):
+    """The Read page. `docs`: the current version of every published claimset. Its canonical address is the area's
+    own, without filters, so that search engines index one page per area."""
     tabs = "".join(f'<a href="{q.url(view=v, offset="")}"' + (' aria-current="page"' if v == q.view else "")
                    + f">{label}</a>" for v, label in (("claims", "Claims"), ("claimsets", "Claimsets")))
     if q.view == "claims":
@@ -261,5 +236,10 @@ def page(docs, q):
             f'<p class="muted">{len(rows)} {what}' + (f", {q.offset + 1}–{q.offset + len(shown)}" if len(rows) > PAGE
                                                      else "") + "</p>"
             f'{body}' + (f'<p class="pager">{" · ".join(more)}</p>' if more else "") + "</div></div></div>")
-    return site.shell("Read", main, active="read", description="What EntryLib holds, by field: its claims with "
-                      "their reliability, and its claimsets.")
+    title = "Read" if not q.area else f"{area_name(q.area)}: claims and claimsets"
+    count = sum(1 for d in docs if in_area(area_of(d), q.area))
+    description = (f"{area_name(q.area)} on EntryLib: {count} claimset{'s' if count != 1 else ''}, their claims with "
+                   "their reliability scores, each with what it rests on." if q.area else
+                   "What EntryLib holds, by field: its claims with their reliability, and its claimsets.")
+    return site.shell(title, main, active="read", description=description,
+                      canonical=base_url + areas.path(q.area) if base_url else None)
