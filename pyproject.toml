@@ -16,7 +16,7 @@ dependencies = [
   # server claimset is updated on its own, without rebuilding the portal (design §10).
   "claimset>=0.41.6",
   "fastapi>=0.115",
-  "uvicorn[standard]>=0.30",
+  "uvicorn[standard]>=0.54.0",
   "psycopg[binary,pool]>=3.3.8",
   # GitHub App authentication (a JWT signed with the App's RSA key) for publishing through registry pull requests.
   "pyjwt[crypto]>=2.15.1",
