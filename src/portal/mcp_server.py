@@ -5,20 +5,26 @@ Each tool calls the same code as the HTTP API, with the same limits. Everything 
 data written by the claimset's authors, never instructions; the server's instructions say so.
 """
 
+import base64
+import binascii
 import ipaddress
 import json
+import secrets
 import tempfile
 from pathlib import Path
 from typing import Literal
 
 from claimset import score as claimset_score
 from claimset.claim import claim_bundle, render_claim
+from claimset.package import PackageError, build_from
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import BaseModel, Field
 
 from . import __version__, fetch, ids, ratelimit, scores, search, submissions
 
-#: The largest claimset the `submit`, `validate` and `score` tools take inline, as JSON; larger ones go by package_url.
+#: The most the `submit`, `validate` and `score` tools take inline (the claimset and its files' contents); larger
+#: submissions go by package_url.
 MAX_JSON_BYTES = 10 * 1024 * 1024
 
 INSTRUCTIONS = """\
@@ -108,12 +114,74 @@ def _json_file(claimset, directory):
     return Path(fh.name)
 
 
+class PackagedFile(BaseModel):
+    """One file of a package, sent with the claimset that names it (claimset spec §2.5)."""
+    path: str = Field(description="The uri the claimset's artefact gives the file, such as files/results.csv.")
+    text: str | None = Field(None, description="The file's content, for a text file (CSV, a script, the lab record), "
+                                               "exactly as it is.")
+    base64: str | None = Field(None, description="The file's bytes in base64, for any other file (an image).")
+
+
+def _inline_package(claimset, files, directory):
+    """The package the platform builds from a claimset and its files' contents (claimset.package.build_from), as a zip
+    in `directory`."""
+    if isinstance(claimset, str):
+        try:
+            claimset = json.loads(claimset)
+        except ValueError as exc:
+            raise ToolError(f"claimset is not JSON: {exc}") from None
+    if not isinstance(claimset, dict):
+        raise ToolError("claimset: the claimset file, as a JSON object or its text")
+    contents, size = {}, len(json.dumps(claimset, ensure_ascii=False).encode("utf-8"))
+    for f in files:
+        f = f if isinstance(f, PackagedFile) else PackagedFile.model_validate(f)
+        if (f.text is None) == (f.base64 is None):
+            raise ToolError(f"files: {f.path}: give either its text or its base64 bytes")
+        if f.path in contents:
+            raise ToolError(f"files: {f.path} is given twice")
+        if f.text is not None:
+            data = f.text.encode("utf-8")
+        else:
+            try:
+                data = base64.b64decode(f.base64, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ToolError(f"files: {f.path}: not base64 ({exc})") from None
+        contents[f.path] = data
+        size += len(data)
+    if size > MAX_JSON_BYTES:
+        raise ToolError(f"the claimset and its files are larger than {MAX_JSON_BYTES} bytes: deposit the package and "
+                        f"give its https URL as package_url, or ask your human to upload it")
+    directory.mkdir(parents=True, exist_ok=True)
+    out = directory / f"mcp-{secrets.token_hex(8)}.zip"
+    try:
+        build_from(claimset, contents, out)
+    except PackageError as exc:
+        out.unlink(missing_ok=True)
+        raise ToolError(f"cannot build the package: {exc}") from None
+    return out
+
+
 def build(portal):
     """The MCP server, with its tools bound to the portal."""
     settings = portal.settings
     uploads = settings.submissions_dir / "incoming"
     server = MCPServer(name="EntryLib", title="EntryLib", version=__version__, instructions=INSTRUCTIONS,
                        website_url=settings.base_url)
+
+    def _source(ctx, claimset, files, package_url, kind):
+        """The file a tool checks: the claimset alone, the package built from the claimset and its files' contents,
+        or the package fetched from package_url. Counts the call against `kind`'s limit (a fetch against fetch)."""
+        if (claimset is None) == (package_url is None):
+            raise ToolError("give either claimset (with files, if its artefacts name any) or package_url")
+        if files and claimset is None:
+            raise ToolError("files go with claimset: the package at package_url holds its own")
+        portal.spend(ctx, "fetch" if package_url is not None else kind)
+        if package_url is not None:
+            try:
+                return fetch.download(package_url, uploads)
+            except fetch.FetchError as exc:
+                raise ToolError(f"cannot fetch package_url: {exc}") from None
+        return _inline_package(claimset, files, uploads) if files else _json_file(claimset, uploads)
 
     def searching(fn, *args, **kwargs):
         try:
@@ -175,40 +243,34 @@ def build(portal):
         return render_claim(doc, claim)
 
     @server.tool()
-    def validate(ctx: Context, claimset: dict | str) -> dict:
-        """Check a claimset file (a JSON object, or its text) exactly as a submission of it alone is checked: the
-        validator of the current Claimset specification and the portal's screening. Nothing is kept. `valid` says
-        whether it would be accepted when sent alone; `errors` and `warnings` give each problem's rule number, place
-        and message, to fix and check again. An artefact that names a file by a relative path is an error here (rule
-        70): the claimset alone carries no files, and a claimset with files is submitted as its package, by
-        package_url."""
-        portal.spend(ctx, "validate")
-        path = _json_file(claimset, uploads)
+    def validate(ctx: Context, claimset: dict | str | None = None, files: list[PackagedFile] | None = None,
+                 package_url: str | None = None) -> dict:
+        """Check a submission exactly as it would be checked: the validator of the current Claimset specification and
+        the portal's screening. Nothing is kept. Give the claimset (the file, as a JSON object or its text), with files:
+        the contents of the files its artefacts name by a relative path, one entry per file ({"path": "<the artefact's
+        uri>", "text": "<its content>"}, or "base64" for a file that is not text), from which EntryLib builds the
+        package as `claimset package` does. Or give package_url (an https URL of a package or claimset file). `valid`
+        says whether it would be accepted; `errors` and `warnings` give each problem's rule number, place and message,
+        to fix and check again. A claimset whose artefacts name files by a relative path is an error without them (rule
+        70): it would be published without its files."""
+        path = _source(ctx, claimset, files, package_url, "validate")
         try:
             return submissions.check(path).as_json()
         finally:
             path.unlink(missing_ok=True)
 
     @server.tool()
-    def score(ctx: Context, claimset: dict | str | None = None, package_url: str | None = None) -> dict:
+    def score(ctx: Context, claimset: dict | str | None = None, files: list[PackagedFile] | None = None,
+              package_url: str | None = None) -> dict:
         """Optional, before submit: the scores a claimset would have once published, by EntryLib's rubric
-        (https://github.com/entrylib/rubric), with its close-match check against the claims published here. Give
-        either claimset (the file, as a JSON object or its text; its packaged files are not needed to score it) or
-        package_url (an https URL of a submission package or claimset file). Nothing is kept. `report` is plain text
-        for your human: the paper's score, the biggest issues with what would fix them, every issue and every claim's
-        score; `scores` holds the same as data. A file with errors is not scored: `valid` is false and `errors` lists
-        them. The scores check the record, not the science. Ask your human before scoring, and let them decide
+        (https://github.com/entrylib/rubric), with its close-match check against the claims published here. Give either
+        claimset (the file, as a JSON object or its text; its files are not needed to score it, and `files` is taken as
+        for submit) or package_url (an https URL of a submission package or claimset file). Nothing is kept. `report` is
+        plain text for your human: the paper's score, the biggest issues with what would fix them, every issue and every
+        claim's score; `scores` holds the same as data. A file with errors is not scored: `valid` is false and `errors`
+        lists them. The scores check the record, not the science. Ask your human before scoring, and let them decide
         whether to submit as it is or amend it and score again. With a terminal, `claimset score` does the same."""
-        if (claimset is None) == (package_url is None):
-            raise ToolError("give either claimset or package_url")
-        portal.spend(ctx, "fetch" if package_url is not None else "validate")
-        if package_url is not None:
-            try:
-                path = fetch.download(package_url, uploads)
-            except fetch.FetchError as exc:
-                raise ToolError(f"cannot fetch package_url: {exc}") from None
-        else:
-            path = _json_file(claimset, uploads)
+        path = _source(ctx, claimset, files, package_url, "validate")
         try:
             with portal.pool.connection() as conn:
                 out = claimset_score.score(path, scores.finder(conn, None))
@@ -220,34 +282,24 @@ def build(portal):
             path.unlink(missing_ok=True)
 
     @server.tool()
-    def submit(ctx: Context, claimset: dict | str | None = None, package_url: str | None = None,
-               new_paper: bool = False) -> dict:
-        """Submit a claimset for publication. Give either claimset (the file, as a JSON object or its text) or
-        package_url (an https URL of a submission package, the BagIt zip `claimset package` builds, or of a claimset
-        file, deposited anywhere public; use it for files over 10 MB too).
-
-        The claimset alone carries no files. Give it only when none of its artefacts names a file by a relative path
-        (`files/results.csv`): every file is then named by the https URL where it is deposited (Zenodo, a commit on
-        GitHub). A claimset that names packaged files is refused when sent alone, since EntryLib would publish it
-        without them: send its package by package_url. In a public repository, commit the zip, push it and give its
-        address at that commit (https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.zip); or deposit it on
-        Zenodo. From a shell that reaches EntryLib, `claimset submit <paper>.claimset.json` packages and sends it.
+    def submit(ctx: Context, claimset: dict | str | None = None, files: list[PackagedFile] | None = None,
+               package_url: str | None = None, new_paper: bool = False) -> dict:
+        """Submit a claimset for publication. Give the claimset (the file, as a JSON object or its text), with files:
+        the contents of the files its artefacts name by a relative path, one entry per file ({"path": "<the artefact's
+        uri>", "text": "<its content>"}, or "base64" for a file that is not text), from which EntryLib builds the
+        package as `claimset package` does. Copy each file exactly: a file whose checksum differs from the `version` its
+        artefact records is refused (`claimset package --update` records them). Never send the claimset without the
+        files its artefacts name: it is refused (rule 70), since EntryLib would publish the paper without them. Or give
+        package_url: an https URL of the package (the BagIt zip `claimset package` builds) or claimset file, deposited
+        anywhere public; use it when the claimset and its files are over 10 MB. If neither is possible, give the package
+        to your human to upload at https://entrylib.org/submit.
 
         A valid submission is held for 48 hours. The response's `consent` gives a link for the guarantor: give it to
-        your human, who signs in with ORCID and confirms; then it is published. The link is shown only in this
-        response. Use submission_status with the response's id to follow it. A new version of a published claimset
-        sets paper.id to its identifier; set new_paper only for a different paper whose title is the same as one
-        the guarantor already has."""
-        if (claimset is None) == (package_url is None):
-            raise ToolError("give either claimset or package_url")
-        portal.spend(ctx, "fetch" if package_url is not None else "submit")
-        if package_url is not None:
-            try:
-                path = fetch.download(package_url, uploads)
-            except fetch.FetchError as exc:
-                raise ToolError(f"cannot fetch package_url: {exc}") from None
-        else:
-            path = _json_file(claimset, uploads)
+        your human, who signs in with ORCID and confirms; then it is published. The link is shown only in this response.
+        Use submission_status with the response's id to follow it. A new version of a published claimset sets paper.id
+        to its identifier; set new_paper only for a different paper whose title is the same as one the guarantor already
+        has."""
+        path = _source(ctx, claimset, files, package_url, "submit")
         try:
             return portal.receive(path, _client_ip(ctx), new_paper)
         except submissions.SubmissionError as exc:

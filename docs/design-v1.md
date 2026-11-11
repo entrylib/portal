@@ -107,11 +107,12 @@ Every route ends in the same checks and the same pending submission (§4.2); the
 | Evidence already deposited elsewhere (Zenodo, GitHub, an institutional repository) | `POST /api/submissions` with the JSON as the body, or the MCP tool `submit` | The claimset JSON alone; its artefacts' `uri` are the deposits' https URLs and are left there: the portal neither downloads nor copies them. An artefact with a relative `uri` names a file of a package, and the JSON alone is refused |
 | A claimset with no files | as above | The claimset JSON alone |
 | A person with a file, no terminal | `/submit`, a page with a file picker | The zip or the JSON, sent as the request body of `POST /api/submissions` by the page's script |
+| An agent that cannot send a file or reach a public URL (a chat with MCP), with a package of text files and small binaries | The MCP tools `validate`, `score` and `submit` with `claimset` and `files` | The claimset JSON with the contents of the files its artefacts name (`{path, text}`, or `{path, base64}` for a file that is not text); the portal builds the package from them with the claimset package's `build_from`, as `claimset package` would, and checks it as an upload. A file whose checksum differs from the `version` its artefact records is refused, so a file copied wrongly is never published. At most 10 MB in all |
 | An agent that cannot upload a large file (MCP, a chat) but can deposit it | `POST /api/submissions/from-url` with `{"url": …}`, or the MCP tool `submit` with `package_url` | An https URL of the package or the JSON, which the portal fetches |
 
 - **By URL.** The portal fetches https URLs only, from public addresses only (loopback, private, link-local and other non-global addresses are refused, checked on the address actually connected to), follows at most 5 redirects (each checked again), and stops at 210 MB or 120 seconds. What it fetches is checked exactly as an upload is.
 - **The upload page** is static HTML and one script, served by the app with a Content-Security-Policy that allows only that script. It shows the response's submission ID, consent link and errors as text; nothing submitted is rendered.
-- **The MCP server** takes the claimset JSON as text, at most 10 MB; larger submissions and packages go by URL.
+- **The MCP server** takes the claimset JSON as text, with the contents of its files when its artefacts name any (`files`), at most 10 MB in all; larger submissions and packages go by URL, or the human uploads the package at `/submit`. An agent that can neither send a file nor reach a public URL needs this route: without it, a claimset with files could not be submitted by the agent at all.
 - Batch submission, many claimsets confirmed by one sign-in, is future work (portal issue #34).
 
 ### 4.5 New versions and duplicates
@@ -201,7 +202,7 @@ Rendered views are produced by the platform, never submitted. All are regenerate
 
 ### 7.3 MCP server
 
-Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT-11): the Streamable HTTP transport, stateless, answering in JSON, with no sign-in. Tools: `search_papers`, `search_claims`, `get_paper` (reading view or JSON, a version or the current one), `get_claim` (the claim bundle), `validate`, `score` (§7.6), `submit` (the claimset JSON as text, or `package_url`), `submission_status`. Each calls the same code as the HTTP API, with the same limits. `related` comes with embeddings (§7.2). Tool results are data: their descriptions say so, as `/llms.txt` does.
+Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT-11): the Streamable HTTP transport, stateless, answering in JSON, with no sign-in. Tools: `search_papers`, `search_claims`, `get_paper` (reading view or JSON, a version or the current one), `get_claim` (the claim bundle), `validate`, `score` (§7.6), `submit` (the claimset JSON as text with its files' contents, or `package_url`), `submission_status`. Each calls the same code as the HTTP API, with the same limits. `related` comes with embeddings (§7.2). Tool results are data: their descriptions say so, as `/llms.txt` does.
 
 ### 7.4 Website
 
