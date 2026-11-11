@@ -1166,8 +1166,9 @@ def link_guarantors(header, doc):
         if not isinstance(orcid, str) or not re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]", orcid):
             continue
         mark = f' <span class="orcid-wrap">(<a class="orcid orcid-verified" href="https://orcid.org/{orcid}">'
-        header = header.replace(f"{esc(c.get('name', ''))}{mark}",
-                                f'<a class="person" href="/people/{orcid}">{esc(c.get("name", ""))}</a>{mark}', 1)
+        name = esc(c.get("name", ""))
+        link = f'<a class="guarantor-link" href="/people/{orcid}">{name}</a>'
+        header = header.replace(f"{name}{mark}", f"{link}{mark}", 1)
     return header
 
 
