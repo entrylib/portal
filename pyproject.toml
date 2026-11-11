@@ -17,7 +17,7 @@ dependencies = [
   "claimset>=0.41.6",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
-  "psycopg[binary,pool]>=3.2",
+  "psycopg[binary,pool]>=3.3.8",
   # GitHub App authentication (a JWT signed with the App's RSA key) for publishing through registry pull requests.
   "pyjwt[crypto]>=2.8",
   # The MCP server at /mcp (design §7.3): the official MCP Python SDK.
