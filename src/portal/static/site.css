@@ -41,8 +41,15 @@ main { min-height: 60vh; }
 .muted, .small { color: var(--muted); }
 .small { font-size: 15px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 4px;
-  background: var(--accent); color: var(--ground) !important; text-decoration: none; font-weight: 600; }
+/* Buttons (design §7.4): one style for every action, one quiet style for secondary ones. No form styles its own. */
+.button, button[type="submit"] { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: var(--ground) !important;
+  font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+.button-quiet { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--rule);
+  border-radius: 4px; background: var(--ground); color: var(--accent); font: inherit; font-size: 15px;
+  text-decoration: none; cursor: pointer; }
+.button:focus-visible, button[type="submit"]:focus-visible, .button-quiet:focus-visible {
+  outline: 3px solid var(--ink); outline-offset: 2px; }
 
 /* header and footer */
 /* The site's header stays at the top of the window (--head is its height), so the menu, the home page and Read are
@@ -81,8 +88,6 @@ main { min-height: 60vh; }
 .search { display: flex; gap: 8px; max-width: 44rem; margin: 16px 0; }
 .search input { flex: 1; min-width: 0; min-height: 44px; font: inherit; padding: 0 12px; color: var(--ink);
   background: var(--ground); border: 1px solid var(--rule); border-radius: 4px; }
-.search button { font: inherit; min-height: 44px; padding: 0 18px; border: 1px solid var(--accent); border-radius: 4px;
-  background: var(--accent); color: var(--ground); font-weight: 600; cursor: pointer; }
 .search-big input { min-height: 52px; font-size: 18px; }
 .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
 .tabs a { padding: 10px 0; min-height: 44px; display: inline-block; text-decoration: none; color: var(--muted); }
@@ -93,7 +98,15 @@ main { min-height: 60vh; }
 .pager { margin-top: 24px; }
 
 /* home */
-.hero { padding: 48px 0 24px; }
+.hero { padding: 48px 0 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 24rem); gap: 32px 56px;
+  align-items: start; }
+@media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+.start-here { background: var(--panel); border: 1px solid var(--rule-light); border-radius: 6px; padding: 20px 24px; }
+.start-here h2 { margin: 0 0 10px; font-size: 20px; }
+.start-here ol { margin: 0 0 14px; padding-left: 22px; }
+.start-here li { margin: 6px 0; }
+.start-here h3 { margin: 16px 0 4px; font-size: 16px; }
+.start-here p { margin: 0 0 6px; font-size: 15px; }
 .hero h1 { font-size: clamp(32px, 5vw, 44px); margin: 0 0 16px; max-width: 22ch; }
 .lead { font-size: 19px; max-width: 46rem; }
 .paths { display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: center; margin: 32px 0 48px; }
@@ -203,9 +216,8 @@ details.notice[open] summary { margin-bottom: 4px; }
 .problems .fix { color: var(--muted); }
 .score-claim { border-top: 1px solid var(--rule-light); padding: 8px 0; }
 .score-claim h4 { margin: 0; font-size: 17px; font-weight: 600; }
-dialog.explain .popup-body { padding: 20px 64px 20px 24px; max-width: 46rem; overflow-y: auto; max-height: 94vh; }
-dialog.explain h3, dialog.explain h4 { margin-top: 0; }
-dialog.explain .score-claim { border-top: 0; padding-top: 0; }
+dialog.peek h3, dialog.peek h4 { margin-top: 0; }
+dialog.peek .score-claim { border-top: 0; padding-top: 0; }
 .lights { list-style: none; margin: 0; padding: 0; }
 .lights li { display: flex; align-items: center; }
 .cite summary { cursor: pointer; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
@@ -261,7 +273,6 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
 /* upload page */
 .upload input[type="file"] { font: inherit; max-width: 100%; }
 .upload label { display: flex; gap: 8px; align-items: baseline; }
-.upload button { border: 0; font: inherit; cursor: pointer; }
 #result pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); padding: 12px; font: inherit;
   font-size: 15px; }
 .error { color: var(--bad); }
@@ -308,7 +319,6 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
   border: 1px solid var(--rule); border-radius: 4px; }
 .request fieldset { border: 1px solid var(--rule-light); border-radius: 6px; margin: 20px 0; padding: 4px 18px 8px; }
 .request legend { font-weight: 600; padding: 0 6px; }
-.request button { border: 0; font: inherit; cursor: pointer; }
 .spec-body table code { overflow-wrap: normal; word-break: normal; white-space: nowrap; }
 @media (max-width: 860px) {
   .toc-js .cs-body [id], .toc-js .spec-body [id] { scroll-margin-top: calc(var(--head) + 60px); }
@@ -319,13 +329,12 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
 .pending h2 { border-top: 0 !important; padding-top: 0 !important; margin-top: 16px !important; font-size: 22px !important; }
 .pending pre { white-space: pre-wrap; background: var(--panel); padding: 12px; font-size: 14px; max-height: 60vh;
   overflow-y: auto; }
-.pending button { border: 0; font: inherit; cursor: pointer; }
 
 /* pop-ups (page.js): figures, and explanations; the close button always in the top right corner */
 dialog.popup { border: 0; padding: 0; max-width: min(96vw, 1400px); max-height: 94vh; background: var(--ground);
   color: var(--ink); border-radius: 6px; box-shadow: 0 10px 40px rgb(0 0 0 / .35); }
 dialog.popup::backdrop { background: rgb(0 0 0 / .72); }
-dialog.popup .popup-close { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0;
+dialog.popup .popup-close { position: absolute; z-index: 2; top: 8px; right: 8px; width: 44px; height: 44px; border: 0;
   border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; font: 26px/44px sans-serif; cursor: pointer; }
 @media (max-width: 640px) {
   dialog.popup { max-width: 100vw; max-height: 100vh; width: 100vw; height: 100vh; border-radius: 0; }
@@ -336,7 +345,6 @@ dialog.zoom img { display: block; max-width: 100%; max-height: calc(94vh - 72px)
   background: #fff; }
 dialog.zoom figcaption { padding: 10px 56px 12px 16px; font-size: 15px; }
 @media (max-width: 640px) { dialog.zoom img { max-height: calc(100vh - 90px); } }
-.copy-link.copied { color: var(--ok); text-decoration: none; }
 
 /* room between items, so that definitions and claims read one at a time */
 .cs-item { padding: 16px 0 !important; }
@@ -358,9 +366,43 @@ dialog.zoom figcaption { padding: 10px 56px 12px 16px; font-size: 15px; }
 .read-main { flex: 999 1 560px; min-width: 0; }
 .read-main h2 { margin: 0 0 4px; font-size: 26px; }
 .read-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 12px; font-size: 15px; }
-.read-filters select, .read-filters button { font: inherit; min-height: 36px; }
+.read-filters select { font: inherit; min-height: 36px; }
 .read-filters .check { display: flex; align-items: center; gap: 6px; }
-.read-filters button { padding: 0 14px; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel);
-  color: var(--ink); cursor: pointer; }
 .result .card-top .score-badge { margin-right: 6px; }
 .pager { margin-top: 16px; }
+
+/* Ask your AI (design §7.4) */
+.ask-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 16px 0 0; }
+.ask-ai > p { margin: 0; }
+.ask-ai details { flex-basis: 100%; font-size: 15px; color: var(--muted); }
+.ask-ai summary { cursor: pointer; }
+.cite button[data-copy] { margin-top: 6px; }
+
+/* Folded sections and pop-ups for IDs (page.js, design §7.4) */
+.fold > h2 { margin: 0; }
+.fold-toggle { all: unset; box-sizing: border-box; display: flex; align-items: baseline; gap: 10px; width: 100%;
+  min-height: 44px; padding: 4px 0; cursor: pointer; }
+.fold-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fold-toggle .count { font-size: 15px; font-weight: 400; color: var(--muted); }
+.fold-toggle .fold-state { margin-left: auto; font-size: 15px; font-weight: 400; color: var(--accent); }
+.fold:not(.open) > .fold-body { display: none; }
+.cs-body > .cs-section.fold:not(.open) { margin-top: 0; padding-top: 6px; }
+.cs-body > .cs-section.fold.open { margin-top: 24px; }
+dialog.peek { width: min(60rem, 96vw); }
+dialog.peek .popup-body { max-width: none; max-height: 90vh; overflow-y: auto; padding: 0 24px 16px; }
+@media (max-width: 640px) { dialog.peek .popup-body { max-height: 100vh; height: 100%; box-sizing: border-box; padding: 0 16px 16px; } }
+.peek-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; min-height: 60px;
+  padding-right: 52px; background: var(--ground); border-bottom: 1px solid var(--rule-light); }
+.peek-title { margin: 0; font-weight: 600; }
+.peek-head .button-quiet[hidden] { display: none; }
+.peek-foot { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--rule-light); }
+dialog.peek .cs-item, dialog.peek .cs-def { border: 0; }
+.peek-hit { background: var(--warn-bg); }
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--warn-bg); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+.to-top { position: fixed; z-index: 20; right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); min-height: 44px; border-radius: 22px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
+.to-top[hidden] { display: none; }
+.cs-toc a.toc-top { font-weight: 600; }

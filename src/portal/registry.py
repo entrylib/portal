@@ -67,6 +67,14 @@ class Registry:
             return []
         return sorted(int(m.group(1)) for p in d.iterdir() if p.is_dir() and (m := VERSION_DIR.match(p.name)))
 
+    def published_at(self, folder, n):
+        """When version n was published: the time of the commit that added its file (ISO 8601), or None."""
+        try:
+            out = self.git("log", "--diff-filter=A", "-1", "--format=%cI", "--", f"{folder}/v{n}/claimset.json")
+        except RegistryError:
+            return None
+        return out.strip() or None
+
     def folders(self):
         """Every claimset folder in the registry (`<year>/<block>/<name>`)."""
         out = []

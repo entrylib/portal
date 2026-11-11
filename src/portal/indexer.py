@@ -215,6 +215,9 @@ def write_static(conn, registry, folder, published_dir, base_url):
                  "hash": doc_hash(raws[n]), "json": f"{base_url}/p/{key}@v{n}.json",
                  "reading_view": f"{base_url}/p/{key}@v{n}.txt",
                  "classifier": _validation(registry, folder, n).get("classifier")}
+        published = registry.published_at(folder, n)              # the time, for notices and the versions list
+        if published:
+            entry["published_at"] = published
         for f in ("status_notice", "previous_version"):
             if pp.get(f):
                 entry[f] = pp[f]

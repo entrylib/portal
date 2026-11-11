@@ -9,7 +9,7 @@
   var nav = document.querySelector(".cs-toc");
   if (!nav || !("IntersectionObserver" in window)) return;
   var links = {};
-  nav.querySelectorAll('a[href^="#"]').forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  nav.querySelectorAll('a[href^="#"]:not(.toc-top)').forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
   var sections = Object.keys(links).map(function (id) { return document.getElementById(id); }).filter(Boolean);
   if (!sections.length) return;
 
@@ -119,65 +119,196 @@ window.entrylibPopup = function (className, label) {
   });
 })();
 
-// Claimset pages: a score opens its explanation (the section *Score* on the page) in a pop-up. Without this script the
-// score's link goes to the section.
+// Claimset and claim pages: the long sections start folded (design §7.4). In brief and the principal claims stay open;
+// any other section opens with its title, from the contents, or when the page is opened at something in it. Without
+// this script every section is open.
+window.entrylibOpen = (function () {
+  "use strict";
+  var OPEN = { brief: true, principal: true };
+  var body = document.querySelector(".cs-body");
+  function setOpen(section, open) {
+    if (!section || !section.classList.contains("fold")) return;
+    section.classList.toggle("open", open);
+    var b = section.querySelector(".fold-toggle");
+    b.setAttribute("aria-expanded", open ? "true" : "false");
+    b.querySelector(".fold-state").textContent = open ? "Hide" : "Show";
+  }
+  function reveal(el) {                       // opens the section that holds `el`
+    if (el) setOpen(el.closest("section.cs-section.fold"), true);
+  }
+  if (body) {
+    body.querySelectorAll(":scope > section.cs-section").forEach(function (s) {
+      var h = s.querySelector(":scope > h2");
+      if (!h || OPEN[s.id]) return;
+      var rest = document.createElement("div");
+      rest.className = "fold-body";
+      while (h.nextSibling) rest.appendChild(h.nextSibling);
+      s.appendChild(rest);
+      var count = document.querySelector('.cs-toc a[href="#' + s.id + '"] + .count');
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "fold-toggle";
+      b.setAttribute("aria-expanded", "false");
+      var title = document.createElement("span");
+      title.textContent = h.textContent;
+      b.appendChild(title);
+      if (count) {
+        var c = document.createElement("span");
+        c.className = "count";
+        c.textContent = count.textContent;
+        b.appendChild(c);
+      }
+      var state = document.createElement("span");
+      state.className = "fold-state";
+      state.textContent = "Show";
+      b.appendChild(state);
+      h.replaceChildren(b);
+      s.classList.add("fold");
+      b.addEventListener("click", function () { setOpen(s, !s.classList.contains("open")); });
+    });
+    document.querySelectorAll('.cs-toc a[href^="#"]').forEach(function (a) {
+      a.addEventListener("click", function () { reveal(document.getElementById(a.getAttribute("href").slice(1))); });
+    });
+    var opened = function () {
+      if (location.hash) reveal(document.getElementById(decodeURIComponent(location.hash.slice(1))));
+    };
+    opened();
+    window.addEventListener("hashchange", opened);
+  }
+  return reveal;
+})();
+
+// Claimset and claim pages: a link to an ID (a claim, evidence, a definition or term, an artefact, a reference, a score)
+// shows that item in a pop-up instead of moving the page; links inside it show the next item, with a way back.
+// Without this script the link goes to the item.
 (function () {
   "use strict";
-  if (!window.HTMLDialogElement) return;
-  var popup = null;
-  document.addEventListener("click", function (e) {
-    var link = e.target.closest("a[data-popup]");
-    if (!link || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    var source = document.getElementById(link.getAttribute("data-popup"));
-    if (!source) return;
-    e.preventDefault();
-    if (!popup) {
-      popup = window.entrylibPopup("explain", "Explanation of the score");
-      popup.body.addEventListener("click", function (ev) {      // a link to a claim closes the pop-up and goes there
-        var a = ev.target.closest('a[href^="#"]');
-        if (a) popup.dialog.close();
-      });
-    }
-    var copy = source.cloneNode(true);
+  var body = document.querySelector(".cs-body");
+  if (!body || !window.HTMLDialogElement) return;
+  var KINDS = { principal: "Principal claim", supporting: "Supporting claim", assumptions: "Assumption",
+    definitions: "Definition", evidence: "Evidence", limitations: "Limitation", questions: "Open question",
+    references: "Reference", artefacts: "Artefact", context: "Context", score: "Score" };
+  var popup = null, head, title, back, content, foot, trail = [];
+
+  function make() {
+    popup = window.entrylibPopup("peek", "Item of the claimset");
+    popup.body.classList.add("cs-body");                    // the claimset's own styles: tables, formulae
+    head = document.createElement("div");
+    head.className = "peek-head";
+    back = document.createElement("button");
+    back.type = "button";
+    back.className = "button-quiet";
+    back.textContent = "← Back";
+    title = document.createElement("p");
+    title.className = "peek-title";
+    head.appendChild(back);
+    head.appendChild(title);
+    content = document.createElement("div");
+    foot = document.createElement("div");
+    foot.className = "peek-foot";
+    popup.body.appendChild(head);
+    popup.body.appendChild(content);
+    popup.body.appendChild(foot);
+    back.addEventListener("click", function () { trail.pop(); show(trail[trail.length - 1], true); });
+    popup.dialog.addEventListener("close", function () { trail = []; });
+  }
+  function target(id) {                                    // the item an ID names on this page, and the row in it
+    var el = id && document.getElementById(id);
+    if (!el || el.tagName === "SECTION" || el.closest("nav") || (popup && popup.dialog.contains(el))) return null;
+    var row = el.tagName === "TR" ? el : null;
+    if (row) el = row.closest(".cs-item") || row;
+    return { el: el, row: row };
+  }
+  function show(id, again) {
+    var t = target(id);
+    if (!t) return false;
+    if (!popup) make();
+    if (!again) trail.push(id);
+    var copy = t.el.cloneNode(true);
     copy.removeAttribute("id");
-    copy.querySelectorAll("[id]").forEach(function (n) { n.removeAttribute("id"); });
-    popup.body.replaceChildren(copy);
-    var note = document.querySelector("#score .score-note");
-    if (note && !copy.querySelector(".score-note")) copy.appendChild(note.cloneNode(true));
-    popup.open();
+    copy.querySelectorAll("[id]").forEach(function (n) {
+      if (t.row && n.id === t.row.id) n.classList.add("peek-hit");
+      n.removeAttribute("id");
+    });
+    var section = t.el.closest("section.cs-section");
+    var name = /^score-/.test(t.el.id) ? t.el.id.slice(6) : t.el.id;
+    title.textContent = (name === "paper" ? "The paper" : name) + " · " + ((section && KINDS[section.id]) || "");
+    content.replaceChildren(copy);
+    back.hidden = trail.length < 2;
+    foot.replaceChildren();
+    var inPage = document.createElement("button");
+    inPage.type = "button";
+    inPage.className = "button-quiet";
+    inPage.textContent = "Show it in the page";
+    inPage.addEventListener("click", function () {
+      popup.dialog.close();
+      var at = t.row || t.el;
+      window.entrylibOpen(at);
+      at.scrollIntoView({ block: "center" });
+      at.classList.remove("flash");
+      void at.offsetWidth;
+      at.classList.add("flash");
+    });
+    foot.appendChild(inPage);
+    var own = t.el.querySelector("a.claim-page");
+    if (own) {
+      var a = document.createElement("a");
+      a.className = "button-quiet";
+      a.href = own.getAttribute("href");
+      a.textContent = "Open the claim's own page";
+      foot.appendChild(a);
+    }
+    if (!popup.dialog.open) popup.open();
+    popup.body.scrollTop = 0;
+    return true;
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || a.closest(".cs-toc")) return;
+    if (!(body.contains(a) || a.closest(".panel") || (popup && popup.dialog.contains(a)))) return;
+    var id = a.getAttribute("data-popup") || decodeURIComponent(a.getAttribute("href").slice(1));
+    if (show(id)) e.preventDefault();
   });
 })();
 
-// "Copy the link for your AI assistant": copies the reading-view address instead of opening it.
+// Back to the top: the contents start with "↑ Top" (written in the page); this adds a button once the reader is a
+// screen down.
 (function () {
   "use strict";
-  document.addEventListener("click", function (e) {
-    var link = e.target.closest("a.copy-link");
-    if (!link || !navigator.clipboard || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    e.preventDefault();
-    var label = link.textContent;
-    navigator.clipboard.writeText(link.href).then(function () {
-      link.textContent = "Copied: paste it to your assistant";
-      link.classList.add("copied");
-      setTimeout(function () { link.textContent = label; link.classList.remove("copied"); }, 4000);
-    }, function () { window.location.href = link.href; });
-  });
+  if (!document.querySelector(".cs-body")) return;
+  var up = document.createElement("button");
+  up.type = "button";
+  up.className = "to-top button-quiet";
+  up.textContent = "↑ Top";
+  up.hidden = true;
+  document.body.appendChild(up);
+  var smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function top(e) {
+    if (e) e.preventDefault();
+    window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
+  }
+  up.addEventListener("click", function () { top(); });
+  document.querySelectorAll("a.toc-top").forEach(function (a) { a.addEventListener("click", top); });
+  window.addEventListener("scroll", function () { up.hidden = window.scrollY < window.innerHeight; }, { passive: true });
 })();
 
-// A citation copied with one click: the button names the element whose text it copies. Without the script the
-// button stays hidden and the citation can be selected by hand.
+// Copy buttons: a button names the element whose text it copies (data-copy) and what to say once it has
+// (data-copied). Without the script, or without a clipboard, the button stays hidden and the text is selected by hand.
 (function () {
   "use strict";
   if (!navigator.clipboard) return;
-  document.querySelectorAll("button.copy-text").forEach(function (b) {
+  document.querySelectorAll("button[data-copy]").forEach(function (b) {
     var from = document.getElementById(b.getAttribute("data-copy"));
     if (!from) return;
     var label = b.textContent;
     b.hidden = false;
     b.addEventListener("click", function () {
       navigator.clipboard.writeText(from.textContent.trim()).then(function () {
-        b.textContent = "Copied";
-        setTimeout(function () { b.textContent = label; }, 3000);
+        b.textContent = b.getAttribute("data-copied") || "Copied";
+        setTimeout(function () { b.textContent = label; }, 4000);
+      }, function () {
+        var open = from.closest("details");
+        if (open) open.open = true;
       });
     });
   });

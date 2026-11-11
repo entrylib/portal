@@ -164,7 +164,7 @@ def shell(title, main, *, active=None, description="", head="", canonical=None, 
             f'<link rel="stylesheet" href="{asset("/claimset.css")}">'
             f'<link rel="stylesheet" href="{asset("/site.css")}">'
             f'<link rel="alternate" type="application/atom+xml" title="{SITE}: recently published" href="/feed.xml">'
-            f"{head}</head>\n<body>{_header(active)}<main>{main}</main>{_footer()}"
+            f"{head}</head>\n<body id=\"top\">{_header(active)}<main>{main}</main>{_footer()}"
             + "".join(f'<script src="{asset(s)}" defer></script>' for s in ([script] if isinstance(script, str)
                                                                              else script or []))
             + "</body></html>\n")
@@ -355,13 +355,32 @@ def _status(p):
     return f'<span class="status status-{STATUS_CLASS.get(status, "warn")}">{label}</span>'
 
 
-def _notice(p):
+def published_at(listing, n):
+    """When version n was published (versions.json's `published_at`), or None."""
+    return next((v.get("published_at") for v in listing or [] if v.get("version") == n), None)
+
+
+def when(iso):
+    """'10 November 2026 at 13:47 UTC' from an ISO 8601 time, or None."""
+    try:
+        t = dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(dt.UTC)
+    except ValueError:
+        return None
+    return f"{t.day} {t:%B %Y} at {t:%H:%M} UTC"
+
+
+def _notice(p, published=None):
+    """The status notice; a correction's gives the time its version was published (`published`, ISO 8601), when
+    that is on the notice's date."""
     n = p.get("status_notice")
     if not isinstance(n, dict) or (p.get("status") or "active") == "active":
         return ""
     who = n.get("issued_by")
     who = who.get("name") if isinstance(who, dict) else who
-    return _notice_box(p.get("status"), n.get("date"), who, n.get("reason_code"), n.get("statement"))
+    date = n.get("date")
+    if p.get("status") == "corrected" and published and str(published)[:10] == str(date) and when(published):
+        date = when(published)
+    return _notice_box(p.get("status"), date, who, n.get("reason_code"), n.get("statement"))
 
 
 def _notice_box(status, date, who, reason_code, statement):
@@ -428,10 +447,39 @@ def _origin_line(doc, origin, lab):
     return ""
 
 
+def _cite_row(identifier, citation, extra=""):
+    """The panel's Cite row: the identifier, the citation (folded, with a copy button) and `extra`."""
+    return (f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(identifier)}</code></p>'
+            f'<details class="cite"><summary>Citation</summary><p class="cite-text" id="cite-text">{esc(citation)}'
+            '</p><button type="button" class="button-quiet" data-copy="cite-text" data-copied="Copied" hidden>'
+            f'Copy the citation</button></details>{extra}</div>')
+
+
+def ask_ai(doc, base_url, cid=None):
+    """"Ask your AI" (design §7.4): a button that copies a message for an AI assistant, which reads the claimset's
+    reading view as a web page (or the claim's page), and the message itself, to read before copying or select by
+    hand."""
+    p = doc["paper"]
+    key, n = ids.url_key(p["id"]), p.get("version")
+    if cid:
+        what, url = "claim", f"{base_url}/p/{key}/{cid}"
+        message = (f"Read {url}, one claim of a research paper with the evidence it rests on. Tell me briefly what it "
+                   "says and how well it is supported.")
+    else:
+        what, url = "paper", f"{base_url}/p/{key}@v{n}.read"
+        message = (f"Read {url}, a research paper written as claims with their evidence. Give me a brief summary of "
+                   "its main findings and how well each is supported.")
+    message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
+    return ('<div class="ask-ai"><button type="button" class="button" data-copy="ask-message" '
+            f'data-copied="Copied: now paste it into your AI chat" hidden>Ask your AI about this {what}</button>'
+            '<p class="small">Copies a message for ChatGPT, Claude or Gemini: paste it there.</p>'
+            f'<details><summary>The message</summary><p class="cite-text" id="ask-message">{esc(message)}</p>'
+            "</details></div>")
+
+
 def _panel(doc, parts, base_url, key, scores=None):
     p = doc["paper"]
     n = p.get("version")
-    cite = esc(citation_text(doc, base_url))
     original = ""
     src = _source(doc)
     if src and src.startswith("doi:"):
@@ -439,14 +487,10 @@ def _panel(doc, parts, base_url, key, scores=None):
                     "</p>")
     return (f'<aside class="panel" aria-label="About this entry">'
             f'{score_html.panel_rows(scores, parts.get("lights"), f"/p/{key}@v{n}.issues.txt")}'
-            f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(p["id"])}@v{n}</code></p>'
-            f'<details class="cite"><summary>Citation</summary><p class="cite-text" id="cite-text">{cite}</p>'
-            '<button type="button" class="copy-text" data-copy="cite-text" hidden>Copy the citation</button>'
-            '</details>'
-            f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
-            f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}</div>'
-            f'<div class="panel-row"><h2>For models</h2><p class="small"><a class="copy-link" '
-            f'href="{esc(base_url)}/p/{key}@v{n}.read">Copy the link for your AI assistant</a></p>'
+            + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
+                        f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
+                        f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}')
+            + '<div class="panel-row"><h2>For models</h2>'
             f'<p class="small"><a href="/p/{key}@v{n}.txt">Reading view</a> · '
             f'<a href="/p/{key}@v{n}.json">JSON</a></p></div></aside>')
 
@@ -475,7 +519,8 @@ def _versions(listing, key, current):
         n = v["version"]
         label = f"Version {n}" + (" (this page)" if n == current else "")
         link = label if n == current else f'<a href="/p/{key}@v{n}">{label}</a>'
-        bits = [esc(v.get("date")), esc(STATUS_LABELS.get(v.get("status"), v.get("status")))]
+        time = when(v["published_at"]) if v.get("published_at") else None
+        bits = [esc(time or v.get("date")), esc(STATUS_LABELS.get(v.get("status"), v.get("status")))]
         if v.get("changes"):
             bits.append(esc(v["changes"]))
         rows.append(f"<li>{link} · {' · '.join(b for b in bits if b)}</li>")
@@ -503,6 +548,10 @@ def _accepts(fn, name):
         return False
 
 
+#: The contents' first entry: back to the top of the page.
+TOC_TOP = '<li><a class="toc-top" href="#top">\u2191 Top</a></li>'
+
+
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
     """The page of one version of a claimset. `listing`: its versions (versions.json entries); `lab`: {copy,
     summary} when the registry holds its lab record; `current`: the claimset's current version number; `scores`: its
@@ -523,14 +572,16 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
         newer = (f'<p class="notice notice-warn">This is version {esc(n)}. '
                  f'<a href="/p/{key}">The current version is {esc(current)}</a>.</p>')
     score_item = '<li><a href="#score">Score</a></li>' if scores else ""
-    nav = parts["nav"].replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
+    nav = parts["nav"].replace("<ol>", "<ol>" + TOC_TOP, 1)
+    nav = nav.replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
                                               f'<span class="count">{len(listing)}</span></li></ol></nav>')
     body = link_claims(parts["body"], key, claim_pages(doc)) if not current or current == n else parts["body"]
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
-            f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p)}{parts["header"]}'
-            f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key, scores)}'
+            f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
+            f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
+            f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
     first = _principal(doc)[:1]
@@ -603,7 +654,7 @@ def _claim_sections(parts):
     return "\n".join(by[sid] for sid in order), [(sid, *titles[sid]) for sid in order]
 
 
-def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None):
+def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None):
     """The page of one principal claim of the current version, at /p/<key>/<cid>: the claimset's title and the claim's
     ID as its title and heading, then the claim, its reliability and why, how to cite it, and what it rests on (the
     claim bundle, rendered by the claimset package). The statement itself is the page's description."""
@@ -621,11 +672,10 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None)
     item = (scores or {}).get("claims", {}).get(cid) if scores else None
     score_item = '<li><a href="#score">Score</a></li>' if item else ""
     nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
-           + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
+           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
                      + "</li>" for sid, t, c in sections) + f"{score_item}</ol></nav>")
     top = [f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
            esc(p.get("date"))]
-    cite = esc(citation_text(doc, base_url, cid))
     if item:
         reliability = (f'<div class="panel-row score-row"><h2>Reliability</h2>'
                        f'<p class="score-big band-{item["band"]}"><a href="#score" data-popup="score-{esc(cid)}">'
@@ -637,10 +687,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None)
         reliability = ('<div class="panel-row"><h2>Reliability</h2><p class="score">–</p>'
                        f'<p class="small"><a href="{score_html.RUBRIC_URL}">How scores are given</a></p></div>')
     panel = (f'<aside class="panel" aria-label="About this claim">{reliability}'
-             f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(p["id"])}@v{esc(n)}#{esc(cid)}</code>'
-             f'</p><details class="cite"><summary>Citation</summary><p class="cite-text" id="cite-text">{cite}</p>'
-             '<button type="button" class="copy-text" data-copy="cite-text" hidden>Copy the citation</button>'
-             '</details></div>'
+             + _cite_row(f'{p["id"]}@v{n}#{cid}', citation_text(doc, base_url, cid)) +
              f'<div class="panel-row"><h2>The claimset</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
              f'{esc(title)}</a></p></div>'
              f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}/{esc(cid)}.txt">'
@@ -649,8 +696,9 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None)
               f'{esc(_year(doc))}), with what it rests on. <a href="/p/{key}#{esc(cid)}">Read the whole claimset</a>.'
               '</p>')
     main = (f'<div class="cs-page entry claim-entry"><div class="cs-header entry-header">'
-            f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{_notice(p)}'
-            f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}</div>'
+            f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{_notice(p, published)}'
+            f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}'
+            f'{ask_ai(doc, base_url, cid)}</div>'
             f'{panel}'
             f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
             f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}</article></div>')
@@ -814,7 +862,8 @@ def card(doc):
         return f'<article class="card"><div class="card-body">{body}</div></article>'
     word = score_html.BANDS[paper["band"]]
     return (f'<article class="card card-scored"><a class="card-score band-{paper["band"]}" href="/p/{key}#score" '
-            f'aria-label="Reliability {paper["score"]}, {word.lower()}"><span class="card-score-num">'
+            f'aria-label="Reliability {paper["score"]}, {word.lower()}" title="{esc(RELIABILITY)}">'
+            '<span class="card-score-num">'
             f'{paper["score"]}</span><span class="card-score-band">{word}</span></a>'
             f'<div class="card-body">{body}</div></article>')
 
@@ -828,11 +877,20 @@ def _search_form(q="", kind="papers", big=False):
             '<button type="submit">Search</button></form>')
 
 
+#: What reliability means, for people meeting it for the first time (design §7.4): the home page and each card.
+RELIABILITY = ("Reliability (0–100) says how well a claim is backed by what the paper itself shows: points are lost "
+               "for unchecked evidence, untested assumptions, missing scope and similar gaps, by a public rubric. It "
+               "is not a verdict on whether the claim is true.")
+
+
 def home(docs, base_url=None):
     """The home page; `docs` are the current versions, newest first."""
     cards = "".join(card(d) for d in docs[:RECENT]) or '<p class="muted">Nothing is published yet.</p>'
     intro = _static("pages/home.html").read_text(encoding="utf-8")
-    main = (f'<div class="wrap home">{intro.replace("{search}", _search_form(big=True))}'
+    intro = intro.replace("{search}", _search_form(big=True)).replace("{rubric}", score_html.RUBRIC_URL)
+    intro = intro.replace("{reliability}", esc(RELIABILITY).replace("Reliability (0–100)",
+                                                                    "<strong>Reliability (0–100)</strong>", 1))
+    main = (f'<div class="wrap home">{intro}'
             f'<section class="recent"><div class="section-head"><h2>Recently published</h2>'
             f'<p><a href="/all">All claimsets</a> · <a href="/feed.xml">RSS</a></p></div>'
             f'<div class="cards">{cards}</div></section></div>')
@@ -1102,10 +1160,10 @@ def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=N
             _write(p / f"{key}.bib", bibtex(doc, base_url))
             _write(p / f"{key}.ris", ris(doc, base_url))
             write_claim_pages(p / key, doc, base_url=base_url, scores=(scores or {}).get(n), file_url=file_url,
-                              ref_text=ref_text)
+                              ref_text=ref_text, published=published_at(listing, n))
 
 
-def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, ref_text=None):
+def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, ref_text=None, published=None):
     """The pages of the current version's principal claims, replacing those of the version before (whose principal
     claims may differ)."""
     directory = Path(directory)
@@ -1115,7 +1173,7 @@ def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, r
             old.unlink()
     for cid in cids:
         _write(directory / f"{cid}.html", claim_page(doc, cid, base_url=base_url, scores=scores, file_url=file_url,
-                                                     ref_text=ref_text))
+                                                     ref_text=ref_text, published=published))
 
 
 def write_listings(published_dir, base_url, docs):
