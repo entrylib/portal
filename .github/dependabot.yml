@@ -1,19 +1,29 @@
 version: 2
 updates:
+  # Requirements are lower bounds only (>=) and CI installs the newest versions, so a bound is raised by hand when the
+  # code needs a newer version: increase-if-necessary changes a requirement only when a release falls outside it.
+  # Vulnerable versions are handled by Dependabot security updates (repository settings), not here.
   - package-ecosystem: pip
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    versioning-strategy: increase-if-necessary
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      images:
+        patterns: ["*"]
     # The image's Python is chosen with the CI's (tests run on 3.12): a new Python is a change of our own, made when
-    # both move together and its wheels exist, not a weekly update. Fixes within a version still come.
+    # both move together and its wheels exist, not a monthly update. Fixes within a version still come.
     ignore:
       - dependency-name: python
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
