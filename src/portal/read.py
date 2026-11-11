@@ -1,6 +1,6 @@
 """The Read page, /read (design §7.7): what EntryLib holds, as a tree of OpenAlex domains, fields and subfields (only
-those with claimsets), and for the part chosen its principal claims (or all claims) or its claimsets, filtered and
-sorted. Rendered by the app, without scripts.
+those with claimsets), and for the part chosen its claimsets or its principal claims (or all claims), filtered and
+sorted; with a query, the search of the whole library (site.search_page). Rendered by the app, without scripts.
 
 Scores come from the rubric over each claimset's current file; they are kept in memory per version and rubric
 version. Fine while the library has hundreds of claimsets; past that, the indexer should store them.
@@ -50,7 +50,7 @@ def scores_of(doc):
 @dataclass
 class Query:
     area: str = ""
-    view: str = "claims"
+    view: str = "claimsets"
     all: bool = False
     type: str = ""
     band: str = ""
@@ -65,7 +65,7 @@ class Query:
         q = cls()
         area = str(params.get("area") or "")
         q.area = area if areas.valid(area) else ""
-        q.view = "claimsets" if params.get("view") == "claimsets" else "claims"
+        q.view = "claims" if params.get("view") == "claims" else "claimsets"
         q.all = params.get("all") in ("1", "on", "true")
         q.type = params.get("type") if params.get("type") in TYPES else ""
         q.band = params.get("band") if params.get("band") in BANDS else ""
@@ -86,7 +86,7 @@ class Query:
                   "band": self.band, "novelty": self.novelty, "planning": self.planning,
                   "sort": self.sort if self.sort != "newest" else "", "offset": ""}
         values.update({k: v for k, v in change.items()})
-        if values["view"] == "claims":
+        if values["view"] == "claimsets":
             values["view"] = ""
         parts = [f"{k}={site.esc(v)}" for k, v in values.items() if v not in ("", None, 0, "0")]
         return areas.path(area) + ("?" + "&amp;".join(parts) if parts else "")
@@ -214,7 +214,7 @@ def page(docs, q, base_url=""):
     """The Read page. `docs`: the current version of every published claimset. Its canonical address is the area's
     own, without filters, so that search engines index one page per area."""
     tabs = "".join(f'<a href="{q.url(view=v, offset="")}"' + (' aria-current="page"' if v == q.view else "")
-                   + f">{label}</a>" for v, label in (("claims", "Claims"), ("claimsets", "Claimsets")))
+                   + f">{label}</a>" for v, label in (("claimsets", "Claimsets"), ("claims", "Claims")))
     if q.view == "claims":
         rows = claims(docs, q)
         shown = rows[q.offset:q.offset + PAGE]
@@ -232,7 +232,7 @@ def page(docs, q, base_url=""):
         more.append(f'<a href="{q.url(offset=max(0, q.offset - PAGE))}">Previous</a>')
     if q.offset + PAGE < len(rows):
         more.append(f'<a href="{q.url(offset=q.offset + PAGE)}">Next</a>')
-    main = (f'<div class="wrap"><h1>Read</h1>{site._search_form()}'
+    main = (f'<div class="wrap"><h1>Read</h1>{site._search_form(view=q.view)}'
             f'<div class="read-layout">{_tree(docs, q)}<div class="read-main">'
             f'<h2>{site.esc(area_name(q.area))}</h2><nav class="tabs" aria-label="Show">{tabs}</nav>{_filters(q)}'
             f'<p class="muted">{len(rows)} {what}' + (f", {q.offset + 1}–{q.offset + len(shown)}" if len(rows) > PAGE

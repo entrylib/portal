@@ -177,6 +177,11 @@ details.notice[open] summary { margin-bottom: 4px; }
 .entry-top { margin: 0 0 4px; font-size: 15px; color: var(--muted); }
 .entry-top .id { overflow-wrap: anywhere; }
 .origin-line { margin: 10px 0 0; font-size: 16px; color: var(--muted); }
+.intro-strip { position: relative; margin: 0 0 14px; padding: 8px 48px 8px 12px; border-left: 3px solid var(--accent);
+  background: var(--panel); font-size: 15px; }
+.intro-strip .strip-close { position: absolute; top: 2px; right: 2px; border: 0; background: none; color: var(--muted);
+  font: inherit; font-size: 20px; line-height: 1; cursor: pointer; min-width: 44px; min-height: 36px; }
+.cs-authors .byline-part + .byline-part::before { content: "· "; }
 .panel { background: var(--panel); border: 1px solid var(--rule-light); border-radius: 6px; padding: 4px 16px;
   font-size: 15px; }
 .panel-row { padding: 10px 0; border-bottom: 1px solid var(--rule-light); }
@@ -201,6 +206,7 @@ details.notice[open] summary { margin-bottom: 4px; }
 .score-badge.band-high { background: var(--high-bg); } .score-badge.band-medium { background: var(--medium-bg); }
 .score-badge.band-low { background: var(--low-bg); }
 .score-badge.small { font-size: 13px; min-width: 2.2em; }
+.score-badge .badge-word { font-weight: 400; font-size: 0.85em; }
 .cs-brief .score-badge { flex: none; align-self: flex-start; margin-top: 4px; }
 .dots { display: inline-flex; gap: 3px; margin-right: 8px; vertical-align: 1px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; cursor: help; }

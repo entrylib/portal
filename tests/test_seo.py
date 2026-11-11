@@ -56,8 +56,8 @@ def test_area_addresses(app_client):
     r = app_client.get("/read/social-sciences/decision-sciences")
     assert r.status_code == 200 and "<title>Decision Sciences: claims and claimsets · EntryLib</title>" in r.text
     assert 'rel="canonical" href="https://entrylib.test/read/social-sciences/decision-sciences"' in r.text
-    r = app_client.get("/read", params={"area": "18", "view": "claimsets"}, follow_redirects=False)
-    assert r.status_code == 301 and r.headers["location"] == "/read/social-sciences/decision-sciences?view=claimsets"
+    r = app_client.get("/read", params={"area": "18", "view": "claims"}, follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/read/social-sciences/decision-sciences?view=claims"
     assert app_client.get("/read/nowhere/at-all").status_code == 404
 
 

@@ -51,7 +51,8 @@ def badge(scores, cid, small=False):
     c = scores["claims"][cid]
     label = f"{NAME} {c['score']}, {BANDS[c['band']].lower()}: why"
     return (f'<a class="score-badge band-{c["band"]}{" small" if small else ""}" href="#score-{esc(cid)}" '
-            f'data-popup="score-{esc(cid)}" aria-label="{esc(label)}">{c["score"]}</a>')
+            f'data-popup="score-{esc(cid)}" aria-label="{esc(label)}"><span class="badge-word">{NAME}</span> '
+            f'{c["score"]}</a>')
 
 
 def marker(scores):

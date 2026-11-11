@@ -351,6 +351,15 @@ def when(iso):
     return f"{t.day} {t:%B %Y} at {t:%H:%M} UTC"
 
 
+def day(iso):
+    """'10 November 2026' from an ISO 8601 date, or the text as given."""
+    try:
+        t = dt.date.fromisoformat(str(iso)[:10])
+    except ValueError:
+        return str(iso)
+    return f"{t.day} {t:%B %Y}"
+
+
 def _notice(p, published=None):
     """The status notice; a correction's gives the time its version was published (`published`, ISO 8601), when
     that is on the notice's date."""
@@ -427,7 +436,7 @@ def _origin_line(doc, origin, lab):
             link = f'<a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
         return (f'<p class="origin-line">Made from a published paper, {esc(by) + ", " if by else ""}{link}. '
                 "The conversion guarantor answers for its faithfulness to the paper.</p>")
-    return ""
+    return '<p class="origin-line">Written directly as a claimset.</p>'
 
 
 def _cite_row(identifier, citation, extra=""):
@@ -555,7 +564,9 @@ def person(c, where):
     an agent (with its label) and a person for a human. Everything from the file is escaped."""
     orcid = c.get("orcid") if isinstance(c.get("orcid"), str) and ORCID_ID.fullmatch(c["orcid"]) else None
     name = esc(c.get("name") or ("an AI agent" if c.get("type") == "agent" else ""))
-    ident = (f' <span class="orcid-wrap">(<a class="orcid{" orcid-verified" if where == "guarantor" else ""}" '
+    verified = (' orcid-verified" title="ORCID verified: they signed in with this ORCID iD to publish the paper'
+                if where == "guarantor" else "")
+    ident = (f' <span class="orcid-wrap">(<a class="orcid{verified}" '
              f'href="https://orcid.org/{orcid}">{orcid}</a>)</span>') if orcid else ""
     if where == "guarantor":
         return (f'<a class="guarantor-link" href="/people/{orcid}">{name}</a>' if orcid else name) + ident
@@ -566,6 +577,24 @@ def person(c, where):
     return f'<span class="who">{ICON["human"]}{name}{ident}</span>'
 
 
+def byline(role, people):
+    """The header's lines of people (claimset's render_parts `byline`, design §7.4): the guarantor as the responsible
+    researcher, then people as authors and AI agents as what the paper was written with. A converted claimset's
+    source authors keep the package's line."""
+    if role == "guarantor":
+        return "Responsible researcher: " + ", ".join(person(g, "guarantor") for g in people)
+    if role == "authors":
+        humans = [c for c in people if c.get("type") != "agent"]
+        agents = [c for c in people if c.get("type") == "agent"]
+        lines = ([f'<span class="byline-part">Authors: {", ".join(person(c, "author") for c in humans)}</span>']
+                 if humans else [])
+        if agents:
+            lines.append(f'<span class="byline-part">Written with: {", ".join(person(c, "author") for c in agents)}'
+                         "</span>")
+        return " ".join(lines)
+    return None
+
+
 def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
     """The claimset package's page view of `doc`, with the site's choices: how numbers are written, how people are
     shown, how references given by DOI are written out, what marks a claim (its score and dots, and its novelty,
@@ -574,7 +603,8 @@ def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
     key = ids.url_key(doc["paper"]["id"])
     extra = {"ref_text": ref_text} if ref_text else {}
     return cshtml.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
-                               claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, **extra)
+                               claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, byline=byline,
+                               **extra)
 
 
 def contents(sections, more=""):
@@ -582,6 +612,13 @@ def contents(sections, more=""):
     return ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
             + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
                                 + "</li>" for sid, t, c in sections) + f"{more}</ol></nav>")
+
+
+#: What a visitor who arrives from a link is looking at (UX audit, 11 November 2026). page.js shows its close button
+#: and hides it for good once closed; without the script it stays.
+INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a research paper published on EntryLib as '
+               'separate claims, each with its evidence. <a href="/about#reading">How to read this page</a>'
+               '<button type="button" class="strip-close" aria-label="Hide this note" hidden>\u00d7</button></p>')
 
 
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
@@ -592,8 +629,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     key, n = ids.url_key(p["id"]), p.get("version")
     parts = render(doc, file_url, ref_text, scores, claim_pages(doc) if not current or current == n else ())
     origin = parts["origin"]
-    top = [f'<span class="origin">{esc(origin)}</span>', _status(p), f'<span class="id">{esc(p["id"])}</span>',
-           f"version {esc(n)} · {esc(p.get('date'))}"]
+    top = [_status(p)] if (p.get("status") or "active") != "active" else []
+    top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
     newer = ""
@@ -605,7 +642,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
-            f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
+            f'{INTRO_STRIP}<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{parts["body"]}'
@@ -878,12 +915,13 @@ def card(doc):
             f'<div class="card-body">{body}</div></article>')
 
 
-def _search_form(q="", kind="papers", big=False):
+def _search_form(q="", view="claimsets", big=False):
+    """The search box: it searches on the Read page (design §7.7), claimsets unless `view` is "claims"."""
     cls = "search search-big" if big else "search"
-    hidden = f'<input type="hidden" name="kind" value="{esc(kind)}">' if kind != "papers" else ""
-    return (f'<form class="{cls}" action="/search" method="get" role="search">'
-            f'<label class="visually-hidden" for="q">Search claimsets</label>'
-            f'<input id="q" name="q" type="search" value="{esc(q)}" placeholder="Search claimsets">{hidden}'
+    hidden = '<input type="hidden" name="view" value="claims">' if view == "claims" else ""
+    return (f'<form class="{cls}" action="/read" method="get" role="search">'
+            f'<label class="visually-hidden" for="q">Search claimsets and claims</label>'
+            f'<input id="q" name="q" type="search" value="{esc(q)}" placeholder="Search claimsets and claims">{hidden}'
             '<button type="submit">Search</button></form>')
 
 
@@ -955,31 +993,35 @@ def fixed_page(name, base_url):
 SEARCH_PAGE = 20
 
 
-def search_page(q, kind, results=None, error=None, offset=0, limit=SEARCH_PAGE, files=None):
-    """The search page. `results`: the search API's answer; `files`: {paper id: current file} for paper cards."""
+def _read_url(q, view, offset=0):
+    """The address of a search on the Read page."""
+    return (f"/read?q={html.escape(q, quote=True)}" + ("&amp;view=claims" if view == "claims" else "")
+            + (f"&amp;offset={offset}" if offset else ""))
+
+
+def search_page(q, view, results=None, error=None, offset=0, limit=SEARCH_PAGE, files=None):
+    """The Read page with a query (design §7.7): the whole library searched, claimsets or claims. `results`: the
+    search API's answer; `files`: {paper id: current file} for claimset cards."""
     tabs = "".join(
-        f'<a href="/search?q={html.escape(q, quote=True)}&amp;kind={k}"'
-        + (' aria-current="page"' if k == kind else "") + f">{label}</a>"
-        for k, label in (("papers", "Claimsets"), ("claims", "Claims")))
-    out = [f'<div class="wrap"><h1>Read</h1>{_search_form(q, kind)}<nav class="tabs" aria-label="Search in">{tabs}'
-           "</nav>"]
+        f'<a href="{_read_url(q, v)}"' + (' aria-current="page"' if v == view else "") + f">{label}</a>"
+        for v, label in (("claimsets", "Claimsets"), ("claims", "Claims")))
+    out = [f'<div class="wrap"><h1>Read</h1>{_search_form(q, view)}'
+           '<p class="small muted">Searching the whole library. <a href="/read">Browse by field instead</a>.</p>'
+           f'<nav class="tabs" aria-label="Search in">{tabs}</nav>']
     if error:
         out.append(f'<p class="notice notice-warn">{esc(error)}</p>')
-    elif results is None:
-        out.append('<p class="muted">Search the claims and claimsets published on EntryLib, or see '
-                   '<a href="/all">all claimsets</a>.</p>')
     else:
-        rows = results.get("results") or []
+        rows = (results or {}).get("results") or []
         if not rows:
             out.append('<p class="muted">Nothing found. Search matches words, not meaning: try the words a paper '
                        'would use, and synonyms. Or <a href="/all">browse all claimsets</a>, or '
                        '<a href="/read">read by field</a>.</p>')
         else:
-            what = "claimset" if kind == "papers" else "claim"
+            what = "claimset" if view == "claimsets" else "claim"
             out.append(f'<p class="muted">{len(rows)} {what}{"s" if len(rows) != 1 else ""}'
                        + (f", from number {offset + 1}" if offset else "")
                        + (" (more on the next page)" if len(rows) == limit else "") + "</p>")
-        if rows and kind == "papers":
+        if rows and view == "claimsets":
             out.append('<div class="cards">' + "".join(card(files[r["id"]]) for r in rows if r["id"] in (files or {}))
                        + "</div>")
         elif rows:
@@ -994,15 +1036,13 @@ def search_page(q, kind, results=None, error=None, offset=0, limit=SEARCH_PAGE, 
             out.append(f'<ol class="results">{"".join(items)}</ol>')
         more = []
         if offset > 0:
-            more.append(f'<a href="/search?q={esc(q)}&amp;kind={kind}&amp;offset={max(0, offset - limit)}">Previous'
-                        "</a>")
+            more.append(f'<a href="{_read_url(q, view, max(0, offset - limit))}">Previous</a>')
         if len(rows) == limit:
-            more.append(f'<a href="/search?q={esc(q)}&amp;kind={kind}&amp;offset={offset + limit}">Next</a>')
+            more.append(f'<a href="{_read_url(q, view, offset + limit)}">Next</a>')
         if more:
             out.append(f'<p class="pager">{" · ".join(more)}</p>')
     out.append("</div>")
-    title = f"{q} · Read" if q else "Read"
-    return shell(title, "".join(out), active="read")
+    return shell(f"{q} · Read", "".join(out), active="read", head='<meta name="robots" content="noindex">')
 
 
 def removal_page(form=None, error=None, orcid_ready=True):
