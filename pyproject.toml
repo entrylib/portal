@@ -15,7 +15,7 @@ dependencies = [
   # From PyPI, not pinned: the portal works with whatever claimset it is given, at least portal.MIN_CLAIMSET. On the
   # server claimset is updated on its own, without rebuilding the portal (design §10).
   "claimset>=0.41.6",
-  "fastapi>=0.115",
+  "fastapi>=0.162.2",
   "uvicorn[standard]>=0.30",
   "psycopg[binary,pool]>=3.3.8",
   # GitHub App authentication (a JWT signed with the App's RSA key) for publishing through registry pull requests.

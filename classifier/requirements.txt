@@ -2,5 +2,5 @@
 torch>=2.4
 transformers>=5.22.2
 huggingface_hub>=0.24
-fastapi>=0.115
+fastapi>=0.162.2
 uvicorn>=0.30
