@@ -406,3 +406,7 @@ dialog.peek .cs-item, dialog.peek .cs-def { border: 0; }
   box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
 .to-top[hidden] { display: none; }
 .cs-toc a.toc-top { font-weight: 600; }
+
+/* People in a claimset's header (site.person, design §7.4): an icon for each author, none for the guarantor */
+.who-icon { width: 0.95em; height: 0.95em; vertical-align: -0.12em; margin-right: 0.3em; color: var(--muted); }
+.cs-label { color: var(--muted); }

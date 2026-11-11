@@ -355,6 +355,13 @@ def test_reading_aids(env):
     guarantor = next(c for c in example()["contributors"] if "guarantor" in c.get("positions", []))
     assert f'<a class="guarantor-link" href="/people/{guarantor["orcid"]}">{site.esc(guarantor["name"])}</a>' in page
     assert f"<loc>{BASE}/people/{guarantor['orcid']}</loc>" in (out / "sitemap.xml").read_text()
+    # authors drawn by the portal (claimset's person hook): an icon each, none for the guarantor
+    authors = re.search(r'<p class="cs-authors">.*?</p>', page, re.S).group(0)
+    assert 'aria-label="AI agent"' in authors and "(AI agent)" not in authors
+    assert "<svg" not in re.search(r'<p class="cs-guarantor">.*?</p>', page, re.S).group(0)
+    shown = site.person({"type": "agent", "name": "Claude <Code>", "label": "drafting"}, "author")
+    assert 'Claude &lt;Code&gt; <span class="cs-label">· drafting</span>' in shown
+    assert 'aria-label="Person"' in site.person({"type": "human", "name": "A. B"}, "author")
     home = (out / "index.html").read_text()
     assert 'class="start-here"' in home and "<strong>Reliability (0–100)</strong> says how well" in home
     assert "{reliability}" not in home and "{rubric}" not in home

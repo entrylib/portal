@@ -553,16 +553,58 @@ def _accepts(fn, name):
 TOC_TOP = '<li><a class="toc-top" href="#top">\u2191 Top</a></li>'
 
 
+#: Icons for the people and agents who wrote a paper (inline SVG: no image to load), in the text's colour, each named
+#: for screen readers and on hover. Guarantors are named without one (design §7.4).
+ICON = {
+    "agent": ('<svg class="who-icon" viewBox="0 0 16 16" width="15" height="15" role="img" aria-label="AI agent">'
+              '<title>AI agent</title><path d="M8 1.5v2.2M4.5 4.5h7a1.5 1.5 0 0 1 1.5 1.5v5.5a1.5 1.5 0 0 1-1.5 1.5'
+              'h-7A1.5 1.5 0 0 1 3 11.5V6a1.5 1.5 0 0 1 1.5-1.5zM1.5 8v2M14.5 8v2M6 10.8h4" fill="none" '
+              'stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="6" cy="8" r="1" '
+              'fill="currentColor"/><circle cx="10" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="1.5" r="1" '
+              'fill="currentColor"/></svg>'),
+    "human": ('<svg class="who-icon" viewBox="0 0 16 16" width="15" height="15" role="img" aria-label="Person">'
+              '<title>Person</title><circle cx="8" cy="5" r="2.8" fill="none" stroke="currentColor" '
+              'stroke-width="1.4"/><path d="M2.5 14.5c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6" fill="none" '
+              'stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'),
+}
+ORCID_ID = re.compile(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]")
+
+
+def person(c, where):
+    """How a person or agent is shown in a claimset's header (claimset's render_parts `person`, design §7.4): a
+    guarantor by name, linked to their page on EntryLib, with their ORCID link; an author with an icon, a robot for
+    an agent (with its label) and a person for a human. Everything from the file is escaped."""
+    orcid = c.get("orcid") if isinstance(c.get("orcid"), str) and ORCID_ID.fullmatch(c["orcid"]) else None
+    name = esc(c.get("name") or ("an AI agent" if c.get("type") == "agent" else ""))
+    ident = (f' <span class="orcid-wrap">(<a class="orcid{" orcid-verified" if where == "guarantor" else ""}" '
+             f'href="https://orcid.org/{orcid}">{orcid}</a>)</span>') if orcid else ""
+    if where == "guarantor":
+        return (f'<a class="guarantor-link" href="/people/{orcid}">{name}</a>' if orcid else name) + ident
+    if c.get("type") == "agent":
+        label = c.get("label") if isinstance(c.get("label"), str) and c["label"].strip() else None
+        return (f'<span class="who">{ICON["agent"]}{name}'
+                + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "") + "</span>")
+    return f'<span class="who">{ICON["human"]}{name}{ident}</span>'
+
+
+def render(doc, file_url=None, ref_text=None):
+    """The claimset package's page view of `doc`, with the site's choices: how numbers are written, how people are
+    shown, how references given by DOI are written out (each where the installed package takes it)."""
+    extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
+    if _accepts(cshtml.render_parts, "number"):                           # claimset 0.40.8
+        extra["number"] = number
+    if _accepts(cshtml.render_parts, "person"):                           # claimset 0.41.5
+        extra["person"] = person
+    return cshtml.render_parts(doc, file_url=file_url, **extra)
+
+
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
     """The page of one version of a claimset. `listing`: its versions (versions.json entries); `lab`: {copy,
     summary} when the registry holds its lab record; `current`: the claimset's current version number; `scores`: its
     scores (scores.compute), or None to show "–"."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
-    extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
-    if _accepts(cshtml.render_parts, "number"):                           # claimset 0.40.8
-        extra["number"] = number
-    parts = cshtml.render_parts(doc, file_url=file_url, **extra)
+    parts = render(doc, file_url, ref_text)
     origin = parts["origin"]
     top = [f'<span class="origin">{esc(origin)}</span>', _status(p), f'<span class="id">{esc(p["id"])}</span>',
            f"version {esc(n)} · {esc(p.get('date'))}"]
@@ -581,7 +623,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
-            f'{link_guarantors(parts["header"], doc)}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
+            f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
@@ -663,10 +705,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     key, n = ids.url_key(p["id"]), p.get("version")
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
     bundle = claim_bundle(doc, cid)
-    extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}
-    if _accepts(cshtml.render_parts, "number"):
-        extra["number"] = number
-    parts = cshtml.render_parts(bundle, file_url=file_url, **extra)
+    parts = render(bundle, file_url, ref_text)
     body, sections = _claim_sections(parts)
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""
@@ -1156,20 +1195,6 @@ def person_page(orcid, docs, base_url=""):
     return shell(f"{name}: claimsets", main, active="read",
                  description=f"The claimsets {name} guarantees on {SITE}: research papers as claims with what each "
                              "rests on.", canonical=f"{base_url}/people/{orcid}" if base_url else None)
-
-
-def link_guarantors(header, doc):
-    """The claimset's header with each guarantor's name linked to their page (design §7.4), found by the package's
-    markup for a guarantor (name, then the verified ORCID link); if that markup changes, the names stay plain."""
-    for c in _people(doc, "guarantor"):
-        orcid = c.get("orcid")
-        if not isinstance(orcid, str) or not re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]", orcid):
-            continue
-        mark = f' <span class="orcid-wrap">(<a class="orcid orcid-verified" href="https://orcid.org/{orcid}">'
-        name = esc(c.get("name", ""))
-        link = f'<a class="guarantor-link" href="/people/{orcid}">{name}</a>'
-        header = header.replace(f"{name}{mark}", f"{link}{mark}", 1)
-    return header
 
 
 def message_page(title, text, link=None):
