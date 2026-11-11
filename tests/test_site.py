@@ -1,6 +1,7 @@
 """The website (design §7.4): pages written at publication and at start, citations, images, search, escaping."""
 
 import json
+import re
 
 from publishing import BASE, example, write
 
@@ -261,8 +262,13 @@ def test_robots_and_for_models(env):
     assert "ai-train=yes" in robots                                      # the owner's choice, design §7.4
     assert "Disallow" not in robots
     page = (out / "p" / f"{KEY}.html").read_text()
-    assert f'<a class="copy-link" href="{BASE}/p/{KEY}@v1.read">Copy the link for your AI assistant</a>' in page
     assert ", for programs" not in page
+    # Ask your AI (design §7.4): a button copying a message that names the reading view's web page
+    assert 'data-copy="ask-message"' in page and ">Ask your AI about this paper</button>" in page
+    message = re.search(r'<p class="cite-text" id="ask-message">(.*?)</p>', page).group(1)
+    assert message.startswith(f"Read {BASE}/p/{KEY}@v1.read, a research paper") and "instead of guessing" in message
+    claim = (out / "p" / KEY / "C2.html").read_text()
+    assert ">Ask your AI about this claim</button>" in claim and f"Read {BASE}/p/{KEY}/C2, one claim" in claim
 
 
 def test_a_proposed_subfield_is_kept(env):
@@ -318,6 +324,47 @@ def test_a_correction_notice_is_folded():
     assert "<p>By A. B (ORCID 0000-0000-0000-0001)</p>" in named
     retracted = site._notice_box("retracted", "2026-11-10", "EntryLib", "error", "Wrong data.")
     assert retracted.startswith('<div class="notice') and "by EntryLib" in retracted
+    # with the time its version was published (design §7.4), in UTC, when that is on the notice's date
+    timed = site._notice(p, "2026-11-10T14:47:38+01:00")
+    assert "<summary><strong>Corrected</strong> · 10 November 2026 at 13:47 UTC</summary>" in timed
+    assert "· 2026-11-10</summary>" in site._notice(p, "2026-11-11T09:00:00+00:00")       # another day: the date
+    assert site.when("not a time") is None
+
+
+def test_publication_times(env):
+    """versions.json gives each version's publication time, from the registry commit that added it; the versions
+    list shows it."""
+    ctx, concept = published(env)
+    out = ctx["published_dir"]
+    versions = json.loads((out / "p" / KEY / "versions.json").read_text())["versions"]
+    stamp = versions[0]["published_at"]
+    assert stamp == ctx["registry"].published_at("2026/000/entrylib_2026.000001", 1) and "T" in stamp
+    page = (out / "p" / f"{KEY}.html").read_text()
+    assert f"Version 1 (this page) · {site.when(stamp)}" in page
+    assert ctx["registry"].published_at("2026/000/entrylib_2026.000001", 9) is None
+
+
+def test_reading_aids(env):
+    """Design §7.4: back to the top, the contents, buttons, Start here and what reliability means."""
+    ctx, concept = published(env)
+    out = ctx["published_dir"]
+    page = (out / "p" / f"{KEY}.html").read_text()
+    assert '<body id="top">' in page and f"<ol>{site.TOC_TOP}" in page
+    assert f"<ol>{site.TOC_TOP}" in (out / "p" / KEY / "C2.html").read_text()
+    assert 'data-copy="cite-text"' in page and "copy-link" not in page
+    guarantor = next(c for c in example()["contributors"] if "guarantor" in c.get("positions", []))
+    assert f'<a class="person" href="/people/{guarantor["orcid"]}">{site.esc(guarantor["name"])}</a>' in page
+    assert f"<loc>{BASE}/people/{guarantor['orcid']}</loc>" in (out / "sitemap.xml").read_text()
+    home = (out / "index.html").read_text()
+    assert 'class="start-here"' in home and "<strong>Reliability (0–100)</strong> says how well" in home
+    assert "{reliability}" not in home and "{rubric}" not in home
+    assert f'title="{site.esc(site.RELIABILITY)}"' in home
+    site.write_fixed(out, BASE)
+    css = (out / "site.css").read_text()
+    assert '.button, button[type="submit"]:not(.button-quiet) {' in css      # one style for every action button
+    assert not re.search(r"\.(search|read-filters|upload|request|pending) button", css)
+    js = (out / "page.js").read_text()
+    assert "entrylibPopup(\"peek\"" in js and "button[data-copy]" in js and "fold-toggle" in js
 
 
 def test_numbers_are_shown_to_four_decimal_places(env, monkeypatch):

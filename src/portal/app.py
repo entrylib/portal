@@ -336,14 +336,19 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return HTMLResponse(pages.message("Sign-in failed", str(exc)), status_code=502)
         if notices.is_notice_state(state):                  # a sign-in from the removal form
             return await removal_signed_in(state, who, name)
-        if consent.is_listing_state(state):                 # a sign-in at /confirm
+        kind = consent.listing_kind(state)
+        if kind:                                            # a sign-in at /confirm or /submissions
             def listing():
                 with pool.connection() as conn:
-                    return consent.listing(conn, state, who, settings.submissions_dir)
-            items = await run_in_threadpool(listing)
+                    items = consent.listing(conn, state, who, settings.submissions_dir)
+                    return items, (consent.history(conn, who) if items is not None and kind == "submissions"
+                                   else None)
+            items, past = await run_in_threadpool(listing)
             if items is None:
                 return _page(site.message_page("Sign-in expired", "This sign-in has expired or was already used. "
-                                               "Sign in again.", ("/confirm", "Confirm a claimset")), 400)
+                                               "Sign in again.", (f"/{kind}", "Sign in again")), 400)
+            if kind == "submissions":
+                return _page(site.submissions_list(items, past, who, name))
             return _page(site.confirm_list(items, who, name))
 
         def work():
@@ -394,12 +399,53 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             state = consent.start_listing(conn)
         return RedirectResponse(orcid.authorize_url(state), status_code=303)
 
+    @app.get("/submissions", response_class=HTMLResponse, include_in_schema=False)
+    def submissions_page():
+        """Your submissions: sign in with ORCID to see what you submitted and what you guarantee."""
+        return _page(site.submissions_page(orcid.configured))
+
+    @app.get("/submissions/start", include_in_schema=False)
+    def submissions_start():
+        if not orcid.configured:
+            return _page(site.submissions_page(False), 503)
+        with pool.connection() as conn:
+            state = consent.start_listing(conn, kind="submissions")
+        return RedirectResponse(orcid.authorize_url(state), status_code=303)
+
+    @app.get("/people/{who}", response_class=HTMLResponse, include_in_schema=False)
+    def person(who: str):
+        """A guarantor's page: the published claimsets they guarantee (design §7.4)."""
+        if not re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]", who):
+            return HTMLResponse(site.message_page("Not found", "No such person."), status_code=404)
+        with pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+                " AND v.version = p.current_version WHERE %s = ANY(p.guarantors)"
+                " ORDER BY p.first_published DESC, p.concept_id DESC", (who,)).fetchall()
+        docs = [r[0] for r in rows]
+        if not docs:
+            return HTMLResponse(site.message_page("Not found", "No claimset on EntryLib names this ORCID iD as its "
+                                                  "guarantor."), status_code=404)
+        return HTMLResponse(site.person_page(who, docs, settings.base_url))
+
     @app.post("/confirm", response_class=HTMLResponse, include_in_schema=False)
     async def confirm_ticket(request: Request):
-        """A Confirm button of the /confirm listing: its ticket is bound to the submission and the iD that signed
-        in."""
+        """A Confirm or Cancel button of the /confirm listing: its ticket is bound to the submission and the iD that
+        signed in."""
         body = await request.body()
         form = {k: v[0] for k, v in urllib.parse.parse_qs(body[:2000].decode("utf-8", "replace")).items()}
+        back = ("/confirm", "Back to your submissions")
+        if form.get("action") == "cancel":
+            def cancel():
+                with pool.connection() as conn:
+                    return consent.cancel_ticket(conn, form.get("ticket", ""), settings.submissions_dir)
+            outcome = await run_in_threadpool(cancel)
+            if outcome.result != "cancelled":
+                code_ = {"wrong_person": 403, "not_pending": 409}.get(outcome.result, 400)
+                return _page(site.message_page("Not cancelled", outcome.message[:1].upper() + outcome.message[1:]
+                                               + ".", back), code_)
+            return _page(site.message_page("Cancelled", "The submission is cancelled and its content deleted. "
+                                           "Nothing was published.", back))
 
         def work():
             with pool.connection() as conn:
