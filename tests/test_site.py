@@ -353,7 +353,7 @@ def test_reading_aids(env):
     assert f"<ol>{site.TOC_TOP}" in (out / "p" / KEY / "C2.html").read_text()
     assert 'data-copy="cite-text"' in page and "copy-link" not in page
     guarantor = next(c for c in example()["contributors"] if "guarantor" in c.get("positions", []))
-    assert f'<a class="person" href="/people/{guarantor["orcid"]}">{site.esc(guarantor["name"])}</a>' in page
+    assert f'<a class="guarantor-link" href="/people/{guarantor["orcid"]}">{site.esc(guarantor["name"])}</a>' in page
     assert f"<loc>{BASE}/people/{guarantor['orcid']}</loc>" in (out / "sitemap.xml").read_text()
     home = (out / "index.html").read_text()
     assert 'class="start-here"' in home and "<strong>Reliability (0–100)</strong> says how well" in home
