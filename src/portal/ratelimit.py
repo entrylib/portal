@@ -27,7 +27,7 @@ class Limit:
 #: The limits per address (initial values, design §8).
 LIMITS = {
     "read": Limit(120, 60),         # search, submission status, every MCP request
-    "validate": Limit(30, 3600),    # POST /api/validate, MCP validate
+    "validate": Limit(30, 3600),    # POST /api/validate, MCP validate and score
     "submit": Limit(20, 3600),      # POST /api/submissions, MCP submit
     "fetch": Limit(10, 3600),       # submission by URL: the server downloads up to 210 MB
     "request": Limit(10, 3600),     # POST /removal: retraction and removal requests

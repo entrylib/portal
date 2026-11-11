@@ -1,11 +1,15 @@
 """Scores of a claimset version, by EntryLib's rubric (github.com/entrylib/rubric; design §7.6).
 
-    compute(conn, doc) -> the scores of one version, or None without the rubric installed
-    text(scores)       -> the scores in plain text, for the end of the reading view
-    version()          -> the rubric version, or None
+    compute(conn, doc)    -> the scores of one version, or None without the rubric installed
+    finder(conn, concept) -> find(statement) for rubric.assess: the candidates for the close-match check
+    text(scores)          -> the scores in plain text, for the end of the reading view
+    issues_text(...)      -> every issue, for the authors' agent (rubric.report)
+    version()             -> the rubric version, or None
 
-The rubric decides every cost and every match; the portal only finds the candidates for the close-match check: claims
-of claimsets first published before this one, by the full-text search of their statements.
+The rubric decides every cost and every match (rubric.assess) and writes the report (rubric.report); the portal only
+finds the candidates for the close-match check: claims of claimsets first published before this one (every published
+claimset, for one not yet submitted), by the full-text search of their statements. A claimset is scored before it is
+submitted by the same functions (`claimset score`, the MCP tool score; design §7.6).
 """
 
 import re
@@ -39,7 +43,7 @@ def _candidates(conn, concept, statement, limit=20):
     rows = conn.execute(
         "SELECT c.concept_id, c.claim_id, c.statement FROM claims c"
         " JOIN papers p ON p.concept_id = c.concept_id AND p.current_version = c.version"
-        " WHERE c.concept_id <> %s AND NOT c.is_assumption"
+        " WHERE c.concept_id IS DISTINCT FROM %s AND NOT c.is_assumption"
         " AND p.first_published < (SELECT COALESCE(MIN(first_published), 'infinity'::date) FROM papers"
         "                          WHERE concept_id = %s)"
         " AND c.search @@ to_tsquery('english', %s)"
@@ -48,22 +52,19 @@ def _candidates(conn, concept, statement, limit=20):
     return [{"claim": f"{r[0]}#{r[1]}", "statement": r[2]} for r in rows]
 
 
+def finder(conn, concept):
+    """find(statement) for rubric.assess: the candidates of _candidates(), or None without a database."""
+    if conn is None:
+        return None
+    return lambda statement: _candidates(conn, concept, statement)
+
+
 def compute(conn, doc):
-    """The scores of one claimset version: the rubric's result, plus novelty for every scored claim that has a
-    novelty label. None without the rubric."""
+    """The scores of one claimset version: rubric.assess() with the portal's candidates, and the note. None without
+    the rubric."""
     if rubric is None:
         return None
-    result = rubric.score(doc)
-    concept = (doc.get("paper") or {}).get("id")
-    novelty = {}
-    for c in doc.get("claims") or []:
-        if not isinstance(c, dict) or c.get("id") not in result["claims"] or not c.get("novelty"):
-            continue
-        matches = _candidates(conn, concept, c.get("statement")) if c.get("role") == "principal" else []
-        n = rubric.novelty(c, matches, concept)
-        n["checked"] = c.get("role") == "principal" and conn is not None
-        novelty[c["id"]] = n
-    result["novelty"] = novelty
+    result = rubric.assess(doc, finder(conn, (doc.get("paper") or {}).get("id")))
     result["note"] = NOTE.format(v=result["rubric"])
     return result
 
@@ -109,32 +110,9 @@ def issues_text(scores, concept, n, base_url):
            f"{scores['rubric']}.",
            "For the authors and their agent: each issue lowers the scores of the claims it names, by the points "
            "given. Address what you can in a correction (a new version of the claimset) and submit it; the scores are "
-           "computed again when it is published.",
+           "computed again when it is published. Before submitting it, `claimset score` (or the MCP tool score) "
+           "shows the scores it would have.",
            NOTE.format(v=scores["rubric"]),
            "Rubric: https://github.com/entrylib/rubric/blob/main/RUBRIC.md",
            f"Page: {base_url}/p/{key}@v{n}#score · Scores as JSON: {base_url}/p/{key}@v{n}.score.json", ""]
-    paper = scores.get("paper")
-    if paper:
-        out.append(f"PAPER: reliability {paper['score']} ({paper['band']}), the score of its lowest principal claim, "
-                   f"{paper['lowest']}. Raising the lowest principal claim raises the paper.")
-        out.append("")
-    if not scores["problems"]:
-        out.append("No issues: every scored claim keeps all its points.")
-        return "\n".join(out) + "\n"
-    out.append("ISSUES, those of the principal claims first, most costly first:")
-    for pid, p in scores["problems"].items():
-        claims = [c for c, item in scores["claims"].items() if pid in item["problems"]]
-        if not claims:
-            continue
-        words = p["text"] if p["text"].rstrip().endswith((".", "!", "?")) else p["text"] + "."
-        out += ["", f"{pid}. {words}",
-                f"  Check: {p['check']} (group: {p['group']}); costs up to {p['cost']} points.",
-                f"  Lowers: {', '.join(f'{c} (-{scores['claims'][c]['costs'][pid]})' for c in claims)}."]
-        if p["objects"]:
-            out.append(f"  Concerns: {', '.join(p['objects'])}.")
-        out.append(f"  To fix: {p['fix']}")
-    out += ["", "CLAIMS: score (band): issues"]
-    for cid, c in scores["claims"].items():
-        issues = ", ".join(f"{p} (-{c['costs'][p]})" for p in c["problems"]) or "none"
-        out.append(f"{cid}: {c['score']} ({c['band']}): {issues}")
-    return "\n".join(out) + "\n"
+    return "\n".join(out) + "\n" + rubric.report(scores)

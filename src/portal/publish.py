@@ -33,6 +33,7 @@ from claimset.validate import (
     local_targets,
     validate,
     validate_path,
+    with_verifiability,
 )
 
 from . import ids
@@ -149,6 +150,7 @@ def prepare(source, *, conn, registry, store, classifier, today=None, concept=No
                 a["version"] = f"sha256:{digest}"
 
         # 4. platform fields
+        published = with_verifiability(published, rep.computed)    # claimset spec §5
         p = published["paper"]
         p["id"] = concept
         p["version"] = version
@@ -156,11 +158,6 @@ def prepare(source, *, conn, registry, store, classifier, today=None, concept=No
         proposed = proposed_subfield(doc)                   # claimset spec §3.1: the agent may propose it
         p["classification"] = {**(p.get("classification") or {}), "subfield": proposed or cls.subfield,
                                "topics": list(cls.topics)}
-        for c in published.get("claims") or []:
-            computed = rep.computed.get(c.get("id")) if isinstance(c, dict) else None
-            if computed:
-                c["verifiability"] = computed["verifiability"]
-                c["verifiability_flags"] = computed["verifiability_flags"]
         if previous is None:
             p["status"] = "active"
         else:
