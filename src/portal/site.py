@@ -41,7 +41,8 @@ FEED_ENTRIES = 30
 
 NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
        ("/about", "About", "about")]
-FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/privacy", "Privacy"),
+FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/submissions", "Your submissions"),
+          ("/privacy", "Privacy"),
           ("/removal", "Removal requests"), ("/spec/", "Specification"),
           (SOURCE_CODE, "Source code"), (f"mailto:{CONTACT}", CONTACT)]
 
@@ -580,7 +581,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
-            f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
+            f'{link_guarantors(parts["header"], doc)}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
@@ -1031,46 +1032,143 @@ CONSENT = ("By confirming, you state that you are the main author of this work a
            "and is removed only when it must be.")
 
 
+def _sign_in(path, orcid_ready):
+    return (f'<p><a class="button" href="{path}/start">Sign in with ORCID</a></p>' if orcid_ready else
+            '<p class="muted">ORCID sign-in is not available now.</p>')
+
+
 def confirm_page(orcid_ready=True):
     """/confirm: sign in with ORCID to see the submissions waiting for you, without the consent link."""
-    action = ('<p><a class="button" href="/confirm/start">Sign in with ORCID</a></p>' if orcid_ready else
-              '<p class="muted">ORCID sign-in is not available now.</p>')
     main = ('<div class="wrap prose"><h1>Confirm a claimset</h1><p class="lead">When an agent submits a claimset, '
             "its guarantor confirms it before it is published. The consent link the agent was given leads straight "
-            "to it; without the link, sign in here with your ORCID iD to see every submission waiting for you."
-            f"</p>{action}<p class=\"muted\">Submissions wait 48 hours for confirmation; then they are deleted and "
-            "can be submitted again.</p></div>")
+            "to it; without the link, sign in here with your ORCID iD to see every submission waiting for you, and "
+            f"confirm or cancel each.</p>{_sign_in('/confirm', orcid_ready)}<p class=\"muted\">Submissions wait 48 "
+            "hours for confirmation; then they are deleted and can be submitted again. "
+            '<a href="/submissions">Your submissions</a> shows everything you submitted.</p></div>')
     return shell("Confirm a claimset", main, head='<meta name="robots" content="noindex">')
 
 
+def submissions_page(orcid_ready=True):
+    """/submissions: sign in with ORCID to see what you submitted and what you guarantee."""
+    main = ('<div class="wrap prose"><h1>Your submissions</h1><p class="lead">Sign in with your ORCID iD to see '
+            "what waits for your confirmation, what waits for others or is being published, what closed recently, "
+            f"and every claimset you guarantee.</p>{_sign_in('/submissions', orcid_ready)}</div>")
+    return shell("Your submissions", main, head='<meta name="robots" content="noindex">')
+
+
+def _who_signed_in(orcid, name):
+    return f"{esc(name)} (ORCID {esc(orcid)})" if name else f"ORCID {esc(orcid)}"
+
+
+def _pending(items):
+    """The submissions waiting for the guarantor who signed in: each with its claims, a Confirm button, and a Cancel
+    button behind a second step."""
+    rows = []
+    for it in items:
+        principal = "".join(f"<li>{esc(plain(s))}</li>" for s in it.get("principal") or [])
+        kind = (f"<p><strong>A new version of {esc(it['target'])}.</strong> Reason given: "
+                f"{esc(it.get('correction_reason') or '')}</p>") if it.get("kind") == "correction" else ""
+        expires = it["expires"].strftime("%d %B %Y, %H:%M UTC")
+        ticket = f'<input type="hidden" name="ticket" value="{esc(it["ticket"])}">'
+        rows.append(
+            f'<section class="pending"><h2>{esc(it.get("title"))}</h2>{kind}'
+            f'<p class="muted">{esc(it["submission"])} · {esc(it.get("n_claims"))} claims · licence '
+            f'{esc(it.get("licence"))} · waits until {esc(expires)}</p>'
+            f'<p class="muted">Subfield: {esc(it.get("subfield"))}</p>'
+            f"<p>Principal claims:</p><ul>{principal}</ul>"
+            f"<details><summary>The whole claimset, as models will read it</summary><pre>"
+            f"{esc(it.get('reading_view'))}</pre></details>"
+            f'<form method="post" action="/confirm" class="actions">{ticket}'
+            '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>'
+            '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
+            "submission and its file are deleted. To publish it later, submit it again.</p>"
+            f'<form method="post" action="/confirm">{ticket}<button type="submit" class="button-quiet" '
+            'name="action" value="cancel">Cancel it</button></form></details></section>')
+    return "".join(rows)
+
+
 def confirm_list(items, orcid, name=None):
-    """The submissions waiting for the guarantor who signed in, each with its claims and a Confirm button."""
-    who = f"{esc(name)} (ORCID {esc(orcid)})" if name else f"ORCID {esc(orcid)}"
+    """The submissions waiting for the guarantor who signed in, each with its claims and its buttons."""
+    who = _who_signed_in(orcid, name)
     if not items:
         body = (f"<p>No submission is waiting for {who}. A submission is deleted 48 hours after it was made; if "
                 "yours has expired, submit it again.</p>")
     else:
-        rows = []
-        for it in items:
-            principal = "".join(f"<li>{esc(plain(s))}</li>" for s in it.get("principal") or [])
-            kind = (f"<p><strong>A new version of {esc(it['target'])}.</strong> Reason given: "
-                    f"{esc(it.get('correction_reason') or '')}</p>") if it.get("kind") == "correction" else ""
-            expires = it["expires"].strftime("%d %B %Y, %H:%M UTC")
-            rows.append(
-                f'<section class="pending"><h2>{esc(it.get("title"))}</h2>{kind}'
-                f'<p class="muted">{esc(it["submission"])} · {esc(it.get("n_claims"))} claims · licence '
-                f'{esc(it.get("licence"))} · waits until {esc(expires)}</p>'
-                f'<p class="muted">Subfield: {esc(it.get("subfield"))}</p>'
-                f"<p>Principal claims:</p><ul>{principal}</ul>"
-                f"<details><summary>The whole claimset, as models will read it</summary><pre>"
-                f"{esc(it.get('reading_view'))}</pre></details>"
-                f'<form method="post" action="/confirm"><input type="hidden" name="ticket" value="{esc(it["ticket"])}">'
-                '<p><button class="button" type="submit">Confirm and publish</button></p></form></section>')
         body = (f"<p>Signed in as {who}. {len(items)} submission{'s' if len(items) != 1 else ''} "
-                f"name{'s' if len(items) == 1 else ''} you as guarantor.</p><p>{esc(CONSENT)}</p>" + "".join(rows)
+                f"name{'s' if len(items) == 1 else ''} you as guarantor.</p><p>{esc(CONSENT)}</p>" + _pending(items)
                 + '<p class="muted">These buttons work for 30 minutes; then sign in again.</p>')
     main = f'<div class="wrap prose"><h1>Confirm a claimset</h1>{body}</div>'
     return shell("Confirm a claimset", main, head='<meta name="robots" content="noindex">')
+
+
+SUBMISSION_STATES = {"pending": "waiting for another guarantor", "confirmed": "confirmed, being published",
+                     "publishing": "being published", "refused": "refused", "expired": "expired"}
+
+
+def _submission_row(x):
+    what = f"a new version of {esc(x['target'])}" if x.get("kind") == "correction" else "a new claimset"
+    title = esc(x["title"]) if x.get("title") else esc(x["submission"])
+    from .submissions import CANCELLED  # here: submissions imports the indexer, which imports this
+    if x["state"] == "refused" and x.get("detail") == CANCELLED:
+        state, why = "cancelled by you", ""
+    else:
+        state = SUBMISSION_STATES.get(x["state"], x["state"])
+        why = f": {esc(x['detail'])}" if x.get("detail") and x["state"] in ("refused", "expired") else ""
+    return (f"<li><strong>{title}</strong> · {what} · submitted {esc(when(x['received'].isoformat()))} · "
+            f"{esc(state)}{why}</li>")
+
+
+def submissions_list(items, past, orcid, name=None):
+    """/submissions after sign-in (design §4.2): what waits for this guarantor, what waits for others or is being
+    published, what closed recently, and every claimset they guarantee."""
+    who = _who_signed_in(orcid, name)
+    past = past or {}
+    parts = [f"<p>Signed in as {who}. Only you see this page.</p>",
+             "<h2>Waiting for you</h2>",
+             (f"<p>{esc(CONSENT)}</p>" + _pending(items) + '<p class="muted">These buttons work for 30 minutes; then '
+              "sign in again.</p>") if items else '<p class="muted">Nothing waits for your confirmation.</p>']
+    if past.get("others"):
+        parts.append("<h2>In progress</h2><ul>" + "".join(_submission_row(x) for x in past["others"]) + "</ul>")
+    if past.get("closed"):
+        parts.append("<h2>Closed in the last 14 days</h2><ul>" + "".join(_submission_row(x) for x in past["closed"])
+                     + "</ul>")
+    published = past.get("published") or []
+    parts.append("<h2>Published</h2>")
+    if published:
+        parts.append("<ul>" + "".join(
+            f'<li><a href="/p/{ids.url_key(x["id"])}">{esc(x["title"])}</a> · {esc(x["id"])}@v{esc(x["version"])}'
+            f' · {esc(STATUS_LABELS.get(x["status"], x["status"]))}</li>' for x in published) + "</ul>"
+            f'<p><a href="/people/{esc(orcid)}">Your public page</a></p>')
+    else:
+        parts.append('<p class="muted">No claimset names you as its guarantor yet.</p>')
+    main = f'<div class="wrap prose"><h1>Your submissions</h1>{"".join(parts)}</div>'
+    return shell("Your submissions", main, head='<meta name="robots" content="noindex">')
+
+
+def person_page(orcid, docs, base_url=""):
+    """/people/<ORCID iD>: the published claimsets a person guarantees, newest first (design §7.4)."""
+    name = next((c.get("name") for d in docs for c in d.get("contributors") or []
+                 if isinstance(c, dict) and c.get("orcid") == orcid and c.get("name")), None) or orcid
+    n = len(docs)
+    main = (f'<div class="wrap"><h1>{esc(name)}</h1><p class="lead"><a class="orcid orcid-verified" '
+            f'href="https://orcid.org/{esc(orcid)}">{esc(orcid)}</a> · guarantor of {n} claimset{"s" if n != 1 else ""}'
+            f' on {SITE}</p><div class="cards">{"".join(card(d) for d in docs)}</div></div>')
+    return shell(f"{name}: claimsets", main, active="read",
+                 description=f"The claimsets {name} guarantees on {SITE}: research papers as claims with what each "
+                             "rests on.", canonical=f"{base_url}/people/{orcid}" if base_url else None)
+
+
+def link_guarantors(header, doc):
+    """The claimset's header with each guarantor's name linked to their page (design §7.4), found by the package's
+    markup for a guarantor (name, then the verified ORCID link); if that markup changes, the names stay plain."""
+    for c in _people(doc, "guarantor"):
+        orcid = c.get("orcid")
+        if not isinstance(orcid, str) or not re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]", orcid):
+            continue
+        mark = f' <span class="orcid-wrap">(<a class="orcid orcid-verified" href="https://orcid.org/{orcid}">'
+        header = header.replace(f"{esc(c.get('name', ''))}{mark}",
+                                f'<a class="person" href="/people/{orcid}">{esc(c.get("name", ""))}</a>{mark}', 1)
+    return header
 
 
 def message_page(title, text, link=None):
@@ -1193,6 +1291,8 @@ def sitemap(docs, base_url):
     """/sitemap.xml: the site's pages, the current page of every claimset and the pages of its principal claims, with
     the date they last changed."""
     urls = [f"<url><loc>{esc(base_url + path)}</loc></url>" for path in SITEMAP_PAGES + areas.paths(docs)]
+    people = sorted({c["orcid"] for d in docs for c in _people(d, "guarantor") if isinstance(c.get("orcid"), str)})
+    urls += [f"<url><loc>{esc(base_url)}/people/{esc(o)}</loc></url>" for o in people]   # guarantors' pages
     for d in docs:
         p = d["paper"]
         lastmod = f"<lastmod>{esc(str(p.get('date') or '')[:10])}</lastmod>"

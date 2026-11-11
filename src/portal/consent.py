@@ -5,12 +5,16 @@
     complete(conn, state, orcid)    -> Outcome: confirmed, or why not
 
 Without the link (the guarantor lost it): at /confirm the guarantor signs in with ORCID and sees every pending
-submission that names their iD; each has a one-time ticket behind its Confirm button.
+submission that names their iD; each has a one-time ticket behind its Confirm and Cancel buttons. /submissions
+uses the same sign-in and shows, besides, everything else they submitted and guarantee.
 
-    start_listing(conn)             -> an OAuth state for that sign-in
+    start_listing(conn, kind)       -> an OAuth state for that sign-in ("confirm" or "submissions")
+    listing_kind(state)             -> which page a sign-in was for, or None if it is not a listing's
     listing(conn, state, orcid)     -> the pending submissions naming `orcid`, each with a ticket; None if the state
                                        is unknown, expired or used
     complete_ticket(conn, ticket, orcid) -> Outcome, as complete()
+    cancel_ticket(conn, ticket, submissions_dir) -> Outcome: cancelled, or why not
+    history(conn, orcid)            -> the rest of what `orcid` submitted, and the claimsets they guarantee
 
 A submission is confirmed when the person who signs in with ORCID is its guarantor, the submission is still
 pending, and the guarantor is within the limits of design §8. Confirmed submissions are published by the worker.
@@ -26,7 +30,7 @@ from claimset.render import render
 
 from . import limits
 from .publish import load_submission
-from .submissions import duplicate, token_hash
+from .submissions import CANCELLED, duplicate, token_hash
 
 #: How long a sign-in started from a consent page may take.
 SIGNIN_WINDOW = dt.timedelta(minutes=30)
@@ -34,7 +38,7 @@ SIGNIN_WINDOW = dt.timedelta(minutes=30)
 
 @dataclass
 class Outcome:
-    result: str            # confirmed | wrong_person | not_pending | limit | unknown
+    result: str            # confirmed | cancelled | wrong_person | not_pending | limit | duplicate | unknown
     message: str
     submission: str | None = None
 
@@ -134,16 +138,26 @@ def _confirm(conn, token_hash_, orcid, now):
 TICKET_WINDOW = dt.timedelta(minutes=30)
 
 
-def start_listing(conn, now=None):
-    """An OAuth state for a sign-in at /confirm. Its prefix tells the shared ORCID callback whose it is."""
-    state = "l_" + secrets.token_urlsafe(24)
+#: The pages a listing sign-in is for, by the prefix of its OAuth state.
+LISTINGS = {"l_": "confirm", "m_": "submissions"}
+
+
+def start_listing(conn, now=None, kind="confirm"):
+    """An OAuth state for a sign-in at /confirm or /submissions. Its prefix tells the shared ORCID callback whose
+    it is."""
+    prefix = next(p for p, k in LISTINGS.items() if k == kind)
+    state = prefix + secrets.token_urlsafe(24)
     conn.execute("INSERT INTO confirm_signins (state, started) VALUES (%s, %s)",
                  (state, now or dt.datetime.now(dt.UTC)))
     return state
 
 
+def listing_kind(state):
+    return LISTINGS.get(state[:2]) if isinstance(state, str) else None
+
+
 def is_listing_state(state):
-    return isinstance(state, str) and state.startswith("l_")
+    return listing_kind(state) is not None
 
 
 def listing(conn, state, orcid, submissions_dir, now=None):
@@ -174,9 +188,7 @@ def complete_ticket(conn, ticket, orcid=None, now=None):
     """Confirm the submission behind a ticket from /confirm: the ticket is bound to the iD that signed in."""
     now = now or dt.datetime.now(dt.UTC)
     with conn.transaction():
-        row = conn.execute("UPDATE confirm_tickets SET used = %s WHERE ticket_hash = %s AND used IS NULL AND"
-                           " expires > %s RETURNING submission_id, orcid", (now, token_hash(ticket or ""), now)
-                           ).fetchone()
+        row = _ticket(conn, ticket, now)
         if row is None:
             return Outcome("unknown", "this confirmation has expired or was already used; sign in again at /confirm")
         sid, signed_in = row
@@ -185,6 +197,58 @@ def complete_ticket(conn, ticket, orcid=None, now=None):
         if g is None:
             return Outcome("wrong_person", "this submission does not name you as its guarantor", sid)
         return _confirm(conn, g[0], signed_in, now)
+
+
+def _ticket(conn, ticket, now):
+    """Use a ticket of a /confirm listing: (submission, the iD that signed in), or None if it is unknown, expired or
+    used."""
+    return conn.execute("UPDATE confirm_tickets SET used = %s WHERE ticket_hash = %s AND used IS NULL AND"
+                        " expires > %s RETURNING submission_id, orcid", (now, token_hash(ticket or ""), now)
+                        ).fetchone()
+
+
+def cancel_ticket(conn, ticket, submissions_dir, now=None):
+    """Cancel the submission behind a ticket (design §4.2 step 5): its guarantor no longer wants it. It is refused at
+    once, its content deleted as on expiry; it then stops counting against the limits."""
+    now = now or dt.datetime.now(dt.UTC)
+    with conn.transaction():
+        row = _ticket(conn, ticket, now)
+        if row is None:
+            return Outcome("unknown", "this button has expired or was already used; sign in again at /confirm")
+        sid, signed_in = row
+        if conn.execute("SELECT 1 FROM submission_guarantors WHERE submission_id = %s AND orcid = %s",
+                        (sid, signed_in)).fetchone() is None:
+            return Outcome("wrong_person", "this submission does not name you as its guarantor", sid)
+        done = conn.execute("UPDATE submissions SET state = 'refused', file_name = NULL, title = NULL,"
+                            " client_ip = NULL, title_key = NULL, detail = %s"
+                            " WHERE id = %s AND state = 'pending' RETURNING id", (CANCELLED, sid)).fetchone()
+        if done is None:
+            state = conn.execute("SELECT state FROM submissions WHERE id = %s", (sid,)).fetchone()
+            return Outcome("not_pending", f"this submission is {state[0] if state else 'gone'}", sid)
+    for f in Path(submissions_dir).glob(f"{sid}.*"):
+        f.unlink(missing_ok=True)
+    return Outcome("cancelled", "cancelled", sid)
+
+
+def history(conn, orcid, now=None):
+    """What /submissions shows besides the pending submissions waiting for `orcid`: {"others": submissions that wait
+    for another guarantor or are being published, "closed": those closed in the last 14 days (with the reason),
+    "published": the current version of every claimset `orcid` guarantees}, each newest first."""
+    now = now or dt.datetime.now(dt.UTC)
+    rows = conn.execute(
+        "SELECT s.id, s.state, s.kind, s.target, s.title, s.received, s.detail, s.published_id, g.confirmed"
+        " FROM submissions s JOIN submission_guarantors g ON g.submission_id = s.id WHERE g.orcid = %s"
+        " ORDER BY s.received DESC", (orcid,)).fetchall()
+    keys = ("submission", "state", "kind", "target", "title", "received", "detail", "published_id", "confirmed")
+    subs = [dict(zip(keys, r, strict=True)) for r in rows]
+    published = conn.execute(
+        "SELECT p.concept_id, p.current_version, p.title, p.status, p.updated FROM papers p"
+        " WHERE %s = ANY(p.guarantors) ORDER BY p.updated DESC, p.concept_id DESC", (orcid,)).fetchall()
+    return {"others": [x for x in subs if x["state"] in ("pending", "confirmed", "publishing") and
+                       not (x["state"] == "pending" and x["confirmed"] is None)],
+            "closed": [x for x in subs if x["state"] in ("refused", "expired")],
+            "published": [dict(zip(("id", "version", "title", "status", "date"), r, strict=True))
+                          for r in published]}
 
 
 def forget_old(conn, now=None):

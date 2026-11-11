@@ -34,6 +34,8 @@ MAX_PENDING_PER_IP = 5
 MAX_UPLOAD_BYTES = 210 * 1024 * 1024
 #: How long the record of a closed submission (expired, refused) is kept for status queries.
 KEEP_CLOSED = dt.timedelta(days=14)
+#: Why a submission its guarantor cancelled is refused (consent.cancel_ticket).
+CANCELLED = "cancelled by its guarantor"
 
 
 class SubmissionError(Exception):

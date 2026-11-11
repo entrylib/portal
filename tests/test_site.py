@@ -352,13 +352,16 @@ def test_reading_aids(env):
     assert '<body id="top">' in page and f"<ol>{site.TOC_TOP}" in page
     assert f"<ol>{site.TOC_TOP}" in (out / "p" / KEY / "C2.html").read_text()
     assert 'data-copy="cite-text"' in page and "copy-link" not in page
+    guarantor = next(c for c in example()["contributors"] if "guarantor" in c.get("positions", []))
+    assert f'<a class="person" href="/people/{guarantor["orcid"]}">{site.esc(guarantor["name"])}</a>' in page
+    assert f"<loc>{BASE}/people/{guarantor['orcid']}</loc>" in (out / "sitemap.xml").read_text()
     home = (out / "index.html").read_text()
     assert 'class="start-here"' in home and "<strong>Reliability (0–100)</strong> says how well" in home
     assert "{reliability}" not in home and "{rubric}" not in home
     assert f'title="{site.esc(site.RELIABILITY)}"' in home
     site.write_fixed(out, BASE)
     css = (out / "site.css").read_text()
-    assert '.button, button[type="submit"] {' in css            # one style for every action: no form styles its own
+    assert '.button, button[type="submit"]:not(.button-quiet) {' in css      # one style for every action button
     assert not re.search(r"\.(search|read-filters|upload|request|pending) button", css)
     js = (out / "page.js").read_text()
     assert "entrylibPopup(\"peek\"" in js and "button[data-copy]" in js and "fold-toggle" in js

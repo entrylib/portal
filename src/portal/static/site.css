@@ -42,7 +42,7 @@ main { min-height: 60vh; }
 .small { font-size: 15px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Buttons (design §7.4): one style for every action, one quiet style for secondary ones. No form styles its own. */
-.button, button[type="submit"] { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
+.button, button[type="submit"]:not(.button-quiet) { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
   border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: var(--ground) !important;
   font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
 .button-quiet { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--rule);
