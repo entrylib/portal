@@ -182,10 +182,12 @@ def write_static(conn, registry, folder, published_dir, base_url):
             score_json = json.dumps(scored[n], indent=1, ensure_ascii=False) + "\n"
             issues = scores.issues_text(scored[n], doc["paper"]["id"], n, base_url)
             _write(p / f"{key}@v{n}.score.json", score_json)
-            _write(p / f"{key}@v{n}.issues.txt", issues)
+            if issues:                                    # empty when the rubric failed to write the report
+                _write(p / f"{key}@v{n}.issues.txt", issues)
             if n == versions[-1]:
                 _write(p / f"{key}.score.json", score_json)
-                _write(p / f"{key}.issues.txt", issues)
+                if issues:
+                    _write(p / f"{key}.issues.txt", issues)
         _write(p / f"{key}@v{n}.json", text)
         _write(p / f"{key}@v{n}.txt", view)
         reading = site.reading_page(doc, view, base_url)       # the same text as a web page, for assistants
