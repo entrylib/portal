@@ -24,6 +24,7 @@ from importlib import resources
 from pathlib import Path
 
 from claimset import html as cshtml
+from claimset.claim import claim_bundle
 
 from . import areas, ids, indexnow, limits, score_html, specs
 from . import scores as score_data
@@ -249,9 +250,7 @@ def _source_authors(doc):
     return names[0] if len(names) == 1 else (", ".join(names[:-1]) + " and " + names[-1] if names else "")
 
 
-def citation_text(doc, base_url):
-    """The plain-text citation of a version."""
-    p = doc["paper"]
+def _who(doc):
     people, as_guarantor = cited_people(doc)
     names = []
     for c in people:
@@ -261,12 +260,40 @@ def citation_text(doc, base_url):
         (names[0] if names else SITE)
     if as_guarantor and people:
         who += " (guarantor)"
+    return who
+
+
+def citation_text(doc, base_url, claim=None):
+    """The plain-text citation of a version, or of one of its claims (`claim`: its ID), which names the claim by its
+    versioned identifier (entrylib:2026.000001@v3#C4) and gives the address of the claim's page."""
+    p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     src = _source(doc)
     title = p.get("title", "")
     if src:
         title += f" [Claimset converted from {src}]"
-    return f"{who} ({_year(doc)}). {title}. {SITE}. {p['id']}@v{n}. {base_url}/p/{key}@v{n}"
+    if claim:
+        return (f"{_who(doc)} ({_year(doc)}). Claim {claim}, in: {title}. {SITE}. {p['id']}@v{n}#{claim}. "
+                f"{base_url}/p/{key}/{claim}")
+    return f"{_who(doc)} ({_year(doc)}). {title}. {SITE}. {p['id']}@v{n}. {base_url}/p/{key}@v{n}"
+
+
+def citation_note(doc, base_url, claim=None):
+    """How to cite, as plain text for the end of a reading view: the claimset's citation, or a claim's, and how to
+    cite any one claim (design §7.8)."""
+    p = doc["paper"]
+    key, n = ids.url_key(p["id"]), p.get("version")
+    out = ["", "HOW TO CITE"]
+    if claim:
+        out.append(f"This claim: {citation_text(doc, base_url, claim)}")
+        out.append(f"The claimset it is from: {citation_text(doc, base_url)}")
+    else:
+        out.append(f"This claimset: {citation_text(doc, base_url)}")
+        first = (claim_pages(doc) or ["C1"])[0]
+        out.append(f"One claim of it: by its identifier, as {p['id']}@v{n}#{first} for claim {first}."
+                   + (f" Each principal claim has its own page, as {base_url}/p/{key}/{first}." if claim_pages(doc)
+                      else ""))
+    return "\n".join(out) + "\n"
 
 
 def _bib_escape(s):
@@ -413,7 +440,9 @@ def _panel(doc, parts, base_url, key, scores=None):
     return (f'<aside class="panel" aria-label="About this entry">'
             f'{score_html.panel_rows(scores, parts.get("lights"), f"/p/{key}@v{n}.issues.txt")}'
             f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(p["id"])}@v{n}</code></p>'
-            f'<details class="cite"><summary>Citation</summary><p class="cite-text">{cite}</p></details>'
+            f'<details class="cite"><summary>Citation</summary><p class="cite-text" id="cite-text">{cite}</p>'
+            '<button type="button" class="copy-text" data-copy="cite-text" hidden>Copy the citation</button>'
+            '</details>'
             f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
             f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}</div>'
             f'<div class="panel-row"><h2>For models</h2><p class="small"><a class="copy-link" '
@@ -496,12 +525,13 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     score_item = '<li><a href="#score">Score</a></li>' if scores else ""
     nav = parts["nav"].replace("</ol></nav>", f'{score_item}<li><a href="#versions">Versions</a> '
                                               f'<span class="count">{len(listing)}</span></li></ol></nav>')
+    body = link_claims(parts["body"], key, claim_pages(doc)) if not current or current == n else parts["body"]
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p)}{parts["header"]}'
             f'{_origin_line(doc, origin, lab)}</div>{_panel(doc, parts, base_url, key, scores)}'
-            f'{nav}<article class="cs-body">{score_html.decorate(parts["body"], scores)}'
+            f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
     first = _principal(doc)[:1]
     description = plain(first[0].get("statement")) if first else ""
@@ -513,6 +543,143 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                           scores=scores)
     return shell(p.get("title", ""), main, active="read", description=description, head=head, canonical=canonical,
                  script="/page.js")
+
+
+# --- the page of a claim (design §7.1, §7.8) --------------------------------------------------------------------------
+
+CLAIM_ID = re.compile(r"C[0-9]+")
+#: The order of a claim page's sections: the claim first, then what it rests on.
+CLAIM_SECTIONS = ("principal", "supporting", "evidence", "limitations", "assumptions", "definitions", "context",
+                  "references", "artefacts")
+SECTION_START = re.compile(r'\n(?=<section class="cs-section" id=")')
+
+
+def claim_pages(doc):
+    """The claims that have a page of their own: the principal claims, in the order the paper gives them."""
+    return [c["id"] for c in _principal(doc)
+            if c.get("role") == "principal" and isinstance(c.get("id"), str) and CLAIM_ID.fullmatch(c["id"])
+            and not any(isinstance(x, dict) and x.get("kind") == "assumption" for x in c.get("support") or [])]
+
+
+def link_claims(body, key, cids):
+    """The page view with the ID of each claim in `cids` linked to the claim's page."""
+    if not cids:
+        return body
+    pattern = re.compile(r'(<div class="cs-item cs-claim[^"]*" id="(' + "|".join(map(re.escape, cids))
+                         + r')"><p class="cs-claim-meta">(?:<span class="light[^"]*"[^>]*></span>)?)\2(?= ·|<)')
+    return pattern.sub(lambda m: f'{m.group(1)}<a class="claim-page" href="/p/{key}/{m.group(2)}" '
+                                 f'title="This claim on its own page">{m.group(2)}</a>', body)
+
+
+def plain_text(text):
+    """A statement as one line of plain text: no term markup, mathematics as its TeX without dollars."""
+    return re.sub(r"\s+", " ", INLINE_MATH.sub(lambda m: m.group(1) or m.group(2), plain(text))).strip()
+
+
+def _shorten(text, limit):
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def _claim_sections(parts):
+    """The sections of a claim bundle's page view, the claim first; the In brief section left out, since the page's
+    heading is the claim. As rendered if the sections cannot be told apart."""
+    shown = [sid for sid, _, _ in parts.get("sections") or []]
+    pieces = SECTION_START.split(parts["body"])
+    if not shown or len(pieces) != len(shown) or any(
+            not piece.startswith(f'<section class="cs-section" id="{sid}"')
+            for sid, piece in zip(shown, pieces, strict=True)):
+        return parts["body"], []
+    by = dict(zip(shown, pieces, strict=True))
+    order = [sid for sid in CLAIM_SECTIONS if sid in by]
+    titles = {sid: (title, n) for sid, title, n in parts["sections"]}
+    by["principal"] = by["principal"].replace("<h2>Principal claims</h2>", "<h2>The claim</h2>", 1) \
+        if "principal" in by else None
+    titles["principal"] = ("The claim", 0)
+    titles["supporting"] = ("Claims it rests on", titles.get("supporting", ("", 0))[1])
+    if "supporting" in by:
+        by["supporting"] = by["supporting"].replace("<h2>Supporting claims</h2>", "<h2>Claims it rests on</h2>", 1)
+    return "\n".join(by[sid] for sid in order), [(sid, *titles[sid]) for sid in order]
+
+
+def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None):
+    """The page of one principal claim of the current version, at /p/<key>/<cid>: the claim as its heading, its
+    reliability and why, how to cite it, and what it rests on (the claim bundle, rendered by the claimset
+    package)."""
+    p = doc["paper"]
+    key, n = ids.url_key(p["id"]), p.get("version")
+    claim = next(c for c in _claims(doc) if c.get("id") == cid)
+    bundle = claim_bundle(doc, cid)
+    extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}
+    if _accepts(cshtml.render_parts, "number"):
+        extra["number"] = number
+    parts = cshtml.render_parts(bundle, file_url=file_url, **extra)
+    body, sections = _claim_sections(parts)
+    url = f"{base_url}/p/{key}/{cid}"
+    title = p.get("title") or ""
+    item = (scores or {}).get("claims", {}).get(cid) if scores else None
+    score_item = '<li><a href="#score">Score</a></li>' if item else ""
+    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+           + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
+                     + "</li>" for sid, t, c in sections) + f"{score_item}</ol></nav>")
+    top = [f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
+           esc(p.get("date"))]
+    cite = esc(citation_text(doc, base_url, cid))
+    if item:
+        reliability = (f'<div class="panel-row score-row"><h2>Reliability</h2>'
+                       f'<p class="score-big band-{item["band"]}"><a href="#score" data-popup="score-{esc(cid)}">'
+                       f'<span class="score-num">{item["score"]}</span> <span class="score-band">'
+                       f'{score_html.BANDS[item["band"]]}</span></a></p>{score_html.dots(scores, cid)}'
+                       f'<p class="small"><a href="#score" data-popup="score-{esc(cid)}">Why</a> · '
+                       f'<a href="{score_html.RUBRIC_URL}">How scores are given</a></p></div>')
+    else:
+        reliability = ('<div class="panel-row"><h2>Reliability</h2><p class="score">–</p>'
+                       f'<p class="small"><a href="{score_html.RUBRIC_URL}">How scores are given</a></p></div>')
+    panel = (f'<aside class="panel" aria-label="About this claim">{reliability}'
+             f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(p["id"])}@v{esc(n)}#{esc(cid)}</code>'
+             f'</p><details class="cite"><summary>Citation</summary><p class="cite-text" id="cite-text">{cite}</p>'
+             '<button type="button" class="copy-text" data-copy="cite-text" hidden>Copy the citation</button>'
+             '</details></div>'
+             f'<div class="panel-row"><h2>The claimset</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
+             f'{esc(title)}</a></p></div>'
+             f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}/{esc(cid)}.txt">'
+             f'Reading view</a> · <a href="/p/{key}/{esc(cid)}.json">JSON</a></p></div></aside>')
+    origin = (f'<p class="origin-line">A principal claim of <a href="/p/{key}#{esc(cid)}">{esc(title)}</a> '
+              f'({esc(_who(doc))}, {esc(_year(doc))}), with what it rests on. '
+              f'<a href="/p/{key}">Read the whole claimset</a>.</p>')
+    main = (f'<div class="cs-page entry claim-entry"><div class="cs-header entry-header">'
+            f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{_notice(p)}'
+            f'<h1 class="cs-title claim-title">{plain_html(claim.get("statement"))}</h1>{origin}</div>{panel}'
+            f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
+            f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}</article></div>')
+    statement = plain_text(claim.get("statement"))
+    head = (f'<link rel="alternate" type="application/json" href="/p/{key}/{esc(cid)}.json">'
+            f'<link rel="alternate" type="text/plain" href="/p/{key}/{esc(cid)}.txt">'
+            + claim_meta(doc, cid, base_url, url, statement, item))
+    return shell(_shorten(statement, 110), main, active="read",
+                 description=_shorten(f"{statement} From: {title}.", 300), head=head, canonical=url,
+                 script="/page.js")
+
+
+def claim_meta(doc, cid, base_url, url, statement, item=None):
+    """A claim page's head for search and answer engines: schema.org Claim, part of the claimset's
+    ScholarlyArticle; Open Graph."""
+    p = doc["paper"]
+    key = ids.url_key(p["id"])
+    people, _ = cited_people(doc)
+    data = {"@context": "https://schema.org", "@type": "Claim", "name": _shorten(statement, 110), "text": statement,
+            "url": url, "identifier": f"{p.get('id')}@v{p.get('version')}#{cid}",
+            "dateModified": str(p.get("date") or "")[:10], "inLanguage": "en",
+            "author": [{"@type": "Person", "name": c.get("name")} for c in people if c.get("name")],
+            "isPartOf": {"@type": "ScholarlyArticle", "name": p.get("title"), "url": f"{base_url}/p/{key}",
+                         "identifier": f"{p.get('id')}@v{p.get('version')}"},
+            "publisher": {"@type": "Organization", "name": SITE, "url": base_url}}
+    extra = ""
+    if item:
+        extra = ('<meta name="twitter:label1" content="Reliability">'
+                 f'<meta name="twitter:data1" content="{item["score"]}, {item["band"]}">')
+    return _ld(data) + _og(_shorten(statement, 110), f"A claim of {p.get('title')}", url, base_url, "article", extra)
 
 
 # --- what search engines and link previews read (design §7.8) ---------------------------------------------------------
@@ -932,6 +1099,21 @@ def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=N
             _write(p / f"{key}.html", page)
             _write(p / f"{key}.bib", bibtex(doc, base_url))
             _write(p / f"{key}.ris", ris(doc, base_url))
+            write_claim_pages(p / key, doc, base_url=base_url, scores=(scores or {}).get(n), file_url=file_url,
+                              ref_text=ref_text)
+
+
+def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, ref_text=None):
+    """The pages of the current version's principal claims, replacing those of the version before (whose principal
+    claims may differ)."""
+    directory = Path(directory)
+    cids = claim_pages(doc)
+    for old in directory.glob("C*.html") if directory.exists() else []:
+        if CLAIM_ID.fullmatch(old.stem) and old.stem not in cids:
+            old.unlink()
+    for cid in cids:
+        _write(directory / f"{cid}.html", claim_page(doc, cid, base_url=base_url, scores=scores, file_url=file_url,
+                                                     ref_text=ref_text))
 
 
 def write_listings(published_dir, base_url, docs):
@@ -948,12 +1130,15 @@ SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/spec/"]
 
 
 def sitemap(docs, base_url):
-    """/sitemap.xml: the site's pages and the current page of every claimset, with the date it last changed."""
+    """/sitemap.xml: the site's pages, the current page of every claimset and the pages of its principal claims, with
+    the date they last changed."""
     urls = [f"<url><loc>{esc(base_url + path)}</loc></url>" for path in SITEMAP_PAGES + areas.paths(docs)]
     for d in docs:
         p = d["paper"]
-        urls.append(f"<url><loc>{esc(base_url)}/p/{ids.url_key(p['id'])}</loc>"
-                    f"<lastmod>{esc(str(p.get('date') or '')[:10])}</lastmod></url>")
+        lastmod = f"<lastmod>{esc(str(p.get('date') or '')[:10])}</lastmod>"
+        urls.append(f"<url><loc>{esc(base_url)}/p/{ids.url_key(p['id'])}</loc>{lastmod}</url>")
+        urls += [f"<url><loc>{esc(base_url)}/p/{ids.url_key(p['id'])}/{cid}</loc>{lastmod}</url>"
+                 for cid in claim_pages(d)]
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             + "\n".join(urls) + "\n</urlset>\n")
 

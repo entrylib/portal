@@ -163,3 +163,22 @@ window.entrylibPopup = function (className, label) {
     }, function () { window.location.href = link.href; });
   });
 })();
+
+// A citation copied with one click: the button names the element whose text it copies. Without the script the
+// button stays hidden and the citation can be selected by hand.
+(function () {
+  "use strict";
+  if (!navigator.clipboard) return;
+  document.querySelectorAll("button.copy-text").forEach(function (b) {
+    var from = document.getElementById(b.getAttribute("data-copy"));
+    if (!from) return;
+    var label = b.textContent;
+    b.hidden = false;
+    b.addEventListener("click", function () {
+      navigator.clipboard.writeText(from.textContent.trim()).then(function () {
+        b.textContent = "Copied";
+        setTimeout(function () { b.textContent = label; }, 3000);
+      });
+    });
+  });
+})();

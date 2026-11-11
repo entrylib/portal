@@ -183,6 +183,7 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 | `/p/2026.000001/versions.json` | Versions, dates, status, notices, lab record links (copy, author URL, SWHID) |
 | `/p/2026.000001/v1/lab.jsonl` | The registry's copy of a version's lab record |
 | `/p/2026.000001/C4.txt`, `.json` | Claim bundle of the current version (PLT-78): the claim with what it rests on, made by the claimset package (claimset spec §2.3, `claimset render --claim C4`) |
+| `/p/2026.000001/C4` | The page of a principal claim of the current version (§7.8): the claim as its heading, its reliability and why, how to cite it, and what it rests on (the claim bundle, rendered by the claimset package); it links to the claimset's page. The same address answers `Accept: application/json` with the bundle and `Accept: text/plain` with its reading view. Pages of claims a newer version no longer has as principal are deleted |
 | `/p/2026.000001`, `@v1` | The page for people (§7.4). The same address answers `Accept: application/json` with the published file and `Accept: application/x-bibtex` with its BibTeX entry |
 | `/p/2026.000001.bib`, `.ris`, `@v1.bib`, `@v1.ris` | Citations, written at publication |
 | `/p/2026.000001/v1/files/<path>` | A packaged file of a version, under its path in the package; images shown on the pages, other files downloaded |
@@ -271,6 +272,8 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 - **schema.org (JSON-LD):** a claimset is a `ScholarlyArticle` (authors with their ORCID iDs, dates, licence, identifier, subfield, keywords, references, the JSON file as associated media); the home page names the `Organization` and the `WebSite`. JSON-LD is data in the page, never run; "<" in it is escaped.
 - **Link previews:** Open Graph and Twitter tags, with one card for the site (`/og-card.png`, 1200×630); a claimset's preview also gives its reliability.
 - **Areas** of the Read page have their own addresses, `/read/<domain>/<field>/<subfield>` by name, each with its own title, description and canonical address (filters never make a new canonical page), listed in the sitemap when they hold a claimset; `/read?area=` answers with a redirect.
+- **Answer engines** (AI search and assistants) quote and cite passages, but index pages: every principal claim has its own page (§7.1), whose title and heading are the claim, listed in the sitemap with the claimset's date. People reach it from the claim's ID on the claimset page.
+- **Citation:** the reading view, the reading view as a web page and every claim bundle's reading view end with how to cite them (the claimset, and a claim as `entrylib:2026.000001@v3#C4` with its page's address). The claimset page's citation can be copied with one click.
 - **IndexNow:** when a version is published the portal tells IndexNow (Bing, Yandex and others) its addresses at once, if `PORTAL_INDEXNOW_KEY` is set; the key is served at `/indexnow.txt`. Best effort; the sitemap lists everything anyway.
 
 ## 8. Limits and spam controls

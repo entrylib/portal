@@ -3,11 +3,12 @@ over claims and papers of current versions."""
 
 import datetime as dt
 import json
+import re
 
 import pytest
 from publishing import BASE, example, write
 
-from portal import search
+from portal import search, site
 from portal.indexer import reindex
 from portal.publish import publish
 
@@ -28,7 +29,12 @@ def test_claim_bundles_page_and_llms_txt(env):
     bundle = json.loads((out / "p" / KEY / "C2.json").read_text())
     assert bundle["bundle_of"] == "C2" and bundle["paper"]["id"] == concept
     assert [c["id"] for c in bundle["claims"]] == ["C2", "C1", "C3"]
-    assert {f.name for f in (out / "p" / KEY).glob("C*")} == {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")}
+    assert {f.name for f in (out / "p" / KEY).glob("C*")} == \
+        {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")} | {"C2.html"}       # a page for the principal claim
+    assert text.rstrip().endswith(f"{concept}@v1. {BASE}/p/{KEY}@v1") and "HOW TO CITE" in text
+    assert "This claim: " in text and f"{concept}@v1#C2. {BASE}/p/{KEY}/C2" in text
+    view = (out / "p" / f"{KEY}.txt").read_text()
+    assert "HOW TO CITE" in view and f"{concept}@v1#C2 for claim C2" in view and f"{BASE}/p/{KEY}/C2." in view
     page = (out / "p" / f"{KEY}.html").read_text()
     assert page.startswith("<!doctype html>") and 'class="cs-page entry"' in page
     assert page.count("<script src=") == 1 and page.count("<script") == 2          # the script, and JSON-LD data
@@ -159,3 +165,40 @@ def test_entry_files_exist_before_anything_is_published(env):
     out = ctx["published_dir"]
     indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.39.2")
     assert (out / "llms.txt").read_text().startswith("# EntryLib") and (out / "index.jsonl").read_text() == ""
+
+
+def test_claim_pages(env):
+    """Every principal claim of the current version has a page (design §7.8): the claim as title and heading, its
+    citation, what it rests on, a canonical address of its own; listed in the sitemap, linked from the claimset."""
+    ctx, _, concept = published(env)
+    out = ctx["published_dir"]
+    page = (out / "p" / KEY / "C2.html").read_text()
+    head, body = page.split("</head>")
+    assert f'<link rel="canonical" href="{BASE}/p/{KEY}/C2">' in head and "<title>" in head
+    claim = json.loads(next(b for b in re.findall(r'type="application/ld\+json">(.*?)</script>', head, re.S)))
+    assert claim["@type"] == "Claim" and claim["identifier"] == f"{concept}@v1#C2"
+    assert claim["isPartOf"]["url"] == f"{BASE}/p/{KEY}"
+    assert 'class="cs-title claim-title"' in body and f"{concept}@v1#C2" in body
+    assert f'href="/p/{KEY}/C2.txt"' in body and f'href="/p/{KEY}#C2"' in body
+    sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', body)
+    assert sections[0] == "principal" and "brief" not in sections and "definitions" in sections
+    assert (out / "p" / f"{KEY}.html").read_text().count(f'class="claim-page" href="/p/{KEY}/C2"') == 1
+    sitemap = (out / "sitemap.xml").read_text()
+    assert f"<loc>{BASE}/p/{KEY}/C2</loc>" in sitemap and f"<loc>{BASE}/p/{KEY}/C1</loc>" not in sitemap
+
+
+def test_claim_pages_follow_the_principal_claims(tmp_path):
+    doc = example()
+    doc["paper"]["id"], doc["paper"]["version"] = "entrylib:2026.000001", 1
+    (tmp_path / "C9.html").write_text("old")
+    (tmp_path / "notes.html").write_text("kept")
+    site.write_claim_pages(tmp_path, doc, base_url=BASE)
+    assert {f.name for f in tmp_path.iterdir()} == {"C2.html", "notes.html"}
+    assert site.claim_pages(doc) == ["C2"]
+    doc["claims"][0]["role"] = "principal"                  # C1 rests on an assumption: never a page of its own
+    assert site.claim_pages(doc) == ["C2"]
+
+
+def test_claim_page_sections_as_rendered_when_unrecognised():
+    parts = {"body": "<p>one</p>", "sections": [("principal", "Principal claims", 1)]}
+    assert site._claim_sections(parts) == ("<p>one</p>", [])

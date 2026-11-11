@@ -12,10 +12,11 @@
 {$PORTAL_DOMAIN:localhost} {
 	encode zstd gzip
 
-	# One address per claimset (design §7.1): people get the page, programs asking for JSON get the published file,
-	# reference managers asking for BibTeX get its entry. The .json, .txt, .bib and .ris addresses stay explicit.
+	# One address per claimset and per principal claim (design §7.1): people get the page, programs asking for JSON get
+	# the published file (a claim: its bundle), reference managers asking for BibTeX get a claimset's entry. The .json,
+	# .txt, .bib and .ris addresses stay explicit.
 	@wants_json {
-		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+|/C[0-9]+)?$
 		header Accept *application/json*
 	}
 	rewrite @wants_json {path}.json
@@ -36,7 +37,7 @@
 	}
 	rewrite @assistant {path}.read.html
 	@wants_text {
-		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+|/C[0-9]+)?$
 		header_regexp Accept ^\s*text/(plain|markdown)
 	}
 	rewrite @wants_text {path}.txt
@@ -62,7 +63,7 @@
 		header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 		header /p/* Vary "Accept, User-Agent"
 		# Every page names its reading view in a header too, which some fetching tools read when they skip the page.
-		@page path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		@page path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+|/C[0-9]+)?$
 		header @page Link "<{path}.txt>; rel=\"alternate\"; type=\"text/plain\""
 		@versioned path /site.css /page.js /claimset.css /fonts/fonts.css
 		header @versioned Cache-Control "public, max-age=31536000, immutable"
