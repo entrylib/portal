@@ -167,10 +167,7 @@ class RemoteRegistry:
 
     def sync(self):
         """Bring the clone's main to the remote's, with its tags."""
-        self._git("fetch", "-q", "--tags", "--force", self.remote, "main")
-        self._git("checkout", "-q", "-B", "main", f"{self.remote}/main")
-        self._git("reset", "-q", "--hard", f"{self.remote}/main")
-        self._git("clean", "-q", "-fd")
+        update_clone(self.registry, self.remote)
 
     @staticmethod
     def branch_of(prepared):
@@ -244,6 +241,14 @@ class RemoteRegistry:
         self.gh.delete_branch(branch)
         self.sync()
         return "merged", None
+
+
+def update_clone(registry, remote="origin"):
+    """Bring a registry clone's main to the remote's, with its tags (anonymously: the registry is public)."""
+    registry.git("fetch", "-q", "--tags", "--force", remote, "main")
+    registry.git("checkout", "-q", "-B", "main", f"{remote}/main")
+    registry.git("reset", "-q", "--hard", f"{remote}/main")
+    registry.git("clean", "-q", "-fd")
 
 
 def ensure_clone(path, repo, registry_factory):
