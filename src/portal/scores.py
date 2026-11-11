@@ -12,11 +12,31 @@ claimset, for one not yet submitted), by the full-text search of their statement
 submitted by the same functions (`claimset score`, the MCP tool score; design §7.6).
 """
 
+import contextlib
 import re
+import sys
+
+
+def rubric_error(what, detail):
+    """Report a failure of the rubric, named as such: the scores are left out ("–") and the rest of the portal goes on
+    (publication, the registry, the index, the pages)."""
+    print(f"portal: RUBRIC ERROR while {what}: {detail}. Scores show \"–\"; the rest of the portal is not affected.",
+          file=sys.stderr)
+
 
 try:
     import rubric
-except ImportError:                                          # the page then shows "–"
+except ImportError:                                          # not installed: the page then shows "–"
+    rubric = None
+except Exception as exc:  # noqa: BLE001 - a broken rubric must not stop the portal
+    rubric_error("importing it", f"{type(exc).__name__}: {exc}")
+    rubric = None
+
+#: What the portal calls in the rubric. A rubric without one of them (installed before it was added) counts as not
+#: installed; the next start installs the current one.
+NEEDED = ("VERSION", "RUBRIC", "assess", "report", "score", "stems")
+if rubric is not None and not all(hasattr(rubric, n) for n in NEEDED):
+    rubric_error("loading it", f"the installed rubric lacks {', '.join(n for n in NEEDED if not hasattr(rubric, n))}")
     rubric = None
 
 NOTE = ("Scores are computed by rules from the claimset file (EntryLib rubric {v}): they check the record, not the "
@@ -64,9 +84,29 @@ def compute(conn, doc):
     the rubric."""
     if rubric is None:
         return None
-    result = rubric.assess(doc, finder(conn, (doc.get("paper") or {}).get("id")))
-    result["note"] = NOTE.format(v=result["rubric"])
+    paper = doc.get("paper") or {}
+    try:
+        # a savepoint: a failed query of the close-match check must not abort the caller's transaction
+        with conn.transaction() if conn is not None else contextlib.nullcontext():
+            result = rubric.assess(doc, finder(conn, paper.get("id")))
+        result["note"] = NOTE.format(v=result["rubric"])
+    except Exception as exc:  # noqa: BLE001 - the rubric's failure leaves the scores out, nothing else
+        rubric_error(f"scoring {paper.get('id') or 'a claimset'}@v{paper.get('version', '?')} (rubric {version()})",
+                     f"{type(exc).__name__}: {exc}")
+        return None
     return result
+
+
+def paper_score(doc):
+    """The paper's reliability for a list card, or None without the rubric or when it fails."""
+    if rubric is None:
+        return None
+    try:
+        return rubric.score(doc)["paper"]
+    except Exception as exc:  # noqa: BLE001 - the rubric's failure leaves the score out, nothing else
+        rubric_error(f"scoring {(doc.get('paper') or {}).get('id')} for a list (rubric {version()})",
+                     f"{type(exc).__name__}: {exc}")
+        return None
 
 
 def label(n):
@@ -115,4 +155,9 @@ def issues_text(scores, concept, n, base_url):
            NOTE.format(v=scores["rubric"]),
            "Rubric: https://github.com/entrylib/rubric/blob/main/RUBRIC.md",
            f"Page: {base_url}/p/{key}@v{n}#score · Scores as JSON: {base_url}/p/{key}@v{n}.score.json", ""]
-    return "\n".join(out) + "\n" + rubric.report(scores)
+    try:
+        report = rubric.report(scores)
+    except Exception as exc:  # noqa: BLE001 - the rubric's failure leaves the issues out, nothing else
+        rubric_error(f"writing the issues of {concept}@v{n} (rubric {version()})", f"{type(exc).__name__}: {exc}")
+        return ""
+    return "\n".join(out) + "\n" + report

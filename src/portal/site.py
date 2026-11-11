@@ -640,7 +640,7 @@ def card(doc):
             f'<h3><a href="/p/{key}">{esc(p.get("title"))}</a></h3>'
             + (f'<p class="card-who">{who}</p>' if who else "") + first
             + f'<p class="card-counts">{" · ".join(counts)}</p>')
-    paper = (score_data.rubric.score(doc)["paper"] if score_data.rubric else None)   # reliability (design §7.6)
+    paper = score_data.paper_score(doc)                                             # reliability (design §7.6)
     if not paper:
         return f'<article class="card"><div class="card-body">{body}</div></article>'
     word = score_html.BANDS[paper["band"]]

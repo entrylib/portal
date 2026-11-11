@@ -4,7 +4,7 @@ score.json; the close-match check against earlier claimsets."""
 import json
 
 import pytest
-from publishing import example, write
+from publishing import BASE, example, write
 
 from portal import score_html, scores, site
 from portal.publish import publish
@@ -94,3 +94,63 @@ def test_lists_show_reliability(env):
         text = (ctx["published_dir"] / page).read_text()
         assert f'<span class="card-score-num">{score["score"]}</span>' in text, page
         assert f'href="/p/{KEY}#score"' in text
+
+
+def test_a_rubric_without_what_the_portal_calls_counts_as_not_installed(monkeypatch):
+    import importlib
+    import types
+
+    old = types.ModuleType("rubric")
+    old.VERSION, old.RUBRIC = "0.2.0", {"groups": []}
+    old.score = old.stems = lambda *a: None                     # no assess and no report, as before they were added
+    monkeypatch.setitem(__import__("sys").modules, "rubric", old)
+    try:
+        reloaded = importlib.reload(scores)
+        assert reloaded.rubric is None
+        assert reloaded.compute(None, example()) is None and reloaded.version() is None
+    finally:
+        monkeypatch.undo()
+        importlib.reload(scores)
+    assert scores.rubric is not None
+
+
+def test_a_failing_rubric_leaves_out_the_scores_and_nothing_else(env, monkeypatch, capsys):
+    ctx, tmp = env
+
+    def broken(doc, find):
+        raise ValueError("a bug in the rubric")
+
+    monkeypatch.setattr(scores.rubric, "assess", broken)
+    concept, version = publish(write(tmp, example()), **ctx)          # published all the same
+    assert (concept, version) == ("entrylib:2026.000001", 1)
+    p = ctx["published_dir"] / "p"
+    assert (p / f"{KEY}.html").exists() and (p / f"{KEY}@v1.json").exists()
+    assert not (p / f"{KEY}.score.json").exists()
+    assert ctx["conn"].execute("SELECT current_version FROM papers").fetchall() == [(1,)]
+    err = capsys.readouterr().err
+    assert "RUBRIC ERROR while scoring entrylib:2026.000001@v1" in err and "a bug in the rubric" in err
+
+
+def test_a_failed_query_of_the_rubric_does_not_abort_a_rebuild(env, monkeypatch, capsys):
+    from portal.indexer import reindex
+    ctx, tmp = env
+    publish(write(tmp, example()), **ctx)
+    publish(write(tmp, example(), "b.claimset.json"), **ctx)
+    monkeypatch.setattr(scores, "_candidates", lambda conn, *a, **k: conn.execute("SELECT nonsense FROM nowhere"))
+    monkeypatch.setattr(scores.rubric, "assess", lambda doc, find: find("forecast accuracy"))
+    reindex(ctx["conn"], ctx["registry"], ctx["published_dir"], BASE)
+    rows = ctx["conn"].execute("SELECT concept_id, current_version FROM papers ORDER BY 1").fetchall()
+    assert rows == [("entrylib:2026.000001", 1), ("entrylib:2026.000002", 1)]
+    assert "RUBRIC ERROR" in capsys.readouterr().err
+
+
+def test_a_failing_report_leaves_out_the_issues(env, monkeypatch):
+    ctx, tmp = env
+
+    def broken(result):
+        raise KeyError("group")
+
+    monkeypatch.setattr(scores.rubric, "report", broken)
+    publish(write(tmp, example()), **ctx)
+    p = ctx["published_dir"] / "p"
+    assert (p / f"{KEY}.score.json").exists() and not (p / f"{KEY}.issues.txt").exists()

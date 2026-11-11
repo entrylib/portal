@@ -45,3 +45,9 @@ def test_the_pieces_agree():
     for name in ("POSTGRES_PASSWORD", "OPENALEX_API_KEY", "ORCID_CLIENT_ID", "ORCID_CLIENT_SECRET", "GITHUB_APP_ID",
                  "GITHUB_APP_PRIVATE_KEY_PATH", "PORTAL_DOMAIN", "PORTAL_REGISTRY_MODE", "ORCID_BASE"):
         assert f"{name}=" in setup and name in compose, name
+
+
+def test_start_reinstalls_the_rubric():
+    # pip keeps a git install whose version number is unchanged, and the rubric's code changes without it
+    line = next(x for x in (ROOT / "deploy" / "start.sh").read_text().splitlines() if "entrylib-rubric @ git+" in x)
+    assert "--force-reinstall" in line

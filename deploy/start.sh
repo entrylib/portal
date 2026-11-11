@@ -8,8 +8,9 @@ if [ "${PORTAL_CLAIMSET_UPDATE:-1}" != "0" ]; then
   pip install --user --quiet --upgrade --no-deps "claimset>=0.40.1" \
     || echo "portal: could not update claimset; using the installed one" >&2
   # The scoring rubric, from GitHub (design §7.6): its version, recorded with every score, rebuilds the pages when it
-  # changes.
-  pip install --user --quiet --upgrade --no-deps "entrylib-rubric @ git+https://github.com/entrylib/rubric" \
+  # changes. Reinstalled at each start (--force-reinstall): pip leaves a git install alone while its version number
+  # is unchanged, and the rubric's code can change without it.
+  pip install --user --quiet --force-reinstall --no-deps "entrylib-rubric @ git+https://github.com/entrylib/rubric" \
     || echo "portal: could not update the rubric; using the installed one" >&2
 fi
 exec portal serve --port 8000
