@@ -73,9 +73,11 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   submission is checked; nothing is kept.
 - {base}/api/submissions (POST a submission package, a zip made by `claimset package`, or a claimset JSON file, as
   the request body): submits it. A claimset whose files are deposited elsewhere (Zenodo, GitHub) is submitted as the
-  JSON alone, its artefacts' `uri` being their https URLs.
-- {base}/api/submissions/from-url (POST `{"url": "https://..."}`): submits a package or a claimset file deposited at a
-  public https URL, for a file too large to send directly.
+  JSON alone, its artefacts' `uri` being their https URLs. A claimset whose artefacts name files by a relative path
+  (`files/results.csv`) is submitted as its package: alone it carries no files, and it is refused (rule 70).
+- {base}/api/submissions/from-url (POST `{"url": "https://..."}`), or the MCP tool submit with package_url: submits a
+  package or a claimset file deposited at a public https URL, for a file too large to send directly or an agent that
+  cannot send a file (a package committed to a public repository, at its commit's raw address, or on Zenodo).
 - {base}/submit: a page where a person uploads the file.
 - Each response gives a consent link: the guarantor signs in with ORCID within 48 hours by that link and confirms;
   then the claimset is published. Keep the whole response: the link is shown only there. Without it, the guarantor

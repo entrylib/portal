@@ -173,10 +173,12 @@ def build(portal):
 
     @server.tool()
     def validate(ctx: Context, claimset: dict | str) -> dict:
-        """Check a claimset file (a JSON object, or its text) exactly as a submission is checked: the validator of
-        the current Claimset specification and the portal's screening. Nothing is kept. `valid` says whether it would be
-        accepted; `errors` and `warnings` give each problem's rule number, place and message, to fix and check
-        again."""
+        """Check a claimset file (a JSON object, or its text) exactly as a submission of it alone is checked: the
+        validator of the current Claimset specification and the portal's screening. Nothing is kept. `valid` says
+        whether it would be accepted when sent alone; `errors` and `warnings` give each problem's rule number, place
+        and message, to fix and check again. An artefact that names a file by a relative path is an error here (rule
+        70): the claimset alone carries no files, and a claimset with files is submitted as its package, by
+        package_url."""
         portal.spend(ctx, "validate")
         path = _json_file(claimset, uploads)
         try:
@@ -187,11 +189,16 @@ def build(portal):
     @server.tool()
     def submit(ctx: Context, claimset: dict | str | None = None, package_url: str | None = None,
                new_paper: bool = False) -> dict:
-        """Submit a claimset for publication. Give either claimset (the file, as a JSON object or its text, for a
-        claimset with no files, or whose artefacts are deposited elsewhere and named by their https URLs), or
-        package_url (an https
-        URL of a submission package, a BagIt zip made by `claimset package`, or of a claimset file, deposited
-        anywhere public, such as Zenodo or GitHub; use it for files over 10 MB).
+        """Submit a claimset for publication. Give either claimset (the file, as a JSON object or its text) or
+        package_url (an https URL of a submission package, the BagIt zip `claimset package` builds, or of a claimset
+        file, deposited anywhere public; use it for files over 10 MB too).
+
+        The claimset alone carries no files. Give it only when none of its artefacts names a file by a relative path
+        (`files/results.csv`): every file is then named by the https URL where it is deposited (Zenodo, a commit on
+        GitHub). A claimset that names packaged files is refused when sent alone, since EntryLib would publish it
+        without them: send its package by package_url. In a public repository, commit the zip, push it and give its
+        address at that commit (https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.zip); or deposit it on
+        Zenodo. From a shell that reaches EntryLib, `claimset submit <paper>.claimset.json` packages and sends it.
 
         A valid submission is held for 48 hours. The response's `consent` gives a link for the guarantor: give it to
         your human, who signs in with ORCID and confirms; then it is published. The link is shown only in this

@@ -64,7 +64,7 @@ data/
   files/results-per-series.csv
 ```
 
-- A packaged artefact has a `uri` relative to `data/` and `version` `sha256:<checksum>` (rule 70). At publication the platform replaces the relative `uri` with the file's permanent location. A claimset with no files may be submitted as the JSON file alone.
+- A packaged artefact has a `uri` relative to `data/` and `version` `sha256:<checksum>` (rule 70). At publication the platform replaces the relative `uri` with the file's permanent location. A claimset with no files may be submitted as the JSON file alone. A claimset submitted alone names no packaged file: an artefact whose `uri` is a relative path is refused under rule 70 (claimset spec v0.41 §2.5, amended 2026-11-11), since the file would not arrive and the paper would be published without it. The refusal says how to send the package.
 - Limits (rule 77, spec v0.35): at most 200 files, 50 MB a file, 200 MB in all; safe paths only; the manifest lists exactly the payload; an allowlist of file types (gzipped data files accepted; archives, executables and links refused). The validator checks a zip before unpacking it. Artefacts are served as downloads, never rendered (SVG included).
 
 ### 4.2 Flow
@@ -104,7 +104,7 @@ Every route ends in the same checks and the same pending submission (§4.2); the
 | Use case | Route | What is sent |
 |---|---|---|
 | A full pipeline in a terminal (claimset-lab, `claimset package`) | `POST /api/submissions`, the zip as the request body (`claimset submit`) | The package, with its files |
-| Evidence already deposited elsewhere (Zenodo, GitHub, an institutional repository) | `POST /api/submissions` with the JSON as the body, or the MCP tool `submit` | The claimset JSON alone; its artefacts' `uri` are the deposits' https URLs and are left there: the portal neither downloads nor copies them |
+| Evidence already deposited elsewhere (Zenodo, GitHub, an institutional repository) | `POST /api/submissions` with the JSON as the body, or the MCP tool `submit` | The claimset JSON alone; its artefacts' `uri` are the deposits' https URLs and are left there: the portal neither downloads nor copies them. An artefact with a relative `uri` names a file of a package, and the JSON alone is refused |
 | A claimset with no files | as above | The claimset JSON alone |
 | A person with a file, no terminal | `/submit`, a page with a file picker | The zip or the JSON, sent as the request body of `POST /api/submissions` by the page's script |
 | An agent that cannot upload a large file (MCP, a chat) but can deposit it | `POST /api/submissions/from-url` with `{"url": …}`, or the MCP tool `submit` with `package_url` | An https URL of the package or the JSON, which the portal fetches |

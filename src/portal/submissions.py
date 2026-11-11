@@ -20,7 +20,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claimset.validate import validate_path
+from claimset.validate import standalone_problems, validate_path
 
 from . import limits
 from .indexer import title_key
@@ -74,6 +74,11 @@ def check(path):
         return Check([{"rule": "read", "where": "", "message": "cannot read the submission: not a claimset file "
                                                                "(JSON) or a package (BagIt zip)"}], [])
     errors, warnings = _items(rep.errors), _items(rep.warnings)
+    if Path(path).is_file() and not zipfile.is_zipfile(path):     # the claimset alone: it carries no files (rule 70)
+        try:
+            errors += _items(standalone_problems(json.loads(Path(path).read_text(encoding="utf-8"))))
+        except (OSError, ValueError):
+            pass
     doc = None
     if not errors:
         with tempfile.TemporaryDirectory() as tmp:

@@ -235,3 +235,37 @@ def test_converted_claimsets_are_not_taken(client):
         c.pop("assessments", None)
     r = client.post("/api/submissions", content=body(doc), headers=JSON)
     assert r.status_code == 422 and "conversion service" in r.json()["error"], r.text
+
+
+def with_packaged_file(tmp_path):
+    """The example claimset, one of whose artefacts names a file beside it by relative path (claimset spec §2.5)."""
+    doc = example()
+    doc["artefacts"].append({"id": "A9", "kind": "data", "uri": "files/results.csv", "licence": "CC-BY-4.0",
+                             "availability": {"level": "public"}, "description": "Every result, at full precision."})
+    path = tmp_path / "paper.claimset.json"
+    path.write_text(json.dumps(doc))
+    (tmp_path / "files").mkdir()
+    (tmp_path / "files" / "results.csv").write_text("lab_result,value\nRS1,0.5\n")
+    return path
+
+
+def test_a_claimset_alone_names_no_packaged_file(tmp_path):
+    """Sent alone, a claimset that names packaged files would be published without them: refused (rule 70)."""
+    path = with_packaged_file(tmp_path)
+    result = submissions.check(path)
+    assert not result.ok
+    assert [(e["rule"], e["where"]) for e in result.errors] == [("70", "artefacts:A9.uri")]
+    assert "package_url" in result.errors[0]["message"]
+    package = tmp_path / "paper.zip"
+    build(str(path), str(package))
+    assert submissions.check(package).ok                             # its package carries the file
+
+
+def test_mcp_refuses_the_claimset_alone(app_client, tmp_path):
+    from test_mcp import call, data
+    doc = json.loads(with_packaged_file(tmp_path).read_text())
+    out = data(app_client, "validate", claimset=json.dumps(doc))
+    assert out["valid"] is False and [e["rule"] for e in out["errors"]] == ["70"]
+    err, text = call(app_client, "submit", claimset=json.dumps(doc))
+    assert "70" in text and "not valid" in text
+
