@@ -29,7 +29,8 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   (`"extensions": {"linguistics": "0.1"}`), with its fields in `ext` blocks on the objects it extends.
 - A claimset is complete without its extensions: every claim and its support is in the core. Read the `ext` blocks of
   an extension you know as added detail, and leave out those you do not.
-- The extensions and their specifications: https://github.com/entrylib/claimset/tree/main/spec/extensions
+- The extensions and their specifications: {base}/spec/extensions (each specification also as plain text,
+  at its address with .md added).
 
 ## Fetch
 

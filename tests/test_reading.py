@@ -43,6 +43,7 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert f"{BASE}/api/search/claims?q=" in llms and "data" in llms and "{base}" not in llms
     assert f"{BASE}/mcp" in llms and f"{BASE}/api/submissions/from-url" in llms and "new_paper" in llms
     assert "## Extensions" in llms and "`ext` blocks" in llms
+    assert f"{BASE}/spec/extensions" in llms and "github.com/entrylib/claimset/tree" not in llms   # issue #46
 
 
 def test_submitted_text_is_escaped_in_the_page(env):
