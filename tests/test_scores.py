@@ -46,6 +46,21 @@ def test_problem_text_is_escaped():
     assert "<script>" not in html and "&lt;script&gt;" in html
 
 
+def test_the_rubric_scores_and_reports():
+    """One place for scoring (design §7.6): the portal's scores are rubric.assess on the file with the verifiability
+    the platform sets, and the issues are rubric.report, the same as `claimset score` gives before submission."""
+    import rubric
+    from claimset.validate import with_verifiability
+    if not hasattr(rubric, "assess"):
+        pytest.skip("the installed rubric is older than rubric.assess")
+    doc = with_verifiability(example())
+    result = scores.compute(None, doc)
+    assert {k: v for k, v in result.items() if k != "note"} == rubric.assess(doc)
+    assert all(not n["checked"] for n in result["novelty"].values())       # no database: nothing compared
+    text = scores.issues_text(result, "entrylib:2026.000001", 1, "https://entrylib.org")
+    assert text.endswith(rubric.report(result)) and "claimset score" in text
+
+
 def test_without_scores_the_page_shows_a_dash():
     doc = example()
     doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})

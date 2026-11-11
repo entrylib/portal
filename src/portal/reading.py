@@ -61,7 +61,7 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 ## MCP
 
 - {base}/mcp: an MCP server (Streamable HTTP, no sign-in) with the tools search_claims, search_papers, get_paper,
-  get_claim, validate, submit and submission_status. It does what this file describes.
+  get_claim, validate, score, submit and submission_status. It does what this file describes.
 
 ## Submit
 
@@ -71,11 +71,16 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   {base}/spec/), and the skills that `pip install claimset` then `claimset skill install` give. Check it first:
   {base}/api/validate (POST a claimset JSON file or a submission package as the request body) checks it as a
   submission is checked; nothing is kept.
+- Optional, before submitting: the scores the claimset would have once published, by the EntryLib rubric
+  (https://github.com/entrylib/rubric), with its biggest issues and what would fix them: `claimset score` on your own
+  machine, or the MCP tool score. Ask your human whether to score; they decide whether to submit as it is or amend it.
 - {base}/api/submissions (POST a submission package, a zip made by `claimset package`, or a claimset JSON file, as
   the request body): submits it. A claimset whose files are deposited elsewhere (Zenodo, GitHub) is submitted as the
-  JSON alone, its artefacts' `uri` being their https URLs.
-- {base}/api/submissions/from-url (POST `{"url": "https://..."}`): submits a package or a claimset file deposited at a
-  public https URL, for a file too large to send directly.
+  JSON alone, its artefacts' `uri` being their https URLs. A claimset whose artefacts name files by a relative path
+  (`files/results.csv`) is submitted as its package: alone it carries no files, and it is refused (rule 70).
+- {base}/api/submissions/from-url (POST `{"url": "https://..."}`), or the MCP tool submit with package_url: submits a
+  package or a claimset file deposited at a public https URL, for a file too large to send directly or an agent that
+  cannot send a file (a package committed to a public repository, at its commit's raw address, or on Zenodo).
 - {base}/submit: a page where a person uploads the file.
 - Each response gives a consent link: the guarantor signs in with ORCID within 48 hours by that link and confirms;
   then the claimset is published. Keep the whole response: the link is shown only there. Without it, the guarantor

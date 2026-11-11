@@ -64,7 +64,7 @@ data/
   files/results-per-series.csv
 ```
 
-- A packaged artefact has a `uri` relative to `data/` and `version` `sha256:<checksum>` (rule 70). At publication the platform replaces the relative `uri` with the file's permanent location. A claimset with no files may be submitted as the JSON file alone.
+- A packaged artefact has a `uri` relative to `data/` and `version` `sha256:<checksum>` (rule 70). At publication the platform replaces the relative `uri` with the file's permanent location. A claimset with no files may be submitted as the JSON file alone. A claimset submitted alone names no packaged file: an artefact whose `uri` is a relative path is refused under rule 70 (claimset spec v0.41 §2.5, amended 2026-11-11), since the file would not arrive and the paper would be published without it. The refusal says how to send the package.
 - Limits (rule 77, spec v0.35): at most 200 files, 50 MB a file, 200 MB in all; safe paths only; the manifest lists exactly the payload; an allowlist of file types (gzipped data files accepted; archives, executables and links refused). The validator checks a zip before unpacking it. Artefacts are served as downloads, never rendered (SVG included).
 
 ### 4.2 Flow
@@ -104,7 +104,7 @@ Every route ends in the same checks and the same pending submission (§4.2); the
 | Use case | Route | What is sent |
 |---|---|---|
 | A full pipeline in a terminal (claimset-lab, `claimset package`) | `POST /api/submissions`, the zip as the request body (`claimset submit`) | The package, with its files |
-| Evidence already deposited elsewhere (Zenodo, GitHub, an institutional repository) | `POST /api/submissions` with the JSON as the body, or the MCP tool `submit` | The claimset JSON alone; its artefacts' `uri` are the deposits' https URLs and are left there: the portal neither downloads nor copies them |
+| Evidence already deposited elsewhere (Zenodo, GitHub, an institutional repository) | `POST /api/submissions` with the JSON as the body, or the MCP tool `submit` | The claimset JSON alone; its artefacts' `uri` are the deposits' https URLs and are left there: the portal neither downloads nor copies them. An artefact with a relative `uri` names a file of a package, and the JSON alone is refused |
 | A claimset with no files | as above | The claimset JSON alone |
 | A person with a file, no terminal | `/submit`, a page with a file picker | The zip or the JSON, sent as the request body of `POST /api/submissions` by the page's script |
 | An agent that cannot upload a large file (MCP, a chat) but can deposit it | `POST /api/submissions/from-url` with `{"url": …}`, or the MCP tool `submit` with `package_url` | An https URL of the package or the JSON, which the portal fetches |
@@ -200,7 +200,7 @@ Rendered views are produced by the platform, never submitted. All are regenerate
 
 ### 7.3 MCP server
 
-Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT-11): the Streamable HTTP transport, stateless, answering in JSON, with no sign-in. Tools: `search_papers`, `search_claims`, `get_paper` (reading view or JSON, a version or the current one), `get_claim` (the claim bundle), `validate`, `submit` (the claimset JSON as text, or `package_url`), `submission_status`. Each calls the same code as the HTTP API, with the same limits. `related` comes with embeddings (§7.2). Tool results are data: their descriptions say so, as `/llms.txt` does.
+Served at `/mcp` from the same app with the official MCP Python SDK (PLT-71, PLT-11): the Streamable HTTP transport, stateless, answering in JSON, with no sign-in. Tools: `search_papers`, `search_claims`, `get_paper` (reading view or JSON, a version or the current one), `get_claim` (the claim bundle), `validate`, `score` (§7.6), `submit` (the claimset JSON as text, or `package_url`), `submission_status`. Each calls the same code as the HTTP API, with the same limits. `related` comes with embeddings (§7.2). Tool results are data: their descriptions say so, as `/llms.txt` does.
 
 ### 7.4 Website
 
@@ -253,6 +253,7 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 
 - **On the page:** the panel shows the paper's reliability large, coloured by band (High 80+, Medium 60–79, Low under 60) and named, and novelty small and uncoloured. Every claim shows its score and five dots (support, plan, checkable, context, open problems), each dot explained on hover; clicking a score opens its explanation in a pop-up (`page.js`). The section *Score* at the end of the page holds the paper's explanation, so it can be linked and read without the script. The explanation says that scores are computed by rules from the file and may change as the rubric and reviews develop.
 - **For programs:** `/p/<key>@v<n>.score.json` (and `/p/<key>.score.json` for the current version) holds the scores, their problems and the rubric version; `/p/<key>@v<n>.issues.txt` lists every issue that lowers a score, with what would fix it, for the authors' agent preparing the next version (linked from the panel and the section *Score*); the reading view ends with the scores in text. Lists of claimsets (home, all, search) show each paper's reliability.
+- **Before submitting:** the authors' agent may score a claimset before it is submitted, as it would be scored once published: `claimset score` on their own machine, or the MCP tool `score` for an agent without a terminal. Optional; the agent asks its human whether to score, and the human decides whether to submit as it is or amend first. The scoring is in one place: the rubric (`rubric.assess`, which adds the close-match check over the claims a caller supplies, and `rubric.report`, the plain-text report), on the file as the claimset package prepares it (`claimset.validate.with_verifiability`, the verifiability the platform sets at publication). `claimset score` searches EntryLib's public claim search for the close-match check only with `--novelty`; the MCP tool uses the portal's search, and keeps nothing. The portal scores published versions with the same functions.
 - **When they change:** pages are rewritten when the rubric version changes (it is part of the marker of §7.1), so scores follow the current rubric. Without the rubric installed the page shows "–".
 
 ### 7.7 Read
@@ -281,7 +282,7 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 | New versions (corrections now, revisions from v2) | 3 per claimset in any day (10 while the library is seeded) |
 | Pending submissions | 5 per address at once |
 | Reads: search, submission status, every MCP request | 120 per minute per address |
-| Validation (`/api/validate`, MCP `validate`) | 30 per hour per address |
+| Validation and scoring (`/api/validate`, MCP `validate` and `score`, counted together) | 30 per hour per address |
 | Submissions (`/api/submissions`, MCP `submit`) | 20 per hour per address |
 | Submissions by URL (`/api/submissions/from-url`, MCP `submit` with `package_url`) | 10 per hour per address, and 2 downloads at once across everyone |
 | Package size | rule 77: 200 files, 50 MB a file, 200 MB in all |

@@ -9,7 +9,7 @@ from portal import fetch, mcp_server
 
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
            "MCP-Protocol-Version": "2025-06-18"}
-TOOLS = {"search_claims", "search_papers", "get_paper", "get_claim", "validate", "submit", "submission_status"}
+TOOLS = {"search_claims", "search_papers", "get_paper", "get_claim", "validate", "score", "submit", "submission_status"}
 
 
 def rpc(c, method, params=None):
@@ -59,6 +59,22 @@ def test_validate(app_client):
     assert out["valid"] is False and out["errors"]
     assert data(app_client, "validate", claimset="{not json")["valid"] is False
     assert call(app_client, "validate", claimset="  ")[0]
+
+
+def test_score(app_client):
+    import pytest
+    rubric = pytest.importorskip("rubric")
+    if not hasattr(rubric, "assess"):
+        pytest.skip("the installed rubric is older than rubric.assess")
+    out = data(app_client, "score", claimset=json.dumps(example()))
+    assert out["valid"] is True and out["novelty_checked"] is True
+    assert out["scores"]["rubric"] == rubric.VERSION and out["scores"]["paper"]["score"] is not None
+    assert out["report"].startswith("Scores by the EntryLib rubric") and "Scoring is optional" in out["report"]
+    bad = example()
+    del bad["paper"]["title"]
+    out = data(app_client, "score", claimset=json.dumps(bad))
+    assert out["valid"] is False and "scores" not in out and out["report"].startswith("Not scored")
+    assert call(app_client, "score")[0]                                   # neither claimset nor package_url
 
 
 def test_submit_and_status(app_client):
