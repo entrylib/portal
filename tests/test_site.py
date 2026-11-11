@@ -375,13 +375,13 @@ def test_reading_aids(env):
 
 
 def test_numbers_are_shown_to_four_decimal_places(env, monkeypatch):
-    """The portal writes the numbers on its pages (site.number), through claimset 0.40.8's render_parts(number=)."""
+    """The portal writes the numbers on its pages (site.number), through claimset's render_parts(number=)."""
     seen = {}
     real = site.cshtml.render_parts
 
-    def render_parts(doc, file_url=None, ref_text=None, number=None):
+    def render_parts(doc, number=None, **rest):
         seen["number"] = number
-        return real(doc, file_url=file_url)
+        return real(doc, number=number, **rest)
 
     monkeypatch.setattr(site.cshtml, "render_parts", render_parts)
     doc = example()

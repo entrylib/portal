@@ -14,7 +14,6 @@ import datetime as dt
 import functools
 import hashlib
 import html
-import inspect
 import json
 import os
 import re
@@ -542,13 +541,6 @@ def number(v):
     return "0.0000" if float(text) == 0 else text.rstrip("0").rstrip(".")
 
 
-def _accepts(fn, name):
-    try:
-        return name in inspect.signature(fn).parameters
-    except (TypeError, ValueError):
-        return False
-
-
 #: The contents' first entry: back to the top of the page.
 TOC_TOP = '<li><a class="toc-top" href="#top">\u2191 Top</a></li>'
 
@@ -588,20 +580,14 @@ def person(c, where):
 
 
 def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
-    """The claimset package's page view of `doc`, with the site's choices (each where the installed package takes
-    it): how numbers are written, how people are shown, how references given by DOI are written out, what marks a
-    claim (its score and dots, and its novelty, design §7.6) and which claims link to a page of their own (`pages`,
-    the current version's principal claims, design §7.8)."""
-    extra = {"ref_text": ref_text} if ref_text and _accepts(cshtml.render_parts, "ref_text") else {}  # claimset 0.40.4
-    if _accepts(cshtml.render_parts, "number"):                           # claimset 0.40.8
-        extra["number"] = number
-    if _accepts(cshtml.render_parts, "person"):                           # claimset 0.41.5
-        extra["person"] = person
-    if _accepts(cshtml.render_parts, "marker"):                           # claimset 0.41.6
-        extra["marker"] = score_html.marker(scores)
-        key = ids.url_key(doc["paper"]["id"])
-        extra["claim_url"] = lambda cid: f"/p/{key}/{cid}" if cid in pages else None
-    return cshtml.render_parts(doc, file_url=file_url, **extra)
+    """The claimset package's page view of `doc`, with the site's choices: how numbers are written, how people are
+    shown, how references given by DOI are written out, what marks a claim (its score and dots, and its novelty,
+    design §7.6) and which claims link to a page of their own (`pages`, the current version's principal claims,
+    design §7.8)."""
+    key = ids.url_key(doc["paper"]["id"])
+    extra = {"ref_text": ref_text} if ref_text else {}
+    return cshtml.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
+                               claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, **extra)
 
 
 def contents(sections, more=""):
