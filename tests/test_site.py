@@ -370,6 +370,8 @@ def test_reading_aids(env):
     css = (out / "site.css").read_text()
     assert '.button, button[type="submit"]:not(.button-quiet) {' in css      # one style for every action button
     assert ".cards { display: grid; grid-template-columns: minmax(0, 1fr);" in css      # never wider than a phone
+    assert 'math[display="block"] { max-width: 100%; overflow-x: auto;' in css         # long formulae scroll alone
+    assert ".cs-brief li > span:last-child { min-width: 0; }" in css
     assert not re.search(r"\.(search|read-filters|upload|request|pending) button", css)
     js = (out / "page.js").read_text()
     assert "entrylibPopup(\"peek\"" in js and "button[data-copy]" in js and "fold-toggle" in js
