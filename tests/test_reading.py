@@ -178,7 +178,11 @@ def test_claim_pages(env):
     claim = json.loads(next(b for b in re.findall(r'type="application/ld\+json">(.*?)</script>', head, re.S)))
     assert claim["@type"] == "Claim" and claim["identifier"] == f"{concept}@v1#C2"
     assert claim["isPartOf"]["url"] == f"{BASE}/p/{KEY}"
-    assert 'class="cs-title claim-title"' in body and f"{concept}@v1#C2" in body
+    title = re.search(r"<title>(.*?)</title>", head).group(1)
+    assert title.startswith("Method M") and title.endswith(": claim C2 · EntryLib")
+    assert '<span class="claim-code">· C2</span></h1>' in body and f"{concept}@v1#C2" in body
+    statement = next(c for c in example()["claims"] if c["id"] == "C2")["statement"]
+    assert claim["text"] == site.plain_text(statement) and '<meta name="description" content="' in head
     assert f'href="/p/{KEY}/C2.txt"' in body and f'href="/p/{KEY}#C2"' in body
     sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', body)
     assert sections[0] == "principal" and "brief" not in sections and "definitions" in sections

@@ -214,7 +214,7 @@ dialog.explain .score-claim { border-top: 0; padding-top: 0; }
 .copy-text { margin-top: 6px; font: inherit; font-size: 14px; color: var(--accent); background: none;
   border: 1px solid var(--rule); border-radius: 4px; padding: 4px 10px; cursor: pointer; min-height: 32px; }
 .claim-page { color: inherit; text-decoration: underline dotted; }
-.cs-title.claim-title { font-size: clamp(21px, 2.4vw, 26px); font-weight: 600; line-height: 1.35; }
+.claim-code { color: var(--muted); font-weight: 400; white-space: nowrap; }
 .versions { padding-left: 20px; }
 .orcid-verified, .orcid.orcid-verified { padding-left: 20px; background: url(/img/orcid.svg) no-repeat left center / 16px 16px; }
 @media (max-width: 860px) {
