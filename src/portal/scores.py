@@ -13,10 +13,19 @@ submitted by the same functions (`claimset score`, the MCP tool score; design §
 """
 
 import re
+import sys
 
 try:
     import rubric
 except ImportError:                                          # the page then shows "–"
+    rubric = None
+
+#: What the portal calls in the rubric. A rubric without one of them (installed before it was added) counts as not
+#: installed, so that it cannot stop publication or a rebuild; the next start installs the current one.
+NEEDED = ("VERSION", "RUBRIC", "assess", "report", "score", "stems")
+if rubric is not None and not all(hasattr(rubric, n) for n in NEEDED):
+    print(f"portal: the installed rubric lacks {', '.join(n for n in NEEDED if not hasattr(rubric, n))}; scores show "
+          "\"–\" until a current one is installed", file=sys.stderr)
     rubric = None
 
 NOTE = ("Scores are computed by rules from the claimset file (EntryLib rubric {v}): they check the record, not the "

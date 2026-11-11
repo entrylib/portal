@@ -94,3 +94,21 @@ def test_lists_show_reliability(env):
         text = (ctx["published_dir"] / page).read_text()
         assert f'<span class="card-score-num">{score["score"]}</span>' in text, page
         assert f'href="/p/{KEY}#score"' in text
+
+
+def test_a_rubric_without_what_the_portal_calls_counts_as_not_installed(monkeypatch):
+    import importlib
+    import types
+
+    old = types.ModuleType("rubric")
+    old.VERSION, old.RUBRIC = "0.2.0", {"groups": []}
+    old.score = old.stems = lambda *a: None                     # no assess and no report, as before they were added
+    monkeypatch.setitem(__import__("sys").modules, "rubric", old)
+    try:
+        reloaded = importlib.reload(scores)
+        assert reloaded.rubric is None
+        assert reloaded.compute(None, example()) is None and reloaded.version() is None
+    finally:
+        monkeypatch.undo()
+        importlib.reload(scores)
+    assert scores.rubric is not None
