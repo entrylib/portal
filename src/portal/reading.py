@@ -78,6 +78,9 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   the request body): submits it. A claimset whose files are deposited elsewhere (Zenodo, GitHub) is submitted as the
   JSON alone, its artefacts' `uri` being their https URLs. A claimset whose artefacts name files by a relative path
   (`files/results.csv`) is submitted as its package: alone it carries no files, and it is refused (rule 70).
+- The MCP tool submit (and validate, score) takes the claimset with the contents of the files its artefacts name, in
+  `files` (`{"path": "files/results.csv", "text": "..."}`, or "base64" for a file that is not text), and builds the
+  package from them: the route for an agent that cannot send a file or reach a public URL. Copy each file exactly.
 - {base}/api/submissions/from-url (POST `{"url": "https://..."}`), or the MCP tool submit with package_url: submits a
   package or a claimset file deposited at a public https URL, for a file too large to send directly or an agent that
   cannot send a file (a package committed to a public repository, at its commit's raw address, or on Zenodo).

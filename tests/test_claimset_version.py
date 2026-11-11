@@ -7,8 +7,8 @@ from portal.cli import main
 
 
 def test_versions():
-    assert claimset_ok(MIN_CLAIMSET) and claimset_ok("0.41.4") and claimset_ok("0.42.0") and claimset_ok("1.0")
-    assert not claimset_ok("0.41.2") and not claimset_ok("0.40.8")
+    assert claimset_ok(MIN_CLAIMSET) and claimset_ok("0.41.5") and claimset_ok("0.42.0") and claimset_ok("1.0")
+    assert not claimset_ok("0.41.3") and not claimset_ok("0.40.8")
     assert claimset_ok(claimset.__version__)
 
 
