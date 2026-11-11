@@ -28,7 +28,7 @@ def test_claimset_page(env):
     assert 'href="/site.css?v=' in page and 'href="/claimset.css?v=' in page
     for part in ('<span class="origin">native</span>', "status-ok", f"{concept}@v1", 'id="versions"',
                  '<a href="#versions">Versions</a>', f'href="/p/{KEY}@v1.bib"', f'href="/p/{KEY}@v1.ris"',
-                 f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "Reliability"):
+                 f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "Support"):
         assert part in page, part
     bib = (out / "p" / f"{KEY}.bib").read_text()
     assert bib.startswith("@misc{entrylib2026.000001v1,") and f"{BASE}/p/{KEY}@v1" in bib
@@ -56,7 +56,8 @@ def test_fixed_pages_and_assets_at_start(env):
     indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.40.1")
     for name in ("lab", "about", "agents", "privacy"):
         page = (out / f"{name}.html").read_text()
-        assert page.startswith("<!doctype html>") and "<script" not in page and "{base}" not in page, name
+        assert page.startswith("<!doctype html>") and "{base}" not in page, name
+        assert ("<script" in page) == (name == "agents"), name                 # For agents: its copy buttons
     assert "This website was created by Claude Opus 5.5." in (out / "about.html").read_text()
     assert f"{BASE}/mcp" in (out / "agents.html").read_text()
     assert (out / "site.css").exists() and ".cs-toc" in (out / "claimset.css").read_text()
@@ -316,7 +317,7 @@ def test_a_correction_notice_is_folded():
     p = {"status": "corrected", "status_notice": {"date": "2026-11-10", "reason_code": "correction",
                                                    "statement": "A typo <fixed>.", "issued_by": "platform"}}
     box = site._notice(p)
-    assert box.startswith('<details class="notice notice-warn">'
+    assert box.startswith('<details class="notice notice-neutral">'
                           '<summary><strong>Corrected</strong> · 2026-11-10</summary>')
     assert "A typo &lt;fixed&gt;." in box and "platform" not in box
     who = "A. B (ORCID 0000-0000-0000-0001)"
@@ -363,7 +364,7 @@ def test_reading_aids(env):
     assert 'Claude &lt;Code&gt; <span class="cs-label">· drafting</span>' in shown
     assert 'aria-label="Person"' in site.person({"type": "human", "name": "A. B"}, "author")
     home = (out / "index.html").read_text()
-    assert 'class="start-here"' in home and "<strong>Reliability (0–100)</strong> says how well" in home
+    assert 'class="start-here"' in home and "<strong>Support (0–100)</strong> says how well" in home
     assert "{reliability}" not in home and "{rubric}" not in home
     assert f'title="{site.esc(site.RELIABILITY)}"' in home
     site.write_fixed(out, BASE)

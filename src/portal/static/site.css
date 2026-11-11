@@ -3,7 +3,7 @@
 :root {
   --ground: #ffffff; --panel: #f7f7f5; --ink: #1a1a1a; --muted: #555555; --rule: #d6d6d6; --rule-light: #e6e6e6;
   --accent: #1d4f91; --ok: #1e6b3a; --ok-bg: #e7f3ec; --warn: #8a4b00; --warn-bg: #fbf0e2; --bad: #a12a2a;
-  --bad-bg: #fbeaea; --cs-green: #2e8b57; --cs-amber: #d08c1a; --cs-red: #c0392b;
+  --bad-bg: #fbeaea; --cs-green: #2e8b57; --cs-amber: #b87500; --cs-red: #c0392b;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -19,6 +19,7 @@
   --cs-ink: #1a1a1a; --cs-muted: #555555; --cs-rule: #d6d6d6; --cs-rule-light: #e6e6e6; --cs-panel: #f7f7f5;
   --cs-accent: #1d4f91; --cs-target: #f4f7fb; --cs-font: "Source Serif 4", Georgia, serif;
   --cs-math-font: "STIX Two Math", math, serif;
+  --cs-amber: #b87500;                                /* 3.8:1 on white: a graphic needs 3:1 (WCAG 1.4.11) */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .cs-page, :root:not([data-theme="light"]) .cs-body,
@@ -109,7 +110,7 @@ main { min-height: 60vh; }
 .start-here p { margin: 0 0 6px; font-size: 15px; }
 .hero h1 { font-size: clamp(32px, 5vw, 44px); margin: 0 0 16px; max-width: 22ch; }
 .lead { font-size: 19px; max-width: 46rem; }
-.paths { display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: center; margin: 32px 0 48px; }
+.paths { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; margin: 32px 0 48px; }
 .path { background: var(--panel); border: 1px solid var(--rule-light); border-radius: 6px; padding: 20px 24px;
   align-self: stretch; }
 .path h2 { font-size: 22px; margin: 0 0 8px; }
@@ -417,3 +418,15 @@ dialog.peek .cs-item, dialog.peek .cs-def { border: 0; }
 math[display="block"] { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 @media (max-width: 640px) { math { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 0 0.1em; } }
 .cs-brief li > span:last-child { min-width: 0; }
+
+/* UX audit, round 1 */
+.skip-link { position: absolute; left: 8px; top: -60px; z-index: 100; padding: 8px 14px; background: var(--ground);
+  color: var(--accent); border: 2px solid var(--accent); border-radius: 4px; }
+.skip-link:focus { top: 8px; }
+.status-neutral { color: var(--muted); background: var(--panel); }
+.notice-neutral { color: var(--ink); background: var(--panel); border-color: var(--rule); }
+.caption { margin: 0 0 6px; }
+.dot-legend { margin: 4px 0 6px; }
+.start-here .routes { display: grid; grid-template-columns: 1fr; gap: 4px; }
+.start-here .routes h3 { margin: 6px 0 2px; }
+.connect { background: var(--panel); border: 1px solid var(--rule-light); border-radius: 6px; padding: 4px 20px 8px; }

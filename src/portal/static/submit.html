@@ -1,7 +1,7 @@
 <h1>Submit a claimset</h1>
 <p class="lead">A claimset is published once its guarantor confirms it: after you submit, you get a consent link for
 them; they sign in with ORCID and confirm within 48 hours. A guarantor without the link confirms at
-<a href="/confirm">Confirm a claimset</a>.</p>
+<a href="/confirm">Confirm a submission</a>.</p>
 <h2>From your agent</h2>
 <p><code>pip install claimset</code>, then <code>claimset submit paper.zip</code> (a package made by
 <code>claimset package</code>), or the <code>submit</code> tool of the MCP server at <code>entrylib.org/mcp</code>. See
@@ -11,8 +11,8 @@ them; they sign in with ORCID and confirm within 48 hours. A guarantor without t
 version of a published claimset sets <code>paper.id</code> to its identifier.</p>
 <form id="form" class="upload">
   <p><input type="file" id="file" accept=".zip,.json,application/zip,application/json" required></p>
-  <p><label><input type="checkbox" id="new_paper"> This is a different paper with the same title as one of the
-  guarantor's claimsets</label></p>
+  <p id="new_paper_row" hidden><label><input type="checkbox" id="new_paper"> This is a different paper with the same
+  title as the guarantor's claimset named above: submit it as a new claimset</label></p>
   <p><button class="button" type="submit" id="send">Submit</button></p>
 </form>
 <div id="result" aria-live="polite"></div>

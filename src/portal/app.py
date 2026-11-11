@@ -20,6 +20,7 @@ import claimset
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (
     __version__,
@@ -184,6 +185,16 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
     app.state.pool = pool
     app.state.limiter = limiter
     app.add_middleware(ratelimit.RateLimitMiddleware, limiter=limiter)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def not_found(request: Request, exc: StarletteHTTPException):
+        """An address that does not exist: a page for people, with search and the way home; JSON for the API, the
+        MCP server and programs that ask for it."""
+        wants_json = (request.url.path.startswith(("/api/", "/mcp"))
+                      or "html" not in request.headers.get("accept", "text/html"))
+        if exc.status_code != 404 or wants_json:
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)
+        return HTMLResponse(site.not_found_page(), status_code=404)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz():
@@ -455,7 +466,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
             text = outcome.message[:1].upper() + outcome.message[1:]
             return _page(site.message_page("Not confirmed", text if text.endswith(".") else text + ".",
-                                           ("/confirm", "Confirm a claimset")), code_)
+                                           ("/confirm", "Confirm a submission")), code_)
         try:
             done = dict(await run_in_threadpool(publish_now))
         except Exception:  # noqa: BLE001 - the periodic loop retries; the guarantor has confirmed either way

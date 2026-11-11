@@ -110,11 +110,13 @@ def paper_score(doc):
 
 
 def label(n):
-    """A claim's novelty in words: 'new (authors) · no close match on EntryLib'."""
+    """A claim's novelty in words: 'new, by the authors', and '· in question: …' when a close match on EntryLib is not
+    acknowledged."""
     if not n or not n.get("label"):
         return ""
     words = f"{LABELS.get(n['label'], n['label'].replace('_', ' '))}, by the authors"
-    return words + (f" · {CHECK[n['check']]}" if n.get("checked") else "")
+    # Only a close match the authors do not acknowledge says something while the library is small (UX audit).
+    return words + (f" · {CHECK[n['check']]}" if n.get("checked") and n.get("check") == "unacknowledged" else "")
 
 
 def text(scores):

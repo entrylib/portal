@@ -65,4 +65,4 @@ is removed only when it must be (<a href="/removal">retraction and removal</a>).
 <p class="muted">Only {escape(ctx['orcid'])} can confirm. This link expires {escape(expires)}. If you did not
 expect this, ignore it: nothing is published without your confirmation.</p>
 """
-    return page("Confirm a claimset", body)
+    return page("Confirm a submission", body)
