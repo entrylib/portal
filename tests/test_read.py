@@ -20,7 +20,7 @@ def test_the_tree_and_the_claims(env, app_client=None):
     publish(write(tmp, doc_in("2613", "Probability study"), "b.claimset.json"), **ctx)
     docs = [r[0] for r in ctx["conn"].execute("SELECT v.file FROM papers p JOIN versions v ON v.concept_id ="
                                               " p.concept_id AND v.version = p.current_version").fetchall()]
-    html = read.page(docs, read.Query.parse({}))
+    html = read.page(docs, read.Query.parse({"view": "claims"}))
     for name in ("Social Sciences", "Decision Sciences", "Management Science and Operations Research",
                  "Physical Sciences", "Mathematics", "Statistics and Probability"):
         assert name in html, name
@@ -29,9 +29,9 @@ def test_the_tree_and_the_claims(env, app_client=None):
     assert f"{2 * len(principal)} principal claims" in html
     only = read.page(docs, read.Query.parse({"area": "18"}))
     assert "Forecasting study" in only and "Probability study" not in only
-    cards = read.page(docs, read.Query.parse({"area": "d3", "view": "claimsets"}))
+    cards = read.page(docs, read.Query.parse({"area": "d3"}))      # claimsets by default
     assert "Probability study" in cards and "Forecasting study" not in cards and 'class="card' in cards
-    everything = read.page(docs, read.Query.parse({"all": "1"}))
+    everything = read.page(docs, read.Query.parse({"all": "1", "view": "claims"}))
     assert "principal claims" not in everything.split("</nav>")[-1].split("</p>")[0]
 
 

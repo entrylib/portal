@@ -223,35 +223,45 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return HTMLResponse(site.home([r[0] for r in rows], settings.base_url),
                                 headers={"Content-Security-Policy": PAGE_CSP})
 
-    @app.get("/search", response_class=HTMLResponse, include_in_schema=False)
-    def search_page(q: str = "", kind: str = "papers", offset: int = 0):
-        """Search for people (design §7.4): the search API's results as a page, rendered here, without scripts."""
-        kind = kind if kind in ("papers", "claims") else "papers"
-        q = q.strip()
-        offset = max(0, offset)
+    @app.get("/search", include_in_schema=False)
+    def search_redirect(q: str = "", kind: str = "papers", offset: int = 0):
+        """Searching is part of the Read page (design §7.7); old addresses lead there."""
+        params = {"q": q.strip()} if q.strip() else {}
+        if kind == "claims":
+            params["view"] = "claims"
+        if offset > 0 and params.get("q"):
+            params["offset"] = str(offset)
+        return RedirectResponse("/read" + ("?" + urllib.parse.urlencode(params) if params else ""), status_code=301)
+
+    def _search(q, view, offset):
+        """The Read page with a query: the search API's results, rendered here, without scripts."""
         results, files, error = None, {}, None
-        if q:
-            try:
-                with pool.connection() as conn:
-                    if kind == "claims":
-                        results = search.search_claims(conn, settings.base_url, q, site.SEARCH_PAGE, offset)
-                    else:
-                        results = search.search_papers(conn, settings.base_url, q, site.SEARCH_PAGE, offset)
-                        ids_ = [r["id"] for r in results["results"]]
-                        files = dict(conn.execute(
-                            "SELECT p.concept_id, v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
-                            " AND v.version = p.current_version WHERE p.concept_id = ANY(%s)", (ids_,)).fetchall())
-            except search.SearchError as exc:
-                error = str(exc)
-        page = site.search_page(q, kind, results, error=error, offset=offset, limit=site.SEARCH_PAGE, files=files)
+        try:
+            with pool.connection() as conn:
+                if view == "claims":
+                    results = search.search_claims(conn, settings.base_url, q, site.SEARCH_PAGE, offset)
+                else:
+                    results = search.search_papers(conn, settings.base_url, q, site.SEARCH_PAGE, offset)
+                    ids_ = [r["id"] for r in results["results"]]
+                    files = dict(conn.execute(
+                        "SELECT p.concept_id, v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+                        " AND v.version = p.current_version WHERE p.concept_id = ANY(%s)", (ids_,)).fetchall())
+        except search.SearchError as exc:
+            error = str(exc)
+        page = site.search_page(q, view, results, error=error, offset=offset, limit=site.SEARCH_PAGE, files=files)
         return HTMLResponse(page, status_code=400 if error else 200, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/read", response_class=HTMLResponse, include_in_schema=False)
     @app.get("/read/{rest:path}", response_class=HTMLResponse, include_in_schema=False)
     def read_page(request: Request, rest: str = ""):
-        """What EntryLib holds, by field, with its claims and claimsets filtered (design §7.7). An area has its own
-        address (/read/social-sciences/decision-sciences); the older ?area= form is sent there."""
+        """What EntryLib holds, by field, with its claims and claimsets filtered (design §7.7); with a query (`q`),
+        the search of the whole library. An area has its own address (/read/social-sciences/decision-sciences);
+        the older ?area= form is sent there."""
         params = dict(request.query_params)
+        text = str(params.get("q") or "").strip()
+        if text:
+            q = read.Query.parse(params)
+            return _search(text, q.view, q.offset)
         if rest.strip("/"):
             area = areas.from_path(rest)
             if area is None:

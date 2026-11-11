@@ -339,3 +339,21 @@ window.entrylibOpen = (function () {
     });
   });
 })();
+
+// Claimset pages: the note saying what the page is can be closed, and stays closed on this browser. Without the
+// script, or without storage, it stays.
+(function () {
+  var strip = document.getElementById("intro-strip");
+  if (!strip) return;
+  var key = "entrylib-intro-hidden";
+  try {
+    if (window.localStorage.getItem(key)) { strip.remove(); return; }
+  } catch (e) { return; }
+  var close = strip.querySelector(".strip-close");
+  if (!close) return;
+  close.hidden = false;
+  close.addEventListener("click", function () {
+    try { window.localStorage.setItem(key, "1"); } catch (e) { /* stays closed for this view only */ }
+    strip.remove();
+  });
+})();

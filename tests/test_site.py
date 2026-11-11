@@ -26,7 +26,7 @@ def test_claimset_page(env):
     assert page.count("<script src=") == 1 and page.count("<script") == 2          # the script, and JSON-LD data
     assert 'src="/page.js?v=' in page and 'class="cs-page entry"' in page
     assert 'href="/site.css?v=' in page and 'href="/claimset.css?v=' in page
-    for part in ('<span class="origin">native</span>', "status-ok", f"{concept}@v1", 'id="versions"',
+    for part in ("Written directly as a claimset.", f"{concept}@v1", 'id="versions"',
                  '<a href="#versions">Versions</a>', f'href="/p/{KEY}@v1.bib"', f'href="/p/{KEY}@v1.ris"',
                  f'href="/p/{KEY}@v1.txt"', 'type="application/json"', "Support"):
         assert part in page, part
@@ -41,7 +41,7 @@ def test_listings_and_feed(env):
     out = ctx["published_dir"]
     home = (out / "index.html").read_text()
     assert "The open library of machine-readable entries" in home and f'href="/p/{KEY}"' in home
-    assert 'action="/search"' in home and "Recently published" in home
+    assert 'action="/read"' in home and "Recently published" in home
     assert f'href="/p/{KEY}"' in (out / "all.html").read_text()
     sitemap = (out / "sitemap.xml").read_text()
     assert sitemap.startswith("<?xml") and f"<loc>{BASE}/p/{KEY}</loc>" in sitemap
@@ -199,12 +199,14 @@ def test_citations():
 
 
 def test_search_page(app_client):
-    r = app_client.get("/search")
-    assert r.status_code == 200 and "Search the claims" in r.text and "script-src" not in r.headers[
-        "content-security-policy"]
-    r = app_client.get("/search", params={"q": "<b>x</b>", "kind": "claims"})
+    r = app_client.get("/search", params={"q": "a b", "kind": "claims", "offset": 50}, follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/read?q=a+b&view=claims&offset=50"   # one page now
+    assert app_client.get("/search", follow_redirects=False).headers["location"] == "/read"
+    r = app_client.get("/read", params={"q": "<b>x</b>", "view": "claims"})
     assert r.status_code == 200 and "<b>x</b>" not in r.text and "Nothing found" in r.text
-    assert app_client.get("/search", params={"q": "x" * 600}).status_code == 400
+    assert "script-src" not in r.headers["content-security-policy"] and 'content="noindex"' in r.text
+    assert "Browse by field instead" in r.text and 'name="view" value="claims"' in r.text
+    assert app_client.get("/read", params={"q": "x" * 600}).status_code == 400
 
 
 def test_home_and_submit_pages(app_client):

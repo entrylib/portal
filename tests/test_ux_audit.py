@@ -66,7 +66,7 @@ def test_read_is_newest_first_and_search_counts():
 
 def test_not_found_is_a_page_for_people_and_json_for_programs(app_client):
     r = app_client.get("/no/such/page", headers={"Accept": "text/html"})
-    assert r.status_code == 404 and "We could not find that page" in r.text and 'action="/search"' in r.text
+    assert r.status_code == 404 and "We could not find that page" in r.text and 'action="/read"' in r.text
     r = app_client.get("/api/no-such", headers={"Accept": "text/html"})
     assert r.status_code == 404 and r.json() == {"detail": "Not Found"}
     r = app_client.get("/no/such/page", headers={"Accept": "application/json"})
@@ -88,3 +88,33 @@ def test_static_not_found_page(env):
     assert "We could not find that page" in (ctx["published_dir"] / "404.html").read_text()
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "handle_errors 404 {" in caddy and "rewrite * /404.html" in caddy
+
+
+# Round 2 (design §7.4, §7.7)
+
+def test_the_paper_page_says_what_it_is(env):
+    out, page = page_of(env)
+    assert site.INTRO_STRIP in page and 'href="/about#reading"' in page
+    assert 'id="reading"' in (Path(site.__file__).parent / "static" / "pages" / "about.html").read_text()
+    assert 'getElementById("intro-strip")' in (Path(site.__file__).parent / "static" / "page.js").read_text()
+    top = page.split('<p class="entry-top">')[1].split("</p>")[0]
+    assert re.fullmatch(r"Version 1 · \d{1,2} [A-Z][a-z]+ \d{4}( · .+)?", top), top          # words, not codes
+    assert '<span class="badge-word">Support</span> ' in page
+
+
+def test_the_byline_tells_people_from_tools():
+    doc = example()
+    people = doc["contributors"]
+    line = site.byline("authors", people)
+    agents = [c for c in people if c.get("type") == "agent"]
+    humans = [c for c in people if c.get("type") != "agent"]
+    assert ("Written with: " in line) == bool(agents) and ("Authors: " in line) == bool(humans)
+    if agents and humans:
+        assert line.index("Authors: ") < line.index("Written with: ")
+    g = {"name": "A <b>Researcher</b>", "orcid": "0000-0002-1825-0097", "type": "human"}
+    shown = site.byline("guarantor", [g])
+    assert shown.startswith("Responsible researcher: ") and "<b>" not in shown and "ORCID verified" in shown
+    assert site.byline("source_authors", [g]) is None                   # the package's line for a source paper
+    doc["paper"]["id"] = "entrylib:2026.000001"
+    header = site.render(doc)["header"]
+    assert "Responsible researcher: " in header and "Guarantor: " not in header
