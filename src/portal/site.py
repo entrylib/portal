@@ -604,9 +604,9 @@ def _claim_sections(parts):
 
 
 def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None):
-    """The page of one principal claim of the current version, at /p/<key>/<cid>: the claim as its heading, its
-    reliability and why, how to cite it, and what it rests on (the claim bundle, rendered by the claimset
-    package)."""
+    """The page of one principal claim of the current version, at /p/<key>/<cid>: the claimset's title and the claim's
+    ID as its title and heading, then the claim, its reliability and why, how to cite it, and what it rests on (the
+    claim bundle, rendered by the claimset package). The statement itself is the page's description."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
@@ -645,19 +645,20 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None)
              f'{esc(title)}</a></p></div>'
              f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}/{esc(cid)}.txt">'
              f'Reading view</a> · <a href="/p/{key}/{esc(cid)}.json">JSON</a></p></div></aside>')
-    origin = (f'<p class="origin-line">A principal claim of <a href="/p/{key}#{esc(cid)}">{esc(title)}</a> '
-              f'({esc(_who(doc))}, {esc(_year(doc))}), with what it rests on. '
-              f'<a href="/p/{key}">Read the whole claimset</a>.</p>')
+    origin = (f'<p class="origin-line">Principal claim {esc(cid)} of this claimset ({esc(_who(doc))}, '
+              f'{esc(_year(doc))}), with what it rests on. <a href="/p/{key}#{esc(cid)}">Read the whole claimset</a>.'
+              '</p>')
     main = (f'<div class="cs-page entry claim-entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{_notice(p)}'
-            f'<h1 class="cs-title claim-title">{plain_html(claim.get("statement"))}</h1>{origin}</div>{panel}'
+            f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}</div>'
+            f'{panel}'
             f'{nav}<article class="cs-body">{score_html.decorate(body, scores)}'
             f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}</article></div>')
     statement = plain_text(claim.get("statement"))
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}/{esc(cid)}.json">'
             f'<link rel="alternate" type="text/plain" href="/p/{key}/{esc(cid)}.txt">'
             + claim_meta(doc, cid, base_url, url, statement, item))
-    return shell(_shorten(statement, 110), main, active="read",
+    return shell(f"{_shorten(title, 90)}: claim {cid}", main, active="read",
                  description=_shorten(f"{statement} From: {title}.", 300), head=head, canonical=url,
                  script="/page.js")
 
@@ -668,7 +669,8 @@ def claim_meta(doc, cid, base_url, url, statement, item=None):
     p = doc["paper"]
     key = ids.url_key(p["id"])
     people, _ = cited_people(doc)
-    data = {"@context": "https://schema.org", "@type": "Claim", "name": _shorten(statement, 110), "text": statement,
+    name = f"{_shorten(p.get('title') or '', 90)}: claim {cid}"
+    data = {"@context": "https://schema.org", "@type": "Claim", "name": name, "text": statement,
             "url": url, "identifier": f"{p.get('id')}@v{p.get('version')}#{cid}",
             "dateModified": str(p.get("date") or "")[:10], "inLanguage": "en",
             "author": [{"@type": "Person", "name": c.get("name")} for c in people if c.get("name")],
@@ -679,7 +681,7 @@ def claim_meta(doc, cid, base_url, url, statement, item=None):
     if item:
         extra = ('<meta name="twitter:label1" content="Reliability">'
                  f'<meta name="twitter:data1" content="{item["score"]}, {item["band"]}">')
-    return _ld(data) + _og(_shorten(statement, 110), f"A claim of {p.get('title')}", url, base_url, "article", extra)
+    return _ld(data) + _og(name, _shorten(statement, 300), url, base_url, "article", extra)
 
 
 # --- what search engines and link previews read (design §7.8) ---------------------------------------------------------
