@@ -134,6 +134,29 @@ def _problem(scores, pid, cost=None):
             + f' <span class="fix">To remove it: {esc(p["fix"])}</span></li>')
 
 
+def _claim_explain(scores, cid):
+    c = scores["claims"][cid]
+    problems = "".join(_problem(scores, pid, c["costs"][pid]) for pid in c["problems"])
+    n = sc.label(scores["novelty"].get(cid))
+    return (f'<div class="score-explain score-claim" id="score-{esc(cid)}"><h4><a href="#{esc(cid)}">'
+            f'{esc(cid)}</a>: <span class="band-{c["band"]}">{c["score"]}, {BANDS[c["band"]]}</span> '
+            f'{dots(scores, cid)}</h4>'
+            + (f'<p class="small">Novelty: {esc(n)}</p>' if n else "")
+            + (f'<ol class="problems">{problems}</ol>' if problems else '<p class="small">Nothing lost.</p>')
+            + "</div>")
+
+
+def claim_section(scores, cids):
+    """The section *Score* of a claim's page: the explanation of each scored claim in `cids` (the claim and those it
+    rests on), the claim first."""
+    shown = [c for c in cids if scores and c in scores["claims"]]
+    if not shown:
+        return ""
+    note = f'<p class="score-note">{esc(scores["note"])} <a href="{RUBRIC_URL}">The rubric</a>.</p>'
+    return ('<section class="cs-section score-section" id="score"><h2>Score</h2>' + note
+            + "".join(_claim_explain(scores, c) for c in shown) + "</section>")
+
+
 def section(scores, issues_url=None):
     """The section *Score*: the paper's explanation, then every claim's. The pop-ups show parts of it."""
     if not scores:
@@ -152,14 +175,7 @@ def section(scores, issues_url=None):
                    f'counted once, with the most it costs a claim:</p>'
                    + (f'<ol class="problems">{problems}</ol>' if problems else "<p>None.</p>") + "</div>")
     out.append("<h3>Claims</h3>")
-    for cid, c in scores["claims"].items():
-        problems = "".join(_problem(scores, pid, c["costs"][pid]) for pid in c["problems"])
-        n = sc.label(scores["novelty"].get(cid))
-        out.append(f'<div class="score-explain score-claim" id="score-{esc(cid)}"><h4><a href="#{esc(cid)}">'
-                   f'{esc(cid)}</a>: <span class="band-{c["band"]}">{c["score"]}, {BANDS[c["band"]]}</span> '
-                   f'{dots(scores, cid)}</h4>'
-                   + (f'<p class="small">Novelty: {esc(n)}</p>' if n else "")
-                   + (f'<ol class="problems">{problems}</ol>' if problems else '<p class="small">Nothing lost.</p>')
-                   + "</div>")
+    for cid in scores["claims"]:
+        out.append(_claim_explain(scores, cid))
     out.append("</section>")
     return "".join(out)

@@ -177,7 +177,7 @@ def write_static(conn, registry, folder, published_dir, base_url):
         if docs[n] is not raws[n]:                       # retracted: the file with the status the platform assigned
             text = json.dumps(docs[n], indent=1, ensure_ascii=False) + "\n"
         scored[n] = scores.compute(conn, doc)             # by the rubric (design §7.6); None without it
-        view = render(doc) + scores.text(scored[n])
+        view = render(doc) + scores.text(scored[n]) + site.citation_note(doc, base_url)
         if scored[n] is not None:
             score_json = json.dumps(scored[n], indent=1, ensure_ascii=False) + "\n"
             issues = scores.issues_text(scored[n], doc["paper"]["id"], n, base_url)
@@ -194,7 +194,7 @@ def write_static(conn, registry, folder, published_dir, base_url):
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
             _write(p / f"{key}.read.html", reading)
-            write_bundles(p / key, doc)
+            write_bundles(p / key, doc, base_url)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab = {}
         if lab_copy.exists():
@@ -351,8 +351,9 @@ def _lab_summary(record):
     return site.lab_summary(events)
 
 
-def write_bundles(directory, doc):
-    """The claim bundles of a version, replacing those of the version before (whose claims may differ)."""
+def write_bundles(directory, doc, base_url=None):
+    """The claim bundles of a version, replacing those of the version before (whose claims may differ); their reading
+    views end with how to cite the claim when `base_url` is given."""
     directory = Path(directory)
     for old in directory.glob("C*.*") if directory.exists() else []:
         if re.fullmatch(r"C\d+\.(json|txt)", old.name):
@@ -361,7 +362,8 @@ def write_bundles(directory, doc):
         cid = c.get("id") if isinstance(c, dict) else None
         if isinstance(cid, str) and re.fullmatch(r"C\d+", cid):
             _write(directory / f"{cid}.json", json.dumps(claim_bundle(doc, cid), indent=1, ensure_ascii=False) + "\n")
-            _write(directory / f"{cid}.txt", render_claim(doc, cid))
+            _write(directory / f"{cid}.txt", render_claim(doc, cid)
+                   + (site.citation_note(doc, base_url, cid) if base_url else ""))
 
 
 def paper_card(doc, base_url):
