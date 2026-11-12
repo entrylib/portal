@@ -1,24 +1,15 @@
-"""The consent pages: plain HTML. Every value from a submission is escaped; nothing submitted is rendered as HTML."""
+"""The consent pages, in the site's shell. Every value from a submission is escaped; nothing submitted is rendered as
+HTML."""
 
 from html import escape
 
-STYLE = """
-body { font: 16px/1.55 system-ui, sans-serif; max-width: 46rem; margin: 2.5rem auto; padding: 0 1rem; color: #1b1b1b; }
-pre { white-space: pre-wrap; background: #f4f4f4; padding: 1rem; border-radius: 4px; font-size: 13px; }
-.box { border: 1px solid #ccc; border-radius: 6px; padding: 1rem 1.25rem; margin: 1.25rem 0; }
-.button { display: inline-block; background: #a6ce39; color: #1b1b1b; padding: 0.6rem 1.1rem; border-radius: 4px;
-          text-decoration: none; font-weight: 600; }
-.muted { color: #666; font-size: 14px; }
-@media (prefers-color-scheme: dark) { body { background: #111; color: #e6e6e6; } pre { background: #1e1e1e; }
-  .box { border-color: #444; } .muted { color: #999; } }
-"""
-
 
 def page(title, body):
-    return (f"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-            f"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            f"<meta name=\"robots\" content=\"noindex\"><title>{escape(title)} · EntryLib</title>"
-            f"<style>{STYLE}</style></head><body><h1>{escape(title)}</h1>{body}</body></html>")
+    """A consent page in the site's own shell (design §4.3): the header with its menu, the footer and the site's styles,
+    so that a guarantor who confirms can go on to the rest of the site. Not indexed."""
+    from . import site
+    return site.shell(title, f'<div class="wrap prose consent"><h1>{escape(title)}</h1>{body}</div>',
+                      active="submissions", head='<meta name="robots" content="noindex">')
 
 
 def message(title, text, status_url=None, back=None):
@@ -61,14 +52,14 @@ def consent(ctx, start_url, status_url, attach_url=None, attached=False):
     for it first: the Confirm button comes once it is attached."""
     state = ctx["state"]
     if state != "pending":
-        texts = {"confirmed": "You have confirmed this claimset; it is being published.",
-                 "publishing": "You have confirmed this claimset. It is being checked in the public registry and "
+        texts = {"confirmed": "You have confirmed this paper; it is being published.",
+                 "publishing": "You have confirmed this paper. It is being checked in the public registry and "
                                "will be published when the checks pass; the status link shows progress.",
-                 "published": f"This claimset is published as {ctx.get('published')}.",
+                 "published": f"This paper is published as {ctx.get('published')}.",
                  "refused": f"This submission could not be published: {ctx.get('detail') or ''}",
                  "expired": "This submission expired: it was not confirmed within 48 hours. The agent can submit "
                             "it again."}
-        return message("Claimset consent", texts.get(state, state), status_url)
+        return message("Confirm a submission", texts.get(state, state), status_url)
     principal = "".join(f"<li>{escape(s)}</li>" for s in ctx["principal"])
     correction = ""
     if ctx["kind"] == "correction":
@@ -76,19 +67,20 @@ def consent(ctx, start_url, status_url, attach_url=None, attached=False):
                       f"{escape(ctx.get('correction_reason') or '')}</p>")
     expires = ctx["expires"].strftime("%d %B %Y, %H:%M UTC")
     body = f"""
-<p>An agent has submitted a claimset to EntryLib that names you, <strong>{escape(ctx['name'] or '')}</strong>
-(ORCID <code>{escape(ctx['orcid'])}</code>), as its guarantor.</p>
+<p>An AI agent has submitted a paper to EntryLib that names you, <strong>{escape(ctx['name'] or '')}</strong>
+(ORCID <code>{escape(ctx['orcid'])}</code>), as its responsible researcher (in the claimset format, its
+guarantor).</p>
 {correction}
 <div class="box">
 <p><strong>{escape(ctx['title'])}</strong></p>
 <p class="muted">{ctx['n_claims']} claims · licence {escape(ctx['licence'])}</p>
 <p class="muted">Subfield: {escape(ctx.get('subfield') or '')}</p>
 {_source_box(ctx)}<p>Principal claims:</p><ul>{principal}</ul>
-<details><summary>The whole claimset, as models will read it</summary><pre>{escape(ctx['reading_view'])}</pre></details>
+<details><summary>The whole paper, as models will read it</summary><pre>{escape(ctx['reading_view'])}</pre></details>
 </div>
 <p>By confirming, you state that you are the main author of this work and the person to contact about it, that you
 answer for its research (whether the claims are true and the work was done properly), and that it may be published
-under the licence {escape(ctx['licence'])}. Once published, a claimset stays: it can be corrected or retracted, and
+under the licence {escape(ctx['licence'])}. Once published, a paper stays: it can be corrected or retracted, and
 is removed only when it must be (<a href="/removal">retraction and removal</a>).</p>
 {_package_box(ctx, attach_url, attached)}
 {_confirm_button(ctx, start_url)}

@@ -28,6 +28,7 @@ from . import (
     consent,
     fetch,
     history,
+    ids,
     mcp_server,
     notices,
     pages,
@@ -432,9 +433,11 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             log.exception("publishing after consent failed")
             done = {}
         published = done.get(outcome.submission)
-        text = (f"Thank you. The claimset is published as {published}." if published else
-                "Thank you. You have confirmed the claimset; it will be published shortly.")
-        return pages.message("Confirmed", text, status_url)
+        text = (f"Thank you. The paper is published as {published}." if published else
+                "Thank you. You have confirmed the paper; it will be published shortly.")
+        nxt = ((f"/p/{ids.url_key(str(published).split('@')[0])}", "Open the paper") if published else
+               ("/submissions", "Your submissions"))
+        return pages.message("Confirmed", text, status_url, back=nxt)
 
     removal_csp = PAGE_CSP.replace("form-action 'self'", f"form-action 'self' {settings.orcid_base}")
 
