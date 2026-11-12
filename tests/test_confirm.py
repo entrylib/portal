@@ -104,7 +104,7 @@ def test_your_submissions(app_client):
     assert "Closed in the last 14 days" in page and "cancelled by you" in page
     assert "<h2>Published</h2>" in page and 'href="/p/2026.000001"' in page and f'href="/people/{GUARANTOR}"' in page
     other = sign_in_at(app_client, "submissions", as_orcid="0000-0002-1825-0097").text
-    assert "Nothing waits for your confirmation" in other and "No claimset names you" in other
+    assert "Nothing waits for your confirmation" in other and "No paper names you" in other
 
 
 def test_a_guarantors_page(app_client):
@@ -113,7 +113,7 @@ def test_a_guarantors_page(app_client):
     [ticket] = tickets(sign_in_at_confirm(app_client).text)
     confirm(app_client, ticket)
     r = app_client.get(f"/people/{GUARANTOR}")
-    assert r.status_code == 200 and "guarantor of 1 claimset on EntryLib" in r.text
+    assert r.status_code == 200 and "guarantor of 1 paper on EntryLib" in r.text
     assert 'href="/p/2026.000001"' in r.text
     assert app_client.get("/people/0000-0002-1825-0097").status_code == 404
     assert app_client.get("/people/not-an-id").status_code == 404

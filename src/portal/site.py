@@ -53,13 +53,13 @@ PAGES = {
     "lab": ("lab.html", "claimset-lab", "lab",
             "claimset-lab keeps the record of research while an agent does it, so that anyone can check it."),
     "about": ("about.html", "About EntryLib", "about",
-              "What EntryLib is, what an entry is, who answers for it, and who runs the site."),
+              "What EntryLib is, what a paper on it is, who answers for it, and who runs the site."),
     "agents": ("agents.html", "For agents", "agents",
                "The MCP server, the API, the formats and the limits for programs and AI agents."),
     "privacy": ("privacy.html", "Privacy", None, "What EntryLib records about people, and why."),
     "convert": ("convert.html", "Turn your paper into a claimset", "about",
                 "How an author turns their own paper into a claimset with their AI agent, and why."),
-    "how-to-judge": ("how-to-judge.html", "How to judge an entry", "about",
+    "how-to-judge": ("how-to-judge.html", "How to judge a paper", "about",
                      "What to look at before relying on a claim on EntryLib, and what its scores do not say."),
     "before-you-submit": ("before-you-submit.html", "Before you submit", "about",
                           "What a guarantor checks before submitting a claimset to EntryLib, and what follows."),
@@ -442,7 +442,7 @@ def removed_page(concept, notice):
     box = _notice_box("removed", notice.get("date"), notice.get("issued_by"), notice.get("reason_code"),
                       notice.get("statement"))
     main = (f'<div class="wrap prose"><p class="entry-top"><span class="id">{esc(concept)}</span></p>'
-            f"<h1>This entry has been removed</h1>{box}"
+            f"<h1>This paper has been removed</h1>{box}"
             '<p>Its content is no longer served. Its identifier stays in use and keeps leading here. See '
             '<a href="/removal">retraction and removal</a>.</p></div>')
     return shell(f"{concept}: removed", main, head='<meta name="robots" content="noindex">')
@@ -539,7 +539,7 @@ def _panel(doc, parts, base_url, key, scores=None):
     if src and src.startswith("doi:"):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
-    return (f'<aside class="panel" aria-label="About this entry">'
+    return (f'<aside class="panel" aria-label="About this paper">'
             f'{score_html.panel_rows(scores, parts.get("lights"))}{_interests_row(doc)}'
             + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
                         f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
@@ -667,10 +667,17 @@ def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
                                **extra)
 
 
-def contents(sections, more=""):
-    """The contents of a page: back to the top, then the package's sections (id, title, count) and `more`."""
+def contents(sections, more="", doc=None):
+    """The contents of a page: back to the top, then the package's sections (id, title, count) and `more`. With
+    `doc`, Evidence counts its evidence and its arguments apart, as the paper's card does (UX audit, issue 9)."""
+    def count(sid, c):
+        warrants = len((doc or {}).get("warrants") or [])
+        if sid == "evidence" and warrants and isinstance(c, int) and c > warrants:
+            return f"{c - warrants} · {warrants} argument{'s' if warrants != 1 else ''}"
+        return c
     return ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
-            + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>' + (f' <span class="count">{c}</span>' if c else "")
+            + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>'
+                                + (f' <span class="count">{esc(count(sid, c))}</span>' if c else "")
                                 + "</li>" for sid, t, c in sections) + f"{more}</ol></nav>")
 
 
@@ -680,7 +687,8 @@ INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a resear
                'separate claims, each with its evidence. <a href="/about#reading" data-help="how-to-read">How to read '
                'this page</a><button type="button" class="strip-close" aria-label="Hide this note" hidden>\u00d7'
                '</button></p><template id="how-to-read"><h2>How to read this page</h2>' + HOW_TO_READ +
-               '<p><a href="/how-to-judge">How to judge an entry</a> · <a href="/about#reading">More on the About '
+               '<p><a href="/about#glossary">Words used here</a> · <a href="/how-to-judge">How to judge a paper</a> · '
+               '<a href="/about#reading">More on the About '
                'page</a></p></template>')
 
 
@@ -702,7 +710,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                  f'<a href="/p/{key}">The current version is {esc(current)}</a>.</p>')
     body, sections = page_sections(parts, doc)
     nav = contents(sections, ('<li><a href="#score">Score</a></li>' if scores else "")
-                   + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>')
+                   + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>', doc)
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
@@ -837,12 +845,12 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
                        '</p></div>')
     panel = (f'<aside class="panel" aria-label="About this claim">{reliability}'
              + _cite_row(f'{p["id"]}@v{n}#{cid}', citation_text(doc, base_url, cid)) +
-             f'<div class="panel-row"><h2>The claimset</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
+             f'<div class="panel-row"><h2>The paper</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
              f'{esc(title)}</a></p></div>'
              f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}/{esc(cid)}.txt">'
              f'Reading view</a> · <a href="/p/{key}/{esc(cid)}.json">JSON</a></p></div></aside>')
-    origin = (f'<p class="origin-line">Principal claim {esc(cid)} of this claimset ({esc(_who(doc))}, '
-              f'{esc(_year(doc))}), with what it rests on. <a href="/p/{key}#{esc(cid)}">Read the whole claimset</a>.'
+    origin = (f'<p class="origin-line">Principal claim {esc(cid)} of this paper ({esc(_who(doc))}, '
+              f'{esc(_year(doc))}), with what it rests on. <a href="/p/{key}#{esc(cid)}">Read the whole paper</a>.'
               '</p>')
     main = (f'<div class="cs-page entry claim-entry"><div class="cs-header entry-header">'
             f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{_notice(p, published)}'
@@ -1026,8 +1034,8 @@ def _search_form(q="", view="claimsets", big=False):
     cls = "search search-big" if big else "search"
     hidden = '<input type="hidden" name="view" value="claims">' if view == "claims" else ""
     return (f'<form class="{cls}" action="/read" method="get" role="search">'
-            f'<label class="visually-hidden" for="q">Search claimsets and claims</label>'
-            f'<input id="q" name="q" type="search" value="{esc(q)}" placeholder="Search claimsets and claims">{hidden}'
+            f'<label class="visually-hidden" for="q">Search papers and claims</label>'
+            f'<input id="q" name="q" type="search" value="{esc(q)}" placeholder="Search papers and claims">{hidden}'
             '<button type="submit">Search</button></form>')
 
 
@@ -1048,7 +1056,7 @@ def home(docs, base_url=None):
     intro = intro.replace("{score_name}", score_html.NAME)
     main = (f'<div class="wrap home">{intro}'
             f'<section class="recent"><div class="section-head"><h2>Recently published</h2>'
-            f'<p><a href="/all">All claimsets</a> · <a href="/feed.xml">RSS</a></p></div>'
+            f'<p><a href="/all">All papers</a> · <a href="/feed.xml">RSS</a></p></div>'
             f'<div class="cards">{cards}</div></section></div>')
     return shell(SITE, main, description="EntryLib publishes research in a form that both people and AI can read "
                  "and check: each paper broken down into its findings, each with what it rests on.",
@@ -1057,10 +1065,10 @@ def home(docs, base_url=None):
 
 def all_page(docs):
     cards = "".join(card(d) for d in docs) or '<p class="muted">Nothing is published yet.</p>'
-    main = (f'<div class="wrap"><h1>All claimsets</h1><p class="muted">{len(docs)} '
-            f'claimset{"s" if len(docs) != 1 else ""}, newest first · <a href="/feed.xml">RSS</a> · '
+    main = (f'<div class="wrap"><h1>All papers</h1><p class="muted">{len(docs)} '
+            f'paper{"s" if len(docs) != 1 else ""}, newest first · <a href="/feed.xml">RSS</a> · '
             f'<a href="/index.jsonl">index.jsonl</a></p><div class="cards">{cards}</div></div>')
-    return shell("All claimsets", main, active="read")
+    return shell("All papers", main, active="read")
 
 
 def feed(docs, base_url):
@@ -1110,7 +1118,7 @@ def search_page(q, view, results=None, error=None, offset=0, limit=SEARCH_PAGE, 
     search API's answer; `files`: {paper id: current file} for claimset cards."""
     tabs = "".join(
         f'<a href="{_read_url(q, v)}"' + (' aria-current="page"' if v == view else "") + f">{label}</a>"
-        for v, label in (("claimsets", "Claimsets"), ("claims", "Claims")))
+        for v, label in (("claimsets", "Papers"), ("claims", "Claims")))
     out = [f'<div class="wrap"><h1>Read</h1>{_search_form(q, view)}'
            '<p class="small muted">Searching the whole library. <a href="/read">Browse by field instead</a>.</p>'
            f'<nav class="tabs" aria-label="Search in">{tabs}</nav>']
@@ -1120,10 +1128,10 @@ def search_page(q, view, results=None, error=None, offset=0, limit=SEARCH_PAGE, 
         rows = (results or {}).get("results") or []
         if not rows:
             out.append('<p class="muted">Nothing found. Search matches words, not meaning: try the words a paper '
-                       'would use, and synonyms. Or <a href="/all">browse all claimsets</a>, or '
+                       'would use, and synonyms. Or <a href="/all">browse all papers</a>, or '
                        '<a href="/read">read by field</a>.</p>')
         else:
-            what = "claimset" if view == "claimsets" else "claim"
+            what = "paper" if view == "claimsets" else "claim"
             out.append(f'<p class="muted">{len(rows)} {what}{"s" if len(rows) != 1 else ""}'
                        + (f", from number {offset + 1}" if offset else "")
                        + (" (more on the next page)" if len(rows) == limit else "") + "</p>")
@@ -1159,7 +1167,7 @@ def removal_page(form=None, error=None, orcid_ready=True):
     policy = _static("pages/removal.html").read_text(encoding="utf-8")
     chosen = form.get("reason", "")
     groups = []
-    for action, label in (("retract", "Retraction: the entry stays readable, with a notice"),
+    for action, label in (("retract", "Retraction: the paper stays readable, with a notice"),
                           ("remove", "Removal: the content is taken down")):
         opts = "".join(f'<option value="{action}:{code}"' + (" selected" if chosen == f"{action}:{code}" else "")
                        + f">{esc(text)}</option>" for code, text in REASONS[action].items())
@@ -1169,15 +1177,15 @@ def removal_page(form=None, error=None, orcid_ready=True):
               "confirm</button></p>") if orcid_ready else '<p class="muted">ORCID sign-in is not available now.</p>'
     form_html = (
         f'<h2 id="request">Make a request</h2>{err}<form class="request" method="post" action="/removal">'
-        f'<p><label for="id">The entry\'s identifier</label><br><input id="id" name="id" required '
+        f'<p><label for="id">The paper\'s identifier</label><br><input id="id" name="id" required '
         f'placeholder="entrylib:2026.000001" value="{esc(form.get("id", ""))}"></p>'
         f'<p><label for="reason">What, and why</label><br><select id="reason" name="reason" required>'
         f'<option value="">Choose a reason</option>{"".join(groups)}</select></p>'
         f'<p><label for="statement">In your own words</label> <span class="muted">(shown in the notice; required '
         f'for Other)</span><br><textarea id="statement" name="statement" rows="3" maxlength="2000">'
         f'{esc(form.get("statement", ""))}</textarea></p>'
-        f'<fieldset><legend>I am the entry\'s guarantor</legend><p class="muted">Sign in with the ORCID iD the '
-        f"entry names as guarantor; it is acted on at once.</p>{signin}</fieldset>"
+        f'<fieldset><legend>I am the paper\'s guarantor</legend><p class="muted">Sign in with the ORCID iD the '
+        f"paper names as guarantor; it is acted on at once.</p>{signin}</fieldset>"
         f'<fieldset><legend>I am someone else</legend><p class="muted">A co-author, a rights holder, a person '
         f"named in the data: EntryLib reviews the request and answers you.</p>"
         f'<p><label for="contact">Your email</label><br><input id="contact" name="contact" type="email" '
@@ -1187,7 +1195,7 @@ def removal_page(form=None, error=None, orcid_ready=True):
         '<p><button class="button" type="submit" name="who" value="other">Send for review</button></p></fieldset>'
         "</form>")
     return shell("Retraction and removal", f'<div class="wrap prose">{policy}{form_html}</div>',
-                 description="How an entry is retracted or removed, and the form to ask for it.")
+                 description="How a paper is retracted or removed, and the form to ask for it.")
 
 
 CONSENT = ("By confirming, you state that you are the main author of this work and the person to contact about it, "
@@ -1316,7 +1324,7 @@ def submissions_list(items, past, orcid, name=None):
             f' · {esc(STATUS_LABELS.get(x["status"], x["status"]))}</li>' for x in published) + "</ul>"
             f'<p><a href="/people/{esc(orcid)}">Your public page</a></p>')
     else:
-        parts.append('<p class="muted">No claimset names you as its guarantor yet.</p>')
+        parts.append('<p class="muted">No paper names you as its guarantor yet.</p>')
     main = f'<div class="wrap prose"><h1>Your submissions</h1>{"".join(parts)}</div>'
     return shell("Your submissions", main, head='<meta name="robots" content="noindex">')
 
@@ -1327,18 +1335,18 @@ def person_page(orcid, docs, base_url=""):
                  if isinstance(c, dict) and c.get("orcid") == orcid and c.get("name")), None) or orcid
     n = len(docs)
     main = (f'<div class="wrap"><h1>{esc(name)}</h1><p class="lead"><a class="orcid orcid-verified" '
-            f'href="https://orcid.org/{esc(orcid)}">{esc(orcid)}</a> · guarantor of {n} claimset{"s" if n != 1 else ""}'
+            f'href="https://orcid.org/{esc(orcid)}">{esc(orcid)}</a> · guarantor of {n} paper{"s" if n != 1 else ""}'
             f' on {SITE}</p><div class="cards">{"".join(card(d) for d in docs)}</div></div>')
-    return shell(f"{name}: claimsets", main, active="read",
-                 description=f"The claimsets {name} guarantees on {SITE}: research papers as claims with what each "
+    return shell(f"{name}: papers", main, active="read",
+                 description=f"The papers {name} guarantees on {SITE}: research papers as claims with what each "
                              "rests on.", canonical=f"{base_url}/people/{orcid}" if base_url else None)
 
 
 def not_found_page():
     """An address that does not exist (any mistyped link): search, the library and the way home."""
     main = ('<div class="wrap prose"><h1>We could not find that page</h1><p class="lead">The address may be mistyped, '
-            "or the page may have moved. A claimset's address looks like <code>entrylib.org/p/2026.000001</code>.</p>"
-            f'{_search_form()}<p><a href="/all">Browse all claimsets</a> · <a href="/read">Read by field</a> · '
+            "or the page may have moved. A paper's address looks like <code>entrylib.org/p/2026.000001</code>.</p>"
+            f'{_search_form()}<p><a href="/all">Browse all papers</a> · <a href="/read">Read by field</a> · '
             '<a href="/">Home</a></p></div>')
     return shell("Page not found", main, head='<meta name="robots" content="noindex">')
 

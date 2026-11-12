@@ -99,8 +99,9 @@ main { min-height: 60vh; }
 .pager { margin-top: 24px; }
 
 /* home */
-.hero { padding: 48px 0 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 24rem); gap: 32px 56px;
-  align-items: start; }
+.hero { padding: 48px 0 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 24rem); gap: 28px 56px;
+  align-items: stretch; }
+.hero-text { display: flex; flex-direction: column; justify-content: center; }
 @media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); } }
 .start-here { background: var(--panel); border: 1px solid var(--rule-light); border-radius: 6px; padding: 20px 24px; }
 .start-here h2 { margin: 0 0 10px; font-size: 20px; }
@@ -445,3 +446,10 @@ dialog.help .popup-body { max-height: 90vh; overflow-y: auto; padding: 20px 64px
 .popup.help .popup-body li { margin: 0 0 8px; }
 .card-summary { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .connect pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; font-size: 14px; }
+.hero-kicker { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--muted); }
+.home-score { grid-column: 1 / -1; padding-top: 18px; border-top: 1px solid var(--rule-light); }
+.home-score p { max-width: 112ch; }
+.home-score h2 { font-size: 20px; margin: 0 0 6px; }
+.home-score p { margin: 0 0 8px; }
+.glossary dt { font-weight: 600; margin-top: 10px; }
+.glossary dd { margin: 2px 0 0; }
