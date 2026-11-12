@@ -301,3 +301,9 @@ def test_the_pages_agree():
     assert "Converted by its authors" in about and "Converted by its authors" in judge
     assert "conversion guarantor" not in (pages / "how-to-judge.html").read_text()
     assert "conversion guarantor" not in site._origin_line({"paper": {}, "artefacts": []}, "converted", None)
+
+
+def test_the_panel_scrolls_on_its_own_only_beside_the_page():
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text()
+    rule = css.split("overscroll-behavior: contain")[0].rsplit("@media", 1)[1]
+    assert "(min-width: 1101px)" in rule                    # below 1100px the panel is in the page's flow
