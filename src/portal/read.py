@@ -154,7 +154,7 @@ def _claim_item(doc, c, sc):
         mark = (f'<a class="score-badge band-{item["band"]}" href="/p/{key}#score-{site.esc(cid)}" '
                 f'aria-label="{score_html.NAME} {item["score"]}, {score_html.BANDS[item["band"]].lower()}">'
                 f'{item["score"]}</a>'
-                + score_html.dots(sc, cid))
+                + score_html.dots(sc, cid, href=f"/p/{key}#score-{cid}"))
     meta = [site.esc(cid), site.esc(c.get("type")), site.esc(c.get("role"))]
     n = score_data.label((sc or {}).get("novelty", {}).get(cid)) if sc else ""
     if n:
@@ -211,7 +211,7 @@ def claimsets(docs, q):
     return [d for d, _ in out]
 
 
-def page(docs, q, base_url=""):
+def page(docs, q, base_url="", corrected=None):
     """The Read page. `docs`: the current version of every published claimset. Its canonical address is the area's
     own, without filters, so that search engines index one page per area."""
     tabs = "".join(f'<a href="{q.url(view=v, offset="")}"' + (' aria-current="page"' if v == q.view else "")
@@ -226,7 +226,7 @@ def page(docs, q, base_url=""):
         rows = claimsets(docs, q)
         shown = rows[q.offset:q.offset + PAGE]
         what = "papers"
-        body = (f'<div class="cards">{"".join(site.card(d) for d in shown)}</div>' if shown
+        body = (f'<div class="cards">{site._cards(shown, corrected)}</div>' if shown
                 else '<p class="muted">No papers here match.</p>')
     more = []
     if q.offset:

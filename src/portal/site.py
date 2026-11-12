@@ -27,6 +27,7 @@ from claimset.claim import claim_bundle
 from . import areas, ids, indexnow, limits, score_html, skills, source, specs
 from . import page as pageview
 from . import scores as score_data
+from .history import claims_changed
 from .text import html as plain_html
 from .text import one_line as plain_text
 from .text import plain, readable
@@ -41,11 +42,19 @@ RECENT = 10
 #: How many entries the feed carries.
 FEED_ENTRIES = 30
 
-NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/convert", "Convert your paper", "convert"),
-       ("/agents", "For agents", "agents"), ("/about", "About", "about")]
+NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
+       ("/about", "About", "about")]
+#: The header's Publish menu (design §7.4): everything an author needs, under one button.
+PUBLISH = [("/submit", "Publish a paper", "Submit a paper your AI agent has prepared", "submit"),
+           ("/convert", "Convert your paper", "Turn a paper you have already written into one", "convert"),
+           ("/before-you-submit", "Before you publish", "What the responsible researcher checks", "before"),
+           ("/submissions", "Your submissions", "Papers waiting for your confirmation", "submissions")]
+BUTTON = ' class="button"'
+CARET = ('<svg class="caret" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">'
+         '<path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>')
 FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/submissions", "Your submissions"),
           ("/privacy", "Privacy"),
-          ("/removal", "Removal requests"), ("/spec/", "Specification"),
+          ("/removal", "Removal requests"), ("/spec/", "Specification"), ("/llms.txt", "llms.txt, for AI agents"),
           (SOURCE_CODE, "Source code"), (f"mailto:{CONTACT}", CONTACT)]
 
 #: The fixed pages: address -> (file under static/pages, title, active nav item, description).
@@ -61,7 +70,7 @@ PAGES = {
                 "How an author turns their own paper into a claimset with their AI agent, and why."),
     "how-to-judge": ("how-to-judge.html", "How to judge a paper", "about",
                      "What to look at before relying on a claim on EntryLib, and what its scores do not say."),
-    "before-you-submit": ("before-you-submit.html", "Before you submit", "about",
+    "before-you-submit": ("before-you-submit.html", "Before you publish", "before",
                           "What a guarantor checks before submitting a claimset to EntryLib, and what follows."),
 }
 
@@ -132,13 +141,23 @@ ICONS = ('<link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" hr
 
 
 def _header(active):
-    links = "".join(f'<a href="{href}"' + (' aria-current="page"' if key == active else "") + f">{label}</a>"
-                    for href, label, key in NAV)
-    submit = '<a class="button" href="/submit">Submit a claimset</a>'
+    """The site's header: four links and the Publish menu (a <details>: it works without scripts and from the
+    keyboard); on a phone, one Menu with the same links and the Publish group."""
+    def cur(key):
+        return ' aria-current="page"' if key == active else ""
+    links = "".join(f'<a href="{href}"{cur(key)}>{label}</a>' for href, label, key in NAV)
+    items = "".join(f'<a class="publish-item" href="{href}"{cur(key)}><strong>{label}</strong><span>{what}</span></a>'
+                    for href, label, what, key in PUBLISH)
+    mine = any(key == active for *_rest, key in PUBLISH)
+    publish = (f'<details class="publish-menu"><summary class="button{" current" if mine else ""}">Publish{CARET}'
+               f'</summary><div class="publish-list">{items}</div></details>')
+    phone = "".join(f'<a{BUTTON if i == 0 else ""} href="{href}"{cur(key)}>{label}</a>'
+                    for i, (href, label, _what, key) in enumerate(PUBLISH))
     return (f'<header class="site-header"><div class="wrap">'
             f'<a class="logo" href="/">{MARK}<span>{SITE}</span></a>'
-            f'<nav class="site-nav" aria-label="Site">{links}{submit}</nav>'
-            f'<details class="site-menu"><summary>Menu</summary><nav aria-label="Site">{links}{submit}</nav></details>'
+            f'<nav class="site-nav" aria-label="Site">{links}{publish}</nav>'
+            f'<details class="site-menu"><summary>Menu</summary><nav aria-label="Site">{links}'
+            f'<p class="menu-group">Publish</p>{phone}</nav></details>'
             "</div></header>")
 
 
@@ -359,9 +378,13 @@ def lab_summary(events):
     return ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in parts)
 
 
-def _status(p):
+def _status(p, claims=None):
+    """The status tag. A correction says "corrected" when it changed claims (`claims`; by default its own version's
+    changes) and "updated" otherwise (history.py)."""
     status = p.get("status") or "active"
     label = esc(STATUS_LABELS.get(status, status))
+    if status == "corrected" and (claims_changed(p.get("changes")) if claims is None else claims):
+        label = "corrected"
     return f'<span class="status status-{STATUS_CLASS.get(status, "warn")}">{label}</span>'
 
 
@@ -415,15 +438,17 @@ def _notice(p, published=None):
     date = n.get("date")
     if p.get("status") == "corrected" and published and str(published)[:10] == str(date) and when(published):
         date = when(published)
-    return _notice_box(p.get("status"), date, who, n.get("reason_code"), n.get("statement"))
+    return _notice_box(p.get("status"), date, who, n.get("reason_code"), n.get("statement"),
+                       claims=claims_changed(p.get("changes")))
 
 
-def _notice_box(status, date, who, reason_code, statement):
+def _notice_box(status, date, who, reason_code, statement, claims=True):
     """A notice: what happened, when, by whom, and why (the reason, and the words of whoever asked, as text). A
-    correction is folded: its line shows "Corrected" and the date, and opens to the explanation. "platform" as the
-    issuer says nothing a reader can use, so it is not shown."""
+    correction is folded: its line shows "Corrected" (when it changed claims, `claims`) or "Updated", as the status
+    tag does, and the date, and opens to the explanation. "platform" as the issuer says nothing a reader can use, so
+    it is not shown."""
     from .notices import REASONS, reason_label
-    label = "corrected" if status == "corrected" else STATUS_LABELS.get(status, status)   # the tag says "updated"
+    label = ("corrected" if claims else "updated") if status == "corrected" else STATUS_LABELS.get(status, status)
     who = "" if not who or str(who).strip().lower() == "platform" else who
     known = any(reason_code in r for r in REASONS.values())
     why = esc(reason_label(reason_code)) if known else ""
@@ -532,11 +557,11 @@ def ask_ai(doc, base_url, cid=None):
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     if cid:
-        what, url, text_url = "claim", f"{base_url}/p/{key}/{cid}", f"/p/{key}/{cid}.txt"
+        what, url = "claim", f"{base_url}/p/{key}/{cid}"
         message = (f"Read {url}, one claim of a research paper with the evidence it rests on. Tell me briefly what it "
                    "says and how well it is supported.")
     else:
-        what, url, text_url = "paper", f"{base_url}/p/{key}@v{n}.read", f"/p/{key}@v{n}.txt"
+        what, url = "paper", f"{base_url}/p/{key}@v{n}.read"
         message = (f"Read {url}, a research paper written as claims with their evidence. Give me a brief summary of "
                    "its main findings and how well each is supported.")
     message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
@@ -544,9 +569,7 @@ def ask_ai(doc, base_url, cid=None):
             f'data-copied="Copied: now paste it into your AI chat" hidden>Ask your AI about this {what}</button>'
             '<p class="small">Copies a message for ChatGPT, Claude or Gemini: paste it there.</p>'
             f'<details><summary>The message</summary><p class="cite-text" id="ask-message">{esc(message)}</p>'
-            f'<p class="small">Your assistant cannot open links? <a class="button-quiet" href="{esc(text_url)}" '
-            f'data-copy-url="{esc(text_url)}" data-copied="Copied: paste the whole {what} into your AI chat">Copy '
-            f"the whole {what} instead</a></p></details></div>")
+            "</details></div>")
 
 
 #: How much of a competing-interests statement the panel shows before "more".
@@ -1038,8 +1061,20 @@ def home_meta(base_url):
 
 # --- cards, home, all, feed -------------------------------------------------------------------------------------------
 
-def card(doc):
-    """A claimset as a card: the home page, the list of all claimsets and search results."""
+def _cards(docs, corrected=None):
+    """Cards for a list, each told whether its paper was ever corrected in its claims (`corrected`: the concept IDs
+    history.corrected_concepts gives; None to judge each by its own version)."""
+    keys = None if corrected is None else {ids.url_key(c) for c in corrected}
+    cards = [card(d, None if keys is None else ids.url_key(d["paper"]["id"]) in keys) for d in docs]
+    caveat = (f'<p class="cards-caveat">{score_html.NAME} score checks a paper\'s record, not its science.</p>'
+              if any("card-scored" in c for c in cards) else "")       # once per list, above the first card
+    return caveat + "".join(cards)
+
+
+def card(doc, corrected=None):
+    """A claimset as a card: the home page, the list of all claimsets and search results. A card is tagged
+    "corrected" only when some version after the first changed claims (`corrected`, from history.py; by default
+    its own version's changes); a paper updated in other ways has no tag, and its Versions say what changed."""
     p = doc["paper"]
     key = ids.url_key(p["id"])
     origin = pageview.origin(doc)
@@ -1047,8 +1082,9 @@ def card(doc):
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
     status = p.get("status") or "active"
-    if status != "active":
-        top.append(_status(p))
+    changed = claims_changed(p.get("changes")) if corrected is None else corrected
+    if status not in ("active", "corrected") or (status == "corrected" and changed):
+        top.append(_status(p, claims=changed))
     if (p.get("version") or 1) > 1:
         top.append(f"v{esc(p['version'])}")
     who = ", ".join(esc(g.get("name")) for g in _people(doc, "guarantor"))
@@ -1099,9 +1135,9 @@ RELIABILITY = (f"{score_html.NAME} (0–100) says how well a claim is backed by 
                "not peer review.")
 
 
-def home(docs, base_url=None):
+def home(docs, base_url=None, corrected=None):
     """The home page; `docs` are the current versions, newest first."""
-    cards = "".join(card(d) for d in docs[:RECENT]) or '<p class="muted">Nothing is published yet.</p>'
+    cards = _cards(docs[:RECENT], corrected) or '<p class="muted">Nothing is published yet.</p>'
     intro = _static("pages/home.html").read_text(encoding="utf-8")
     intro = intro.replace("{search}", _search_form(big=True)).replace("{rubric}", score_html.RUBRIC_URL)
     intro = intro.replace("{reliability}", esc(RELIABILITY).replace(f"{score_html.NAME} (0–100)",
@@ -1110,14 +1146,16 @@ def home(docs, base_url=None):
     main = (f'<div class="wrap home">{intro}'
             f'<section class="recent"><div class="section-head"><h2>Recently published</h2>'
             f'<p><a href="/all">All papers</a> · <a href="/feed.xml">RSS</a></p></div>'
+            f'<p class="small opened">EntryLib opened on 9 November 2026, so there are few papers yet: '
+            f'<a href="/about#governance">how it is run</a>.</p>'
             f'<div class="cards">{cards}</div></section></div>')
     return shell(SITE, main, description="EntryLib publishes research in a form that both people and AI can read "
                  "and check: each paper broken down into its findings, each with what it rests on.",
                  head=home_meta(base_url) if base_url else "", canonical=f"{base_url}/" if base_url else None)
 
 
-def all_page(docs):
-    cards = "".join(card(d) for d in docs) or '<p class="muted">Nothing is published yet.</p>'
+def all_page(docs, corrected=None):
+    cards = _cards(docs, corrected) or '<p class="muted">Nothing is published yet.</p>'
     main = (f'<div class="wrap"><h1>All papers</h1><p class="muted">{len(docs)} '
             f'paper{"s" if len(docs) != 1 else ""}, newest first · <a href="/feed.xml">RSS</a> · '
             f'<a href="/index.jsonl">index.jsonl</a></p><div class="cards">{cards}</div></div>')
@@ -1167,7 +1205,7 @@ def _read_url(q, view, offset=0):
             + (f"&amp;offset={offset}" if offset else ""))
 
 
-def search_page(q, view, results=None, error=None, offset=0, limit=SEARCH_PAGE, files=None):
+def search_page(q, view, results=None, error=None, offset=0, limit=SEARCH_PAGE, files=None, corrected=None):
     """The Read page with a query (design §7.7): the whole library searched, claimsets or claims. `results`: the
     search API's answer; `files`: {paper id: current file} for claimset cards."""
     tabs = "".join(
@@ -1190,8 +1228,8 @@ def search_page(q, view, results=None, error=None, offset=0, limit=SEARCH_PAGE, 
                        + (f", from number {offset + 1}" if offset else "")
                        + (" (more on the next page)" if len(rows) == limit else "") + "</p>")
         if rows and view == "claimsets":
-            out.append('<div class="cards">' + "".join(card(files[r["id"]]) for r in rows if r["id"] in (files or {}))
-                       + "</div>")
+            found = [files[r["id"]] for r in rows if r["id"] in (files or {})]
+            out.append(f'<div class="cards">{_cards(found, corrected)}</div>')
         elif rows:
             items = []
             for r in rows:
@@ -1254,7 +1292,7 @@ def removal_page(form=None, error=None, orcid_ready=True):
 
 CONSENT = ("By confirming, you state that you are the main author of this work and the person to contact about it, "
            "that you answer for its research (whether the claims are true and the work was done properly), and that it "
-           "may be published under its licence. Once published, a claimset stays: it can be corrected or retracted, "
+           "may be published under its licence. Once published, a paper stays: it can be corrected or retracted, "
            "and is removed only when it must be.")
 
 
@@ -1265,21 +1303,25 @@ def _sign_in(path, orcid_ready):
 
 def confirm_page(orcid_ready=True):
     """/confirm: sign in with ORCID to see the submissions waiting for you, without the consent link."""
-    main = ('<div class="wrap prose"><h1>Confirm a submission</h1><p class="lead">When an agent submits a claimset, '
-            "its guarantor confirms it before it is published. The consent link the agent was given leads straight "
+    main = ('<div class="wrap prose"><h1>Confirm a submission</h1><p class="lead">When an AI agent submits a paper, '
+            "its responsible researcher (the guarantor, in the claimset format) confirms it before it is published. "
+            "The consent link the agent was given leads straight "
             "to it; without the link, sign in here with your ORCID iD to see every submission waiting for you, and "
             f"confirm or cancel each.</p>{_sign_in('/confirm', orcid_ready)}<p class=\"muted\">Submissions wait 48 "
             "hours for confirmation; then they are deleted and can be submitted again. "
             '<a href="/submissions">Your submissions</a> shows everything you submitted.</p></div>')
-    return shell("Confirm a submission", main, head='<meta name="robots" content="noindex">')
+    return shell("Confirm a submission", main, active="submissions",
+                 head='<meta name="robots" content="noindex">')
 
 
 def submissions_page(orcid_ready=True):
     """/submissions: sign in with ORCID to see what you submitted and what you guarantee."""
     main = ('<div class="wrap prose"><h1>Your submissions</h1><p class="lead">Sign in with your ORCID iD to see '
             "what waits for your confirmation, what waits for others or is being published, what closed recently, "
-            f"and every claimset you guarantee.</p>{_sign_in('/submissions', orcid_ready)}</div>")
-    return shell("Your submissions", main, head='<meta name="robots" content="noindex">')
+            "and every paper you are the responsible researcher for (its guarantor, in the claimset format).</p>"
+            f"{_sign_in('/submissions', orcid_ready)}</div>")
+    return shell("Your submissions", main, active="submissions",
+                 head='<meta name="robots" content="noindex">')
 
 
 def _who_signed_in(orcid, name):
@@ -1333,10 +1375,12 @@ def confirm_list(items, orcid, name=None):
                 "yours has expired, submit it again.</p>")
     else:
         body = (f"<p>Signed in as {who}. {len(items)} submission{'s' if len(items) != 1 else ''} "
-                f"name{'s' if len(items) == 1 else ''} you as guarantor.</p><p>{esc(CONSENT)}</p>" + _pending(items)
+                f"name{'s' if len(items) == 1 else ''} you as the responsible researcher.</p>"
+                f"<p>{esc(CONSENT)}</p>" + _pending(items)
                 + '<p class="muted">These buttons work for 30 minutes; then sign in again.</p>')
     main = f'<div class="wrap prose"><h1>Confirm a submission</h1>{body}</div>'
-    return shell("Confirm a submission", main, head='<meta name="robots" content="noindex">')
+    return shell("Confirm a submission", main, active="submissions",
+                 head='<meta name="robots" content="noindex">')
 
 
 SUBMISSION_STATES = {"pending": "waiting for another guarantor", "confirmed": "confirmed, being published",
@@ -1378,19 +1422,21 @@ def submissions_list(items, past, orcid, name=None):
             f' · {esc(STATUS_LABELS.get(x["status"], x["status"]))}</li>' for x in published) + "</ul>"
             f'<p><a href="/people/{esc(orcid)}">Your public page</a></p>')
     else:
-        parts.append('<p class="muted">No paper names you as its guarantor yet.</p>')
+        parts.append('<p class="muted">No paper names you as its responsible researcher yet.</p>')
     main = f'<div class="wrap prose"><h1>Your submissions</h1>{"".join(parts)}</div>'
-    return shell("Your submissions", main, head='<meta name="robots" content="noindex">')
+    return shell("Your submissions", main, active="submissions",
+                 head='<meta name="robots" content="noindex">')
 
 
-def person_page(orcid, docs, base_url=""):
+def person_page(orcid, docs, base_url="", corrected=None):
     """/people/<ORCID iD>: the published claimsets a person guarantees, newest first (design §7.4)."""
     name = next((c.get("name") for d in docs for c in d.get("contributors") or []
                  if isinstance(c, dict) and c.get("orcid") == orcid and c.get("name")), None) or orcid
     n = len(docs)
     main = (f'<div class="wrap"><h1>{esc(name)}</h1><p class="lead"><a class="orcid orcid-verified" '
-            f'href="https://orcid.org/{esc(orcid)}">{esc(orcid)}</a> · guarantor of {n} paper{"s" if n != 1 else ""}'
-            f' on {SITE}</p><div class="cards">{"".join(card(d) for d in docs)}</div></div>')
+            f'href="https://orcid.org/{esc(orcid)}">{esc(orcid)}</a> · responsible researcher for {n} '
+            f'paper{"s" if n != 1 else ""}'
+            f' on {SITE}</p><div class="cards">{_cards(docs, corrected)}</div></div>')
     return shell(f"{name}: papers", main, active="read",
                  description=f"The papers {name} guarantees on {SITE}: research papers as claims with what each "
                              "rests on.", canonical=f"{base_url}/people/{orcid}" if base_url else None)
@@ -1414,14 +1460,14 @@ def message_page(title, text, link=None):
 
 def submit_page(body):
     """The upload page: its form and script (static/submit.html) in the site's page."""
-    waiting = ('<p class="small">Waiting for your confirmation as a guarantor? '
+    waiting = ('<p class="small">Waiting for your confirmation as the responsible researcher? '
                '<a href="/confirm">See your submissions</a>: sign in with ORCID to confirm them, without the '
                'consent link.</p>')
     intro_end = body.find("</p>") + len("</p>")                     # the guarantor's note after the introduction
     body = body[:intro_end] + waiting + body[intro_end:] if intro_end > 3 else waiting + body
-    return shell("Submit a claimset", f'<div class="wrap prose">{body}</div>',
-                 description="Submit a claimset to "
-                 "EntryLib: upload a package or a claimset file; its guarantor confirms with ORCID.")
+    return shell("Publish a paper", f'<div class="wrap prose">{body}</div>', active="submit",
+                 description="Publish a paper on EntryLib: upload the package or claimset file your AI agent made; "
+                 "its responsible researcher confirms with ORCID.")
 
 
 # --- writing ----------------------------------------------------------------------------------------------------------
@@ -1510,11 +1556,11 @@ def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, r
                                                      ref_text=ref_text, published=published))
 
 
-def write_listings(published_dir, base_url, docs):
+def write_listings(published_dir, base_url, docs, corrected=None):
     """The pages that list claimsets: home, all claimsets and the feed. `docs`: current versions, newest first."""
     published_dir = Path(published_dir)
-    _write(published_dir / "index.html", home(docs, base_url))
-    _write(published_dir / "all.html", all_page(docs))
+    _write(published_dir / "index.html", home(docs, base_url, corrected))
+    _write(published_dir / "all.html", all_page(docs, corrected))
     _write(published_dir / "feed.xml", feed(docs, base_url))
     _write(published_dir / "sitemap.xml", sitemap(docs, base_url))
 

@@ -29,6 +29,8 @@ not.</dd>
 <dt>Artefact</dt><dd>Material behind the paper: data, code, a manuscript, a figure.</dd>
 <dt>Support</dt><dd>A score from 0 to 100 for how well the paper's own record backs a claim (<a
 href="#quality">Scores</a>).</dd>
+<dt>Evidence, Plan, Checkable, Context, Open problems</dt><dd>The five parts of a Support score, one coloured dot
+each, with the points lost in it. Click a claim's dots to see why.</dd>
 <dt>Responsible researcher</dt><dd>The person who answers for the paper; in the format and the files, its
 guarantor.</dd>
 <dt>Version</dt><dd>Each published state of a paper, never changed; a correction is a new version.</dd>
@@ -71,10 +73,11 @@ is scored by public rules.</p>
 <p><strong>Support</strong>, from 0 to 100, says how far a paper's own record supports each claim. It checks the
 record, not the science: it does not say whether a claim is true, and it is not peer review. (The rubric calls it
 reliability.) Every claim
-starts at 100 and loses points for named problems: weak support, a test not planned beforehand, material a reader
+starts at 100 and loses points for named problems: weak evidence, a test not planned beforehand, material a reader
 cannot obtain, a missing scope or link to earlier work, open limitations and unchecked assumptions. Five dots beside
-each claim show where the points went: support, plan, checkable, context and open problems. A paper's score is the
-mean of its principal claims, and its page names the lowest. Well supported is 80 and over, Partly supported 60 to 79, Weakly supported under 60. Click a score to see why. The
+each claim show where the points went: evidence, plan, checkable, context and open problems; click them for the
+claim's breakdown. A paper's score is the mean of its principal claims; beside it, each part shows the points its
+principal claims lost there on average, and “Why” names the lowest claim. Well supported is 80 and over, Partly supported 60 to 79, Weakly supported under 60. Click a score to see why. The
 rules are in <a href="https://github.com/entrylib/rubric/blob/main/RUBRIC.md">the rubric</a>.</p>
 <p><strong>Novelty</strong> is the authors' own account (new, extends, replicates or refutes earlier work), checked
 against the claims already on EntryLib: a close match the paper does not acknowledge puts it in question.</p>
@@ -92,9 +95,7 @@ problem with a paper is shown in a notice at its top (<a href="/removal">retract
 <p>Reading, searching and publishing are free. Papers carry open licences chosen by their guarantors. Every published
 version is also kept in a public registry on GitHub, and the specification, the tools and this site's code are open
 source.</p>
-<p>If EntryLib stopped, its papers would not be lost: every published version, with its notices, is in the public
-<a href="https://github.com/entrylib/registry">registry</a> under the licence its guarantor chose, and its identifiers
-can be resolved from it.</p>
+<p>If EntryLib stopped, its papers would not be lost (<a href="#governance">see below</a>).</p>
 
 <h2>Who we are</h2>
 <div class="person">
@@ -120,6 +121,11 @@ site and its rules, for what is published and for every decision about a paper a
 retractions, removals and expressions of concern, and disputes about a paper or its scores, following the published
 <a href="/removal">retraction and removal</a> policy, and says on the paper's page what was decided and why. The rules
 that check and score papers are public, and a change to them is a new, published version, never a quiet edit.</p>
+<p><strong>Funding.</strong> EntryLib has no funding yet: Ivan Svetunkov pays for it himself.</p>
+<p><strong>If it closes.</strong> The papers stay where they are kept: every published version, with its notices, is in
+the public <a href="https://github.com/entrylib/registry">registry</a> on GitHub, under the licence its responsible
+researcher chose, and its identifiers can be resolved from it. Only the address entrylib.org would stop working. This
+site's code is open, so anyone can run it again from the registry.</p>
 <p>To raise a problem with a paper, or with a decision, write to
 <a href="mailto:mail@entrylib.org">mail@entrylib.org</a>.</p>
 

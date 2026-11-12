@@ -35,7 +35,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import crossref, ids, notices, reading, scores, site, source
+from . import crossref, history, ids, notices, reading, scores, site, source
 
 
 def _write(path, text):
@@ -393,7 +393,7 @@ def write_index(conn, published_dir, base_url):
     lines = [json.dumps(paper_card(r[0], base_url), ensure_ascii=False) for r in rows]
     _write(Path(published_dir) / "index.jsonl", "".join(line + "\n" for line in lines))
     _write(Path(published_dir) / "llms.txt", reading.llms_txt(base_url))
-    site.write_listings(published_dir, base_url, [r[0] for r in reversed(rows)])
+    site.write_listings(published_dir, base_url, [r[0] for r in reversed(rows)], history.corrected_concepts(conn))
 
 
 def reindex(conn, registry, published_dir, base_url):
