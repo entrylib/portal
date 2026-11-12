@@ -52,7 +52,7 @@ document.getElementById("form").addEventListener("submit", async (event) => {
       }
       return;
     }
-    const nodes = [el("p", "Received. It is waiting for the guarantor's consent.")];
+    const nodes = [el("p", "Received. It is waiting for the responsible researcher's consent.")];
     for (const c of body.consent || []) {
       nodes.push(el("p", `Consent link for ${c.name || c.orcid} (shown only now: copy it and give it to them):`));
       const line = el("p");

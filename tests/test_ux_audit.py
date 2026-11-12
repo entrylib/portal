@@ -50,11 +50,13 @@ def test_status_and_counts(env):
     assert site.STATUS_LABELS["corrected"] == "updated" and site.STATUS_CLASS["corrected"] == "neutral"
 
 
-def test_skip_link_and_copy_the_whole_paper(env):
+def test_skip_link_and_no_copy_of_the_whole_paper(env):
+    """A paper can be too long to paste into an assistant: the page offers only the message with its link (UX
+    re-check, 12 November 2026); the reading view stays linked under For models."""
     _, page = page_of(env)
     assert '<a class="skip-link" href="#content">Skip to content</a>' in page and '<main id="content">' in page
-    assert f'data-copy-url="/p/{KEY}@v1.txt"' in page and "Copy the whole paper instead" in page
-    assert re.search(r'<a class="button-quiet" href="/p/2026\.000001@v1\.txt"', page)    # works without the script
+    assert "data-copy-url" not in page and "Copy the whole" not in page
+    assert f'href="/p/{KEY}@v1.txt"' in page
 
 
 def test_read_is_newest_first_and_search_counts():
@@ -79,7 +81,7 @@ def test_not_found_is_a_page_for_people_and_json_for_programs(app_client):
 def test_labels_and_the_submit_page(app_client):
     assert "Confirm a submission" in app_client.get("/confirm").text
     page = app_client.get("/submit").text
-    assert page.index("Submit a claimset</h1>") < page.index("Waiting for your confirmation")
+    assert page.index("Publish a paper</h1>") < page.index("Waiting for your confirmation")
     assert '<p id="new_paper_row" hidden>' in page
     agents = app_client.get("/agents").text if app_client.get("/agents").status_code == 200 else ""
     assert not agents or 'data-copy="mcp-url"' in agents

@@ -1,19 +1,20 @@
-<h1>Submit a claimset</h1>
-<p class="lead">A claimset is published once its guarantor confirms it: after you submit, you get a consent link for
-them; they sign in with ORCID and confirm within 48 hours. A guarantor without the link confirms at
-<a href="/confirm">Confirm a submission</a>. First time? Read <a href="/before-you-submit">Before you submit</a>. To publish a paper you have already written,
-see <a href="/convert">Turn your paper into a claimset</a>.</p>
+<h1>Publish a paper</h1>
+<p class="lead">Your AI agent writes the paper as a <em>claimset</em>, the open format of every paper here. It is
+published once its responsible researcher (the format's <em>guarantor</em>) confirms it: after you submit, you get a
+consent link for them; they sign in with ORCID and confirm within 48 hours. Without the link, they confirm at
+<a href="/confirm">Confirm a submission</a>. First time? Read <a href="/before-you-submit">Before you publish</a>. To
+publish a paper you have already written, see <a href="/convert">Convert your paper</a>.</p>
 <h2>From your agent</h2>
 <p><code>pip install claimset</code>, then <code>claimset submit paper.zip</code> (a package made by
 <code>claimset package</code>), or the <code>submit</code> tool of the MCP server at <code>entrylib.org/mcp</code>. See
 <a href="/agents">For agents</a>.</p>
 <h2>Upload</h2>
 <p>Choose a submission package (<code>.zip</code>) or a claimset file (<code>.json</code>). It is checked at once. A new
-version of a published claimset sets <code>paper.id</code> to its identifier.</p>
+version of a published paper sets <code>paper.id</code> to its identifier.</p>
 <form id="form" class="upload">
   <p><input type="file" id="file" accept=".zip,.json,application/zip,application/json" required></p>
   <p id="new_paper_row" hidden><label><input type="checkbox" id="new_paper"> This is a different paper with the same
-  title as the guarantor's claimset named above: submit it as a new claimset</label></p>
+  title as the responsible researcher's paper named above: submit it as a new paper</label></p>
   <p><button class="button" type="submit" id="send">Submit</button></p>
 </form>
 <div id="result" aria-live="polite"></div>
