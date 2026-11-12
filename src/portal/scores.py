@@ -13,6 +13,7 @@ submitted by the same functions (`claimset score`, the MCP tool score; design §
 """
 
 import contextlib
+import inspect
 import re
 import sys
 
@@ -79,6 +80,24 @@ def finder(conn, concept):
     return lambda statement: _candidates(conn, concept, statement)
 
 
+def _warnings(doc):
+    """The current validator's warnings for a published file, which the rubric reads from 0.3 (warning 17: numbers no
+    recorded result holds; warning 45: a limitation restating the declared competing interest). None if it fails."""
+    try:
+        from claimset.validate import validate
+        return validate(doc, published=True).warnings
+    except Exception as exc:  # noqa: BLE001 - scored without the warnings, as before rubric 0.3
+        rubric_error("validating for the scores", f"{type(exc).__name__}: {exc}")
+        return None
+
+
+def _with_warnings(fn, doc, *args):
+    """fn(doc, *args), given the validator's warnings when the installed rubric reads them."""
+    if "warnings" in inspect.signature(fn).parameters:
+        return fn(doc, *args, warnings=_warnings(doc))
+    return fn(doc, *args)
+
+
 def compute(conn, doc):
     """The scores of one claimset version: rubric.assess() with the portal's candidates, and the note. None without
     the rubric."""
@@ -88,7 +107,7 @@ def compute(conn, doc):
     try:
         # a savepoint: a failed query of the close-match check must not abort the caller's transaction
         with conn.transaction() if conn is not None else contextlib.nullcontext():
-            result = rubric.assess(doc, finder(conn, paper.get("id")))
+            result = _with_warnings(rubric.assess, doc, finder(conn, paper.get("id")))
         result["note"] = NOTE.format(v=result["rubric"])
     except Exception as exc:  # noqa: BLE001 - the rubric's failure leaves the scores out, nothing else
         rubric_error(f"scoring {paper.get('id') or 'a claimset'}@v{paper.get('version', '?')} (rubric {version()})",
@@ -102,11 +121,21 @@ def paper_score(doc):
     if rubric is None:
         return None
     try:
-        return rubric.score(doc)["paper"]
+        return _with_warnings(rubric.score, doc)["paper"]
     except Exception as exc:  # noqa: BLE001 - the rubric's failure leaves the score out, nothing else
         rubric_error(f"scoring {(doc.get('paper') or {}).get('id')} for a list (rubric {version()})",
                      f"{type(exc).__name__}: {exc}")
         return None
+
+
+def paper_basis(paper):
+    """How the paper's score was made, in words: the mean of its principal claims (rubric 0.3), or, under an earlier
+    rubric, its lowest principal claim's."""
+    if "lowest_score" in paper:
+        n = len(paper.get("principal") or [])
+        return (f"the mean of its {n} principal claim{'s' if n != 1 else ''}; the lowest is {paper['lowest']} at "
+                f"{paper['lowest_score']}")
+    return f"the score of its lowest principal claim, {paper['lowest']}"
 
 
 def label(n):
@@ -126,8 +155,7 @@ def text(scores):
     out = ["", "SCORES", scores["note"]]
     paper = scores.get("paper")
     if paper:
-        out.append(f"Reliability of the paper: {paper['score']} ({paper['band']}), the score of its lowest principal "
-                   f"claim, {paper['lowest']}.")
+        out.append(f"Reliability of the paper: {paper['score']} ({paper['band']}), {paper_basis(paper)}.")
     for cid, c in scores["claims"].items():
         n = label(scores["novelty"].get(cid))
         out.append(f"{cid}: reliability {c['score']} ({c['band']})" + (f"; novelty: {n}" if n else ""))

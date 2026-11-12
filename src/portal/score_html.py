@@ -108,11 +108,20 @@ def panel_rows(scores, lights=None):
             f'<p class="score-big band-{p["band"]}"><a href="#score" data-popup="score-paper">'
             f'<span class="score-num">{p["score"]}</span> <span class="score-band">{BANDS[p["band"]]}</span></a></p>'
             f'<p class="small caption">{CAPTION}</p>{dots(scores)}{legend()}'
-            f'<p class="small">The paper scores as its weakest principal claim, <a href="#{esc(p["lowest"])}">'
-            f'{esc(p["lowest"])}</a>. <a href="#score" data-popup="score-paper">What lowered it</a></p>'
+            f'<p class="small">{_basis(p)}. <a href="#score" data-popup="score-paper">What lowered it</a></p>'
             f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
             + (f'<span class="small"> · {esc(check)}</span>' if check else "") + "</p></div>"
             f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
+
+
+def _basis(p):
+    """How the paper's score was made, with a link to the lowest principal claim (scores.paper_basis)."""
+    link = f'<a href="#{esc(p["lowest"])}">{esc(p["lowest"])}</a>'
+    if "lowest_score" in p:
+        n = len(p.get("principal") or [])
+        return (f"The mean of its {n} principal claim{'s' if n != 1 else ''}; the lowest is {link} at "
+                f"{esc(p['lowest_score'])}")
+    return f"The paper scores as its lowest principal claim, {link}"
 
 
 def _sentence(text):
@@ -166,8 +175,7 @@ def section(scores, issues_url=None):
         problems = "".join(_problem(scores, pid) for pid in p["problems"])
         out.append(f'<div class="score-explain" id="score-paper"><h3>{NAME} of the paper: '
                    f'<span class="band-{p["band"]}">{p["score"]}, {BANDS[p["band"]]}</span></h3>{note}'
-                   f'<p>The paper scores as its lowest principal claim, <a href="#{esc(p["lowest"])}">'
-                   f'{esc(p["lowest"])}</a>. Open problems in the principal claims and what they rest on, each '
+                   f'<p>{_basis(p)}. Open problems in the principal claims and what they rest on, each '
                    f'counted once, with the most it costs a claim:</p>'
                    + (f'<ol class="problems">{problems}</ol>' if problems else "<p>None.</p>") + "</div>")
     out.append("<h3>Claims</h3>")

@@ -397,3 +397,28 @@ def test_numbers_are_shown_to_four_decimal_places(env, monkeypatch):
     for v, shown in [(0.000680612, "0.0007"), (1.00193, "1.0019"), (0.5, "0.5"), (-0.00001, "0.0000"),
                      (12345.678, "12345.678"), (300, None), (80.0, None), (True, None), (float("nan"), None)]:
         assert site.number(v) == shown, v
+
+
+def _page(doc):
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
+    return site.claimset_page(doc, base_url=BASE, listing=[])
+
+
+def test_competing_interests_beside_the_score():
+    """Design §7.6: the declared competing interests and funding are shown in the panel, as text, never scored."""
+    doc = example()
+    doc["paper"]["declarations"] = {"competing_interests": "The author develops <b>smooth</b>, evaluated here.",
+                                    "funding": [{"funder": "Example Council", "award": "EX-1"}]}
+    page = _page(doc)
+    panel = page[page.index('<aside class="panel"'):]
+    row = panel[panel.index('class="panel-row interests-row"'):]
+    assert "The author develops &lt;b&gt;smooth&lt;/b&gt;, evaluated here." in row and "<b>smooth" not in row
+    assert "Funding: Example Council (EX-1)" in row and "Not part of the score." in row
+    doc = example()
+    doc["paper"].pop("declarations", None)
+    row = _page(doc).split('class="panel-row interests-row"')[1]
+    assert "<p class=\"small\">Not declared.</p>" in row and "Funding: Not declared." in row
+    doc = example()
+    doc["paper"]["declarations"] = {"competing_interests": "None declared.", "funding": []}
+    row = _page(doc).split('class="panel-row interests-row"')[1]
+    assert "None declared." in row and "Funding: None declared." in row

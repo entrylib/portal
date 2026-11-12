@@ -511,6 +511,26 @@ def ask_ai(doc, base_url, cid=None):
             f"the whole {what} instead</a></p></details></div>")
 
 
+def _interests_row(doc):
+    """Who did the work and why, beside the score (design §7.6): the competing interests and funding the authors
+    declare (claimset §3.1), as text. Shown, not scored: the rubric charges nothing for them."""
+    dec = (doc.get("paper") or {}).get("declarations")
+    dec = dec if isinstance(dec, dict) else {}
+    interests = dec.get("competing_interests")
+    interests = interests.strip() if isinstance(interests, str) and interests.strip() else "Not declared."
+    funding = dec.get("funding")
+    if isinstance(funding, list):
+        funders = [f"{f.get('funder')}" + (f" ({f.get('award')})" if f.get("award") else "")
+                   for f in funding if isinstance(f, dict) and f.get("funder")]
+        funded = "; ".join(funders) if funders else "None declared."
+    else:
+        funded = "Not declared."
+    return ('<div class="panel-row interests-row"><h2>Competing interests</h2>'
+            f'<p class="small">{esc(interests)}</p><p class="small">Funding: {esc(funded)}</p>'
+            '<p class="small muted">Declared by the authors: who did the work and why, for readers to weigh. Not part '
+            "of the score.</p></div>")
+
+
 def _panel(doc, parts, base_url, key, scores=None):
     p = doc["paper"]
     n = p.get("version")
@@ -520,7 +540,7 @@ def _panel(doc, parts, base_url, key, scores=None):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
     return (f'<aside class="panel" aria-label="About this entry">'
-            f'{score_html.panel_rows(scores, parts.get("lights"))}'
+            f'{score_html.panel_rows(scores, parts.get("lights"))}{_interests_row(doc)}'
             + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
                         f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
                         f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}')
