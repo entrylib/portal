@@ -38,3 +38,26 @@ def test_the_panel_scrolls_on_its_own_only_beside_the_page():
     rule = re.search(r"@media ([^{]*)\{\s*\.entry > \.panel \{ max-height:[^}]*overflow-y: auto", css)
     assert rule and "min-width: 1101px" in rule.group(1) and "min-height: 701px" in rule.group(1)
     assert "@media (max-width: 1100px)" in css and ".entry > .panel { position: static;" in css
+
+
+def test_the_submit_page_offers_its_findings_to_the_assistant():
+    """Errors and warnings at /submit, refused or accepted, are copied as one block with what to do with them."""
+    script = (STATIC / "submit.js").read_text(encoding="utf-8")
+    for label in ("Copy the errors for your assistant", "Copy the errors and warnings for your assistant",
+                  "Copy the warnings for your assistant"):
+        assert label in script
+    assert "never from " in script and "give me the whole corrected file" in script
+    assert "tell me why in one line" in script and 'link.href = "/submissions"' in script
+    assert "fetch(" in script and script.count("fetch(") == 1           # the upload only: copies need no download
+
+
+def test_consent_pages_are_in_the_sites_shell():
+    """A guarantor who confirms, or opens a consent link, can go on to the rest of the site: the header with its
+    menu, the footer and the site's styles, as on every other page."""
+    from portal import pages
+    for html_ in (pages.message("Confirmed", "Thank you.", "https://entrylib.test/api/submissions/s1",
+                                back=("/submissions", "Your submissions")),
+                  pages.message("Sign-in cancelled", "ORCID sign-in was not completed.")):
+        assert '<header class="site-header">' in html_ and '<footer class="site-footer">' in html_
+        assert 'href="/site.css' in html_ and "<style>" not in html_
+        assert '<meta name="robots" content="noindex">' in html_

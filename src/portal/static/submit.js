@@ -16,24 +16,46 @@ function show(nodes) {
   box.replaceChildren(...nodes);
 }
 
-function problems(title, items, forAssistant) {
-  const out = [el("p", title, "error")];
-  if (items && items.length) {
-    const lines = items.map((e) => `rule ${e.rule} at ${e.where || "(file)"}: ${e.message}`).join("\n");
-    out.push(el("pre", lines));
-    // A refusal goes back to the assistant that wrote the file: one block to paste, with what to do with it.
-    if (forAssistant && navigator.clipboard) {
-      const text = "EntryLib refused the claimset you gave me. Fix each problem below in the claimset, following " +
-        `the specification and the skills (${location.origin}/skills/), never from memory, and give me the ` +
-        "whole corrected file.\n\n" + lines + "\n";
-      const button = el("button", "Copy the errors for your assistant", "button-quiet");
-      button.type = "button";
-      button.addEventListener("click", () => navigator.clipboard.writeText(text).then(() => {
-        button.textContent = "Copied";
-      }));
-      out.push(el("p")); out[out.length - 1].appendChild(button);
-    }
+function lines(items) {
+  return (items || []).map((e) => `rule ${e.rule} at ${e.where || "(file)"}: ${e.message}`).join("\n");
+}
+
+// What the assistant that wrote the file is asked to do with what EntryLib found, with the findings after it: one
+// block to paste back to it. The text is on the page already, so the copy happens within the click.
+function forAssistant(errors, warnings) {
+  const rules = `following the specification and the skills (${location.origin}/skills/) and the paper, never from ` +
+    "memory";
+  let text;
+  if (errors.length) {
+    text = `EntryLib refused the claimset you gave me. Fix each error below in the claimset, ${rules}.` +
+      (warnings.length ? " Then go through the warnings after them: fix each that applies, and for one that does " +
+        "not, tell me why in one line." : "") +
+      " Change nothing else, and give me the whole corrected file.\n\nErrors:\n" + lines(errors) + "\n";
+  } else {
+    text = "EntryLib accepted the claimset you gave me: it is valid, with the warnings below. For each warning, fix " +
+      `the claimset if it applies, ${rules}; if it does not apply, tell me why in one line. Change nothing else, ` +
+      "and give me the whole corrected file.\n";
   }
+  if (warnings.length) text += "\nWarnings:\n" + lines(warnings) + "\n";
+  return text;
+}
+
+function copyButton(label, text) {
+  const row = el("p", undefined, "copy-row");
+  if (!navigator.clipboard) return row;               // without a clipboard, the findings above are selected by hand
+  const button = el("button", label, "button-quiet");
+  button.type = "button";
+  button.addEventListener("click", () => navigator.clipboard.writeText(text).then(() => {
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = label; }, 4000);
+  }));
+  row.appendChild(button);
+  return row;
+}
+
+function findings(title, items, cls) {
+  const out = [el("p", title, cls)];
+  if (items.length) out.push(el("pre", lines(items)));
   return out;
 }
 
@@ -58,7 +80,16 @@ document.getElementById("form").addEventListener("submit", async (event) => {
     });
     const body = await response.json();
     if (!response.ok) {
-      show(problems(body.error || `Refused (${response.status}).`, body.errors, true));
+      const errors = body.errors || [], warnings = body.warnings || [];
+      const nodes = findings(body.error || `Refused (${response.status}).`, errors, "error");
+      if (warnings.length) nodes.push(...findings("Warnings, to consider once the errors are fixed:", warnings));
+      if (errors.length || warnings.length) {
+        nodes.push(copyButton(warnings.length ? "Copy the errors and warnings for your assistant"
+          : "Copy the errors for your assistant", forAssistant(errors, warnings)));
+        nodes.push(el("p", "Paste it to the assistant that wrote the claimset, then submit the corrected file here.",
+          "small"));
+      }
+      show(nodes);
       // A claimset with the title of one the guarantor already has: offer to submit it as a different paper.
       if (response.status === 409 && /new_paper/.test(body.error || "")) {
         document.getElementById("new_paper_row").hidden = false;
@@ -75,8 +106,16 @@ document.getElementById("form").addEventListener("submit", async (event) => {
       nodes.push(line);
     }
     nodes.push(el("p", `Submission ${body.id}. Its state: ${body.status_url}`));
-    if (body.report && body.report.warnings && body.report.warnings.length) {
-      nodes.push(...problems("Warnings (it is valid; you may still want to fix these):", body.report.warnings));
+    const warnings = (body.report && body.report.warnings) || [];
+    if (warnings.length) {
+      nodes.push(...findings("Warnings (it is valid; you may still want to fix these):", warnings));
+      nodes.push(copyButton("Copy the warnings for your assistant", forAssistant([], warnings)));
+      const next = el("p", "Paste it to the assistant that wrote the claimset. To publish its corrected file " +
+        "instead of this one, cancel this submission at ", "small");
+      const link = el("a", "Your submissions");
+      link.href = "/submissions";
+      next.append(link, ", then submit the corrected file here.");
+      nodes.push(next);
     }
     show(nodes);
   } catch (err) {

@@ -479,6 +479,10 @@ dialog.help .popup-body { max-height: 90vh; overflow-y: auto; padding: 20px 64px
 .card-summary { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .connect pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; font-size: 14px; }
 .copy-row { margin: 12px 0 4px; }
+/* The consent pages (pages.py): the claimset to confirm in a box, its reading view folded inside. */
+.consent .box { border: 1px solid var(--rule); border-radius: 6px; padding: 4px 20px; margin: 20px 0; }
+.consent .box pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); padding: 12px;
+  border-radius: 4px; font-size: 13px; max-height: 70vh; overflow-y: auto; }
 .hero-kicker { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--muted); }
 .glossary dt { font-weight: 600; margin-top: 10px; }
 .glossary dd { margin: 2px 0 0; }
