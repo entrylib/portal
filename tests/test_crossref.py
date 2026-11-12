@@ -60,8 +60,8 @@ def test_the_page_shows_author_year(env, monkeypatch):
     doc["definitions"][0]["source"] = "B1"
     concept, _ = publish(write(tmp, doc), **ctx)
     page = (ctx["published_dir"] / "p" / f"{concept.split(':', 1)[1]}.html").read_text()
-    from claimset import html as cshtml
-    if "ref_text" in cshtml.render_parts.__code__.co_varnames:     # claimset 0.40.4 and later
+    from portal import page as pageview
+    if "ref_text" in pageview.render_parts.__code__.co_varnames:
         assert "Svetunkov and Petropoulos (2018)" in page and "Old dog, new tricks" in page
     assert 'href="https://doi.org/10.1080/00207543.2017.1380326"' in page
     served = (ctx["published_dir"] / "p" / f"{concept.split(':', 1)[1]}.json").read_text()

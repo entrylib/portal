@@ -14,7 +14,7 @@ dependencies = [
   # The claimset package is the single source of the format's rules: the portal calls it, never reimplements it.
   # From PyPI, not pinned: the portal works with whatever claimset it is given, at least portal.MIN_CLAIMSET. On the
   # server claimset is updated on its own, without rebuilding the portal (design §10).
-  "claimset>=0.41.9",
+  "claimset>=0.41.14",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "psycopg[binary,pool]>=3.3.8",
@@ -47,6 +47,15 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# The page view, moved from the claimset package with its longer lines (and its stylesheet, CSS in a string); wrapped
+# as they change.
+"src/portal/page.py" = ["E501"]
+"src/portal/page_css.py" = ["E501"]
+"tests/test_page.py" = ["E501"]
+"tests/test_page_choices.py" = ["E501"]
+"tests/test_mathml.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

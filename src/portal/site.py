@@ -1,7 +1,7 @@
 """The website for people (design §7.4): the page shell, the claimset pages, the home page and the other pages, the
 citation files and the feed.
 
-The claimset itself is rendered by the claimset package (`claimset.html.render_parts`); this module supplies the page
+The claimset itself is rendered by the portal's page view (`page.render_parts`); this module supplies the page
 around it. Every value taken from a claimset is escaped; nothing submitted is rendered as HTML. Pages carry no scripts
 but one, page.js, on claimset and specification pages: it marks the section being read, opens a figure over the page
 and copies the reading-view address for an AI assistant.
@@ -22,10 +22,10 @@ import urllib.parse
 from importlib import resources
 from pathlib import Path
 
-from claimset import html as cshtml
 from claimset.claim import claim_bundle
 
 from . import areas, ids, indexnow, limits, score_html, specs
+from . import page as pageview
 from . import scores as score_data
 from .text import html as plain_html
 from .text import one_line as plain_text
@@ -151,7 +151,7 @@ def asset(path):
     """A stylesheet's or script's address with a version from its content (/site.css?v=1a2b3c4d), so that a browser
     or Cloudflare never pairs a new page with an old stylesheet."""
     if path == "/claimset.css":
-        data = cshtml.stylesheet().encode()
+        data = pageview.stylesheet().encode()
     else:
         data = _static(path.lstrip("/")).read_bytes()
     return f"{path}?v={hashlib.sha256(data).hexdigest()[:10]}"
@@ -662,7 +662,7 @@ def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
     design §7.8)."""
     key = ids.url_key(doc["paper"]["id"])
     extra = {"ref_text": ref_text} if ref_text else {}
-    return cshtml.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
+    return pageview.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
                                claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, byline=byline,
                                **extra)
 
@@ -981,7 +981,7 @@ def card(doc):
     """A claimset as a card: the home page, the list of all claimsets and search results."""
     p = doc["paper"]
     key = ids.url_key(p["id"])
-    origin = cshtml.origin(doc)
+    origin = pageview.origin(doc)
     top = [f'<span class="origin">{esc(ORIGIN_WORDS.get(origin, origin))}</span>', esc(day(p.get("date")))]
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
@@ -1389,7 +1389,7 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 
 
 def file_url_for(published_dir, base_url, legacy=None):
-    """The `file_url` for claimset.html: an artefact stored with its claimset (its uri is
+    """The `file_url` for the page view (page.py): an artefact stored with its claimset (its uri is
     <base>/p/<key>/v<n>/files/<path>, storage.py) whose file is an image, by its name and its content, is shown from
     there. `legacy`: {sha256: path} for files stored by checksum before (<base>/files/<sha256>), moved since."""
     published_dir = Path(published_dir).resolve()
@@ -1503,7 +1503,7 @@ def write_fixed(published_dir, base_url):
     _write(published_dir / ".well-known" / "security.txt", security_txt(base_url))
     if indexnow.key():                                       # IndexNow checks the key against this file
         _write(published_dir / "indexnow.txt", indexnow.key() + "\n")
-    _write(published_dir / "claimset.css", cshtml.stylesheet())
+    _write(published_dir / "claimset.css", pageview.stylesheet())
     for f in Path(str(_static("icons"))).iterdir():          # favicons and the manifest, at the site's root
         if f.is_file():
             shutil.copyfile(f, published_dir / f.name)
