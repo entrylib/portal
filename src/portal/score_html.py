@@ -71,16 +71,9 @@ def marker(scores):
     return mark
 
 
-def legend():
-    """What the dots' colours mean, with the dots themselves (hover does not reach touch screens or keyboards)."""
-    return ('<p class="dot-key small">' + " ".join(f'<span class="dot dot-{c}" aria-hidden="true"></span> {w}'
-                                                  for c, w in (("green", "nothing lost"), ("amber", "some"),
-                                                               ("red", "many"))) + "</p>")
-
-
 def dot_list(scores, cid=None):
     """The five dots as a list, each beside its group's name and explained on hover: a claim's (cid), or the
-    paper's; the key below says what each colour means."""
+    paper's. Each dot's colour and the points beside it say what it lost; no key is needed."""
     item = scores["claims"][cid] if cid else scores["paper"]
     costs = item.get("costs") or {p: scores["problems"][p]["cost"] for p in item["problems"]}
     rows = []
@@ -93,15 +86,16 @@ def dot_list(scores, cid=None):
         rows.append(f'<li title="{esc(title)}"><span class="dot dot-{colour}" aria-hidden="true"></span>'
                     f'{esc(label)}<span class="visually-hidden">: {DOT_WORDS[colour]}</span>'
                     + (f' <span class="lost">−{lost}</span>' if lost else "") + "</li>")
-    return f'<ul class="dot-list small">{"".join(rows)}</ul>{legend()}'
+    return f'<ul class="dot-list small">{"".join(rows)}</ul>'
 
 
-def score_block(score, band, popup, basis=""):
-    """The score as the panel shows it: the number, with how it was made beside it, and the caption under it."""
-    return (f'<div class="score-line band-{band}"><a class="score-num" href="#score" data-popup="{popup}" '
-            f'aria-label="{NAME} {score} of 100: what lowered it">{score}</a>'
-            f'<p class="small score-basis">{basis}<a href="#score" data-popup="{popup}">What lowered it</a></p></div>'
-            f'<p class="small caption">{CAPTION} <a href="/about#quality">How</a></p>')
+def score_block(score, band, popup):
+    """The score as the panel shows it: the number, then one link to how it was made (the Score section's
+    explanation, in a pop-up), and the caption."""
+    return (f'<p class="score-line band-{band}"><a class="score-num" href="#score" data-popup="{popup}" '
+            f'aria-label="{NAME} {score} of 100: why">{score}</a></p>'
+            f'<p class="small score-why"><a href="#score" data-popup="{popup}">Why {score}?</a></p>'
+            f'<p class="small caption">{CAPTION}</p>')
 
 
 def panel_rows(scores, lights=None):
@@ -131,23 +125,40 @@ def panel_rows(scores, lights=None):
     rows = "".join(f'<li><span class="score-badge small band-{b}">{counts[b]}</span>{w.lower()}</li>'
                    for b, w in BANDS.items())
     return (f'<div class="panel-row score-row"><h2>{NAME}</h2>'
-            + score_block(p["score"], p["band"], "score-paper", _basis(p, short=True) + " · ") + dot_list(scores)
+            + score_block(p["score"], p["band"], "score-paper") + dot_list(scores)
             + f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
-            + (f'<span class="small"> · {esc(check)}</span>' if check else "") + "</p></div>"
+            + (f'<span class="small"> · {esc(check)}</span>' if check else "")
+            + ' · <a class="small" href="/about#quality" data-help="novelty-help" data-title="Novelty">'
+              'What is this?</a>'
+            + "</p>" + novelty_help(scores) + "</div>"
             f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
 
 
-def _basis(p, short=False):
-    """How the paper's score was made, with a link to the lowest principal claim (scores.paper_basis); `short`: in
-    a few words, for beside the number in the panel."""
+def novelty_help(scores):
+    """What the panel's novelty means, for its pop-up (page.js, data-help): the authors' own account of each
+    principal claim, and what EntryLib checks."""
+    groups = {}
+    for cid in scores["paper"].get("principal") or []:
+        words = sc.label(scores["novelty"].get(cid)).replace(", by the authors", "") or "not stated"
+        groups.setdefault(words, []).append(f'<a href="#{esc(cid)}">{esc(cid)}</a>')
+    items = [f"<li><strong>{esc(w[:1].upper() + w[1:])}</strong>: {', '.join(c)}</li>" for w, c in groups.items()]
+    return ('<template id="novelty-help"><h2>Novelty</h2>'
+            '<p>How the authors place each principal claim against earlier work: new, '
+            "extending it, replicating it or refuting it. It is their own account. EntryLib checks it only against "
+            "the claims already published here, and says so when a close match is not acknowledged; it cannot check "
+            "work published elsewhere, so read the paper's references too.</p>"
+            f'<ul class="novelty-list">{"".join(items)}</ul>'
+            '<p><a href="/how-to-judge">How to judge a paper</a></p></template>')
+
+
+def _basis(p):
+    """How the paper's score was made, with a link to the lowest principal claim (scores.paper_basis)."""
     link = f'<a href="#{esc(p["lowest"])}">{esc(p["lowest"])}</a>'
     if "lowest_score" in p:
         n = len(p.get("principal") or [])
-        if short:
-            return f"Mean of {n} principal claim{'s' if n != 1 else ''}; lowest {link} at {esc(p['lowest_score'])}"
         return (f"The mean of its {n} principal claim{'s' if n != 1 else ''}; the lowest is {link} at "
                 f"{esc(p['lowest_score'])}")
-    return f"Its lowest principal claim, {link}" if short else f"The paper scores as its lowest principal claim, {link}"
+    return f"The paper scores as its lowest principal claim, {link}"
 
 
 def _sentence(text):

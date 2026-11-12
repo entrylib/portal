@@ -20,8 +20,10 @@ def page_of(env, doc=None):
 def test_the_score_says_what_it_measures(env):
     out, page = page_of(env)
     assert f"<h2>{score_html.NAME}</h2>" in page and score_html.CAPTION in page
-    assert '<ul class="dot-list small">' in page and '<p class="dot-key small">' in page   # dots, named, with a key
-    assert "Mean of " in page.split('score-basis">')[1][:200] or "Its lowest principal claim" in page
+    assert '<ul class="dot-list small">' in page and "dot-key" not in page        # named dots; no colour key
+    panel = page.split('<aside class="panel"')[1].split("</aside>")[0]
+    assert re.search(r'<p class="small score-why"><a href="#score" data-popup="score-paper">Why \d+\?</a></p>', panel)
+    assert "Conflicts of interest</h2>" in panel and "principal claim" not in panel.split("score-why")[0]
     assert not any(f">{w}<" in page.split('<aside class="panel"')[1][:3000] for w in score_html.BANDS.values())
     assert "Issues as text, for an agent" in page.split('<h2>For models</h2>')[1]   # agent links in their row
     assert "no close match on EntryLib" not in page                     # says nothing while the library is small
@@ -258,3 +260,13 @@ def test_a_page_without_a_summary_starts_with_its_highlights(env):
     _, page = page_of(env, example())
     assert page.split('<article class="cs-body">')[1].startswith('<section class="cs-section" id="')
     assert 'id="summary"' not in page and "<h2>Highlights</h2>" in page
+
+
+def test_novelty_opens_its_explanation(env):
+    _, page = page_of(env)
+    panel = page.split('<aside class="panel"')[1].split("</aside>")[0]
+    assert 'data-help="novelty-help" data-title="Novelty">What is this?</a>' in panel
+    tpl = panel.split('<template id="novelty-help">')[1].split("</template>")[0]
+    assert "It is their own account." in tpl and '<ul class="novelty-list"><li><strong>' in tpl
+    assert 'href="#C' in tpl and "<h2>Novelty</h2>" in tpl
+    assert 'a.getAttribute("data-title")' in (Path(site.__file__).parent / "static" / "page.js").read_text()

@@ -530,7 +530,7 @@ def _interests_row(doc):
                for f in (funding if isinstance(funding, list) else []) if isinstance(f, dict) and f.get("funder")]
     if not interests and not funders:
         said = "None declared" if dec else "Not declared"
-        return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Interests</h2>'
+        return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Conflicts of interest</h2>'
                 f'<p class="small">{said}.</p></div>')
     rows = []
     if interests:
@@ -542,11 +542,12 @@ def _interests_row(doc):
             rows.append(f'<p class="small">{esc(interests)}</p>')
     if funders:
         rows.append(f'<p class="small">Funding: {esc("; ".join(funders))}</p>')
-    return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Interests</h2>{"".join(rows)}'
-            "</div>")
+    return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Conflicts of interest</h2>'
+            f'{"".join(rows)}</div>')
 
 
-INTERESTS_NOTE = "Competing interests and funding, as the authors declare them. Not part of the score."
+INTERESTS_NOTE = ("Competing interests and funding, as the authors declare them, for readers to weigh. Not part of "
+                  "the score.")
 
 
 def _panel(doc, parts, base_url, key, scores=None):
