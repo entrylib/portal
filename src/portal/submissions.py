@@ -22,7 +22,7 @@ from pathlib import Path
 
 from claimset.validate import is_relative_uri, standalone_problems, validate_path
 
-from . import limits
+from . import limits, source
 from .indexer import title_key
 from .publish import load_submission
 from .screening import SCREENING_VERSION, screen
@@ -127,6 +127,54 @@ def duplicate(conn, key, orcids, exclude=None):
     return None
 
 
+def source_checks(conn, doc, people, kind, target):
+    """A claimset its authors prepared from their published paper (design §4.5): the paper is claimed once, and by
+    one of its authors. Returns (its DOI or None, what was checked, for the report). Raises SubmissionError when
+    another claimset already restates the paper, or when the paper's registry lists ORCID iDs and the guarantor is
+    neither among them nor named. When Crossref and DataCite cannot be reached, the authorship check is skipped and
+    the report says so."""
+    doi = source.doi(doc)
+    if not doi:
+        return None, None
+    row = conn.execute("SELECT concept_id FROM papers WHERE source_doi = %s AND concept_id IS DISTINCT FROM %s"
+                       " ORDER BY concept_id LIMIT 1", (doi, target)).fetchone()
+    if row:
+        raise SubmissionError(f"{row[0]} already restates the paper doi:{doi} on EntryLib. A paper is published "
+                              f"once: to change it, its guarantor submits a new version with paper.id \"{row[0]}\"",
+                              status=409)
+    row = conn.execute("SELECT id FROM submissions WHERE source_doi = %s AND state IN ('confirmed', 'publishing')"
+                       " AND target IS NOT DISTINCT FROM %s AND %s = 'new' LIMIT 1", (doi, target, kind)).fetchone()
+    if row:
+        raise SubmissionError(f"submission {row[0]}, restating the paper doi:{doi}, is confirmed and being "
+                              "published", status=409)
+    try:
+        record = source.lookup(doi)
+    except source.Unavailable:
+        return doi, {"doi": doi, "authorship": "not checked: Crossref and DataCite could not be reached"}
+    if record is None:
+        return doi, {"doi": doi, "authorship": "not checked: the DOI is not registered with Crossref or DataCite"}
+    found = source.authorship(record, people)
+    if found == "absent" and any(a.get("orcid") for a in record["authors"]):
+        names = ", ".join(a["name"] for a in record["authors"][:8] if a.get("name"))
+        raise SubmissionError(f"the guarantor ({people[0][1]}, {people[0][0]}) is not among the authors of "
+                              f"doi:{doi} as {record['registry']} lists them ({names}). Only a paper's authors "
+                              "publish it as a claimset; if you are one, add your ORCID iD to the paper's record, "
+                              "or write to mail@entrylib.org", status=403)
+    words = {"orcid": "confirmed: the guarantor's ORCID iD is on the paper",
+             "name": "the guarantor's name is on the paper (no ORCID iD to compare)",
+             "absent": "not confirmed: the guarantor is not named on the paper",
+             "unknown": "not checked: the registry lists no authors"}
+    out = {"doi": doi, "title": record.get("title"), "registry": record["registry"], "authorship": words[found]}
+    missing = [a for a in record["authors"] if a.get("orcid") and a["orcid"] not in _orcids(doc)]
+    if missing:
+        out["coauthor_orcids"] = [f"{a['name']}: {a['orcid']}" for a in missing]
+    return doi, out
+
+
+def _orcids(doc):
+    return {c.get("orcid") for c in doc.get("contributors") or [] if isinstance(c, dict) and c.get("orcid")}
+
+
 def new_id():
     return "sub_" + secrets.token_urlsafe(16)
 
@@ -196,6 +244,7 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
                                   f"paper with the same title, submit it again with new_paper=true", status=409,
                                   warnings=result.warnings)
 
+    src, checked = source_checks(conn, doc, people, kind, target)
     waiting = bool(package_with_consent and alone and standalone_problems(doc))
     sub_id = new_id()
     suffix = ".zip" if zipfile.is_zipfile(upload) else ".json"
@@ -207,17 +256,19 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
     with conn.transaction():
         conn.execute(
             "INSERT INTO submissions (id, received, expires, state, kind, target, title, title_key, new_paper,"
-            " file_name, sha256, size, report, client_ip, waiting_package)"
-            " VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            " file_name, sha256, size, report, client_ip, waiting_package, source_doi)"
+            " VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (sub_id, now, expires, kind, target, paper.get("title"), title_key(paper.get("title")),
-             bool(new_paper), stored.name, _sha256(stored), stored.stat().st_size, json.dumps(result.as_json()),
-             client_ip, waiting))
+             bool(new_paper), stored.name, _sha256(stored), stored.stat().st_size,
+             json.dumps({**result.as_json(), **({"source": checked} if checked else {})}), client_ip, waiting, src))
         for orcid, name in people:
             token = secrets.token_urlsafe(24)
             conn.execute("INSERT INTO submission_guarantors (submission_id, orcid, name, token_hash)"
                          " VALUES (%s, %s, %s, %s)", (sub_id, orcid, name, token_hash(token)))
             links.append({"orcid": orcid, "name": name, "consent_url": f"{base_url}/consent/{token}"})
     out = {**status(conn, sub_id, base_url), "consent": links, "report": result.as_json()}
+    if checked:
+        out["source"] = checked
     if waiting:
         out["package"] = ("The guarantor attaches the package (the zip `claimset package` builds, holding "
                           f"{', '.join(packaged_files(doc))}) on the consent page, then confirms: give them the zip "

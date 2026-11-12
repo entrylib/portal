@@ -65,14 +65,14 @@ def page_context(conn, token, submissions_dir):
 def _context_by_hash(conn, hash_, submissions_dir):
     row = conn.execute(
         "SELECT g.submission_id, g.orcid, g.name, g.confirmed, s.state, s.kind, s.target, s.expires, s.file_name,"
-        " s.published_id, s.detail, s.waiting_package FROM submission_guarantors g"
+        " s.published_id, s.detail, s.waiting_package, s.report -> 'source' FROM submission_guarantors g"
         " JOIN submissions s ON s.id = g.submission_id WHERE g.token_hash = %s", (hash_,)).fetchone()
     if row is None:
         return None
-    sid, orcid, name, confirmed, state, kind, target, expires, file_name, published, detail, waiting = row
+    sid, orcid, name, confirmed, state, kind, target, expires, file_name, published, detail, waiting, src = row
     ctx = {"submission": sid, "orcid": orcid, "name": name, "confirmed": confirmed is not None, "state": state,
            "kind": kind, "target": target, "expires": expires, "published": published, "detail": detail,
-           "waiting_package": bool(waiting)}
+           "waiting_package": bool(waiting), "source": src if isinstance(src, dict) else None}
     if state == "pending" and file_name:
         with tempfile.TemporaryDirectory() as tmp:
             doc, _ = load_submission(Path(submissions_dir) / file_name, tmp)

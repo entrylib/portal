@@ -24,7 +24,7 @@ from pathlib import Path
 
 from claimset.claim import claim_bundle
 
-from . import areas, ids, indexnow, limits, score_html, skills, specs
+from . import areas, ids, indexnow, limits, score_html, skills, source, specs
 from . import page as pageview
 from . import scores as score_data
 from .text import html as plain_html
@@ -81,7 +81,7 @@ agents that helped write it are listed after "Written with".</li>
 
 #: How each origin reads, in words (cards, About).
 ORIGIN_WORDS = {"lab": "Made with the lab", "lab · record withheld": "Made with the lab, record withheld",
-                "own": "From the authors' paper",
+                "own": "Converted by its authors",
                 "converted": "From a published paper", "native": "Written as a claimset"}
 
 STATUS_LABELS = {"active": "active", "corrected": "updated", "retracted": "retracted", "removed": "removed",
@@ -461,8 +461,16 @@ def removed_text(concept, notice):
 
 
 def own_paper(doc):
-    """The paper its authors prepared this claimset from (claimset spec v0.41 §3.6: a native claimset with a
-    `manuscript` artefact, its DOI or other address in `uri`): (address or None, description), or None."""
+    """The paper its authors converted into this claimset (a native claimset with `paper.published_as`, or, before
+    that field, a `manuscript` artefact with its DOI or other address in `uri`): (address or None, description), or
+    None."""
+    pub = (doc.get("paper") or {}).get("published_as")
+    if isinstance(pub, dict) and pub.get("id"):
+        doi = source.doi({"paper": {"published_as": pub}})
+        href = f"https://doi.org/{doi}" if doi else (pub["id"] if str(pub["id"]).startswith("https://") else None)
+        named = next((str(a.get("description")) for a in doc.get("artefacts") or []
+                      if isinstance(a, dict) and a.get("kind") == "manuscript" and a.get("description")), None)
+        return href, named or (f"doi:{doi}" if doi else str(pub["id"]))
     for a in doc.get("artefacts") or []:
         if isinstance(a, dict) and a.get("kind") == "manuscript":
             uri = a.get("uri") if isinstance(a.get("uri"), str) else ""
@@ -504,7 +512,7 @@ def _origin_line(doc, origin, lab):
     if own:
         href, what = own
         named = f'<a href="{esc(href)}">{esc(what or href)}</a>' if href else esc(what)
-        return (f'<p class="origin-line">Prepared by its authors from their paper{": " + named if named else ""}.'
+        return (f'<p class="origin-line">Converted by its authors from their paper{": " + named if named else ""}.'
                 "</p>")
     return '<p class="origin-line">Written directly as a claimset.</p>'
 
