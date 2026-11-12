@@ -270,3 +270,29 @@ def test_novelty_opens_its_explanation(env):
     assert "It is their own account." in tpl and '<ul class="novelty-list"><li><strong>' in tpl
     assert 'href="#C' in tpl and "<h2>Novelty</h2>" in tpl
     assert 'a.getAttribute("data-title")' in (Path(site.__file__).parent / "static" / "page.js").read_text()
+
+
+# Pages agree with each other (12 November 2026)
+
+def test_a_paper_its_authors_prepared_says_so():
+    doc = example()
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
+    assert "Written as a claimset" in site.card(doc) or "Made with the lab" in site.card(doc)
+    doc["artefacts"] = list(doc.get("artefacts") or []) + [
+        {"id": "AR99", "kind": "manuscript", "uri": "https://doi.org/10.1/x", "description": "The article, 2025"}]
+    if site.pageview.origin(doc) == "native":
+        assert "From the authors&#x27; paper" in site.card(doc)
+        line = site._origin_line(doc, "native", None)
+        assert ('Prepared by its authors from their paper: <a href="https://doi.org/10.1/x">The article, 2025</a>'
+                in line)
+    assert site.own_paper({"artefacts": [{"kind": "manuscript", "uri": "doi:10.1/y"}]})[0] == "https://doi.org/10.1/y"
+
+
+def test_the_pages_agree():
+    pages = Path(site.__file__).parent / "static" / "pages"
+    lab, about = (pages / "lab.html").read_text(), (pages / "about.html").read_text()
+    assert '<span class="origin">lab</span>' not in lab and "Made with the lab" in lab
+    assert "mean of its principal claims" in about and "scores as its\nlowest" not in about
+    assert "From the authors' paper" in about and "From the authors' paper" in (pages / "how-to-judge.html").read_text()
+    assert "conversion guarantor" not in (pages / "how-to-judge.html").read_text()
+    assert "conversion guarantor" not in site._origin_line({"paper": {}, "artefacts": []}, "converted", None)
