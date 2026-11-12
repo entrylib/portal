@@ -61,6 +61,23 @@ def test_the_rubric_scores_and_reports():
     assert text.endswith(rubric.report(result)) and "claimset score" in text
 
 
+def test_the_rubric_reads_the_validators_warnings(monkeypatch):
+    """Design §7.6: the portal gives the rubric the current validator's warnings, from rubric 0.3, and says how the
+    paper's score is made (the mean, with the lowest) in the page and the reading view."""
+    import rubric
+    if "warnings" not in __import__("inspect").signature(rubric.score).parameters:
+        pytest.skip("the installed rubric is older than 0.3")
+    seen = {}
+    real = scores._warnings
+    monkeypatch.setattr(scores, "_warnings", lambda doc: seen.setdefault("w", real(doc)))
+    doc = example()
+    doc["paper"]["id"] = "entrylib:2026.000001"
+    result = scores.compute(None, doc)
+    assert isinstance(seen["w"], list) and result["paper"]["lowest_score"] is not None
+    assert "the mean of its" in scores.text(result) and "The mean of its" in score_html.section(result)
+    assert scores.paper_score(doc)["score"] == result["paper"]["score"]       # lists and pages agree
+
+
 def test_without_scores_the_page_shows_a_dash():
     doc = example()
     doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
