@@ -57,7 +57,28 @@ PAGES = {
     "agents": ("agents.html", "For agents", "agents",
                "The MCP server, the API, the formats and the limits for programs and AI agents."),
     "privacy": ("privacy.html", "Privacy", None, "What EntryLib records about people, and why."),
+    "how-to-judge": ("how-to-judge.html", "How to judge an entry", "about",
+                     "What to look at before relying on a claim on EntryLib, and what its scores do not say."),
+    "before-you-submit": ("before-you-submit.html", "Before you submit", "about",
+                          "What a guarantor checks before submitting a claimset to EntryLib, and what follows."),
 }
+
+#: How a claimset's page works, shown in the pop-up of its first line and on About (design §7.4): written once.
+HOW_TO_READ = """<ol>
+<li><strong>In brief</strong> gives the paper's main findings, its principal claims, in a few sentences.</li>
+<li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
+the record, not the science. Click the score to see what lowered it.</li>
+<li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
+see it without leaving your place. Underlined terms show their definitions.</li>
+<li>The other sections start folded: open them from the contents or by their titles.</li>
+<li>At the top, the <strong>responsible researcher</strong> is the person who answers for the paper; tools such as AI
+agents that helped write it are listed after "Written with".</li>
+<li>To ask questions about the paper, use <strong>Ask your AI</strong>: it copies a message for your assistant.</li>
+</ol>"""
+
+#: How each origin reads, in words (cards, About).
+ORIGIN_WORDS = {"lab": "Made with the lab", "lab · record withheld": "Made with the lab, record withheld",
+                "converted": "From a published paper", "native": "Written as a claimset"}
 
 STATUS_LABELS = {"active": "active", "corrected": "updated", "retracted": "retracted", "removed": "removed",
                  "withdrawn": "withdrawn",
@@ -617,8 +638,11 @@ def contents(sections, more=""):
 #: What a visitor who arrives from a link is looking at (UX audit, 11 November 2026). page.js shows its close button
 #: and hides it for good once closed; without the script it stays.
 INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a research paper published on EntryLib as '
-               'separate claims, each with its evidence. <a href="/about#reading">How to read this page</a>'
-               '<button type="button" class="strip-close" aria-label="Hide this note" hidden>\u00d7</button></p>')
+               'separate claims, each with its evidence. <a href="/about#reading" data-help="how-to-read">How to read '
+               'this page</a><button type="button" class="strip-close" aria-label="Hide this note" hidden>\u00d7'
+               '</button></p><template id="how-to-read"><h2>How to read this page</h2>' + HOW_TO_READ +
+               '<p><a href="/how-to-judge">How to judge an entry</a> · <a href="/about#reading">More on the About '
+               'page</a></p></template>')
 
 
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
@@ -878,7 +902,8 @@ def card(doc):
     """A claimset as a card: the home page, the list of all claimsets and search results."""
     p = doc["paper"]
     key = ids.url_key(p["id"])
-    top = [f'<span class="origin">{esc(cshtml.origin(doc))}</span>', esc(p["id"]), esc(p.get("date"))]
+    origin = cshtml.origin(doc)
+    top = [f'<span class="origin">{esc(ORIGIN_WORDS.get(origin, origin))}</span>', esc(day(p.get("date")))]
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
     status = p.get("status") or "active"
@@ -982,7 +1007,7 @@ def fixed_page(name, base_url):
     file, title, active, description = PAGES[name]
     body = (_static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
             .replace("{new_per_week}", str(limits.NEW_PER_WEEK))
-            .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)))
+            .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)).replace("{how_to_read}", HOW_TO_READ))
     return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,
                  script="/page.js" if "data-copy" in body else None)       # its copy buttons
 
@@ -1340,7 +1365,7 @@ def write_listings(published_dir, base_url, docs):
 
 
 #: The site's own pages that search engines should know, besides the claimsets.
-SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/spec/"]
+SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/how-to-judge", "/before-you-submit", "/spec/"]
 
 
 def sitemap(docs, base_url):

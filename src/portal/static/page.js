@@ -357,3 +357,21 @@ window.entrylibOpen = (function () {
     strip.remove();
   });
 })();
+
+// A help link (data-help="<template id>") opens its template in a pop-up; without the script it goes to its page.
+(function () {
+  "use strict";
+  var popups = {};
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("a[data-help]");
+    if (!a || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var id = a.getAttribute("data-help"), tpl = document.getElementById(id);
+    if (!tpl || !tpl.content) return;
+    e.preventDefault();
+    if (!popups[id]) {
+      popups[id] = window.entrylibPopup("help", a.textContent);
+      popups[id].body.appendChild(tpl.content.cloneNode(true));
+    }
+    popups[id].open();
+  });
+})();

@@ -118,3 +118,36 @@ def test_the_byline_tells_people_from_tools():
     doc["paper"]["id"] = "entrylib:2026.000001"
     header = site.render(doc)["header"]
     assert "Responsible researcher: " in header and "Guarantor: " not in header
+
+
+# Round 3
+
+def test_how_to_read_is_written_once():
+    assert site.HOW_TO_READ in site.INTRO_STRIP and 'data-help="how-to-read"' in site.INTRO_STRIP
+    assert site.HOW_TO_READ in site.fixed_page("about", BASE) and "{how_to_read}" not in site.fixed_page("about", BASE)
+    assert 'a[data-help]' in (Path(site.__file__).parent / "static" / "page.js").read_text()
+
+
+def test_cards_say_how_an_entry_was_made_in_words():
+    doc = example()
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
+    top = site.card(doc).split('<p class="card-top">')[1].split("</p>")[0] if 'class="card-top"' in site.card(doc) \
+        else site.card(doc)
+    assert any(f'<span class="origin">{w}</span>' in top for w in site.ORIGIN_WORDS.values())
+    assert "10 November 2026" in top and "entrylib:2026.000001 ·" not in top
+
+
+def test_about_names_the_guarantor_and_who_runs_it():
+    about = site.fixed_page("about", BASE)
+    assert "responsible researcher" in about and '"Guarantor" is the format' in about
+    assert 'id="governance"' in about and "runs it personally" in about
+
+
+def test_the_two_new_pages():
+    caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
+    for name in ("how-to-judge", "before-you-submit"):
+        page = site.fixed_page(name, BASE)
+        assert "{" not in page.split("<main")[1].split("</main>")[0].replace("{ ", "")  # every placeholder filled
+        assert f"/{name}" in site.SITEMAP_PAGES and f" /{name} " in caddy
+    assert "nothing on EntryLib is peer review" in site.fixed_page("how-to-judge", BASE)
+    assert "within 48 hours" in site.fixed_page("before-you-submit", BASE)

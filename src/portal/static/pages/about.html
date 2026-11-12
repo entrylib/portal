@@ -11,16 +11,8 @@ come in tables, and the earlier work it builds on is linked. The format is open 
 <a href="/spec/claimset">Claimset specification</a>.</p>
 
 <h2 id="reading">How to read a paper page</h2>
-<ol>
-<li><strong>In brief</strong> gives the paper's main findings, its principal claims, in a few sentences.</li>
-<li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it (see
-<a href="#quality">Scores</a>). Click the score to see what lowered it.</li>
-<li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
-see it without leaving your place. Underlined terms show their definitions.</li>
-<li>The other sections start folded: open them from the contents or by their titles.</li>
-<li>At the top, the <strong>responsible researcher</strong> is the person who answers for the paper; tools such as AI
-agents that helped write it are listed after "Written with".</li>
-</ol>
+{how_to_read}
+<p>Before relying on a claim, see <a href="/how-to-judge">How to judge an entry</a>.</p>
 
 <h2>One format for every field, with extensions</h2>
 <p>The core of the format is what research in every field shares: claims, their evidence, assumptions and limits, and
@@ -32,16 +24,20 @@ qualitative research</a>; more come as fields need them.</p>
 
 <h2>Where entries come from</h2>
 <ul>
-<li><span class="origin">lab</span> Written from a record of the research kept while it was done, with
+<li><span class="origin">Made with the lab</span> Written from a record of the research kept while it was done, with
 <a href="/lab">claimset-lab</a>. The record is linked from the entry.</li>
-<li><span class="origin">native</span> Written directly as a claimset, usually with an AI agent.</li>
-<li><span class="origin">converted</span> Made from a paper already published elsewhere, which it links.</li>
+<li><span class="origin">Written as a claimset</span> Written directly as a claimset, usually with an AI agent.</li>
+<li><span class="origin">From a published paper</span> Made from a paper already published elsewhere, which it links.</li>
 </ul>
 
 <h2>Who answers for an entry</h2>
 <p>Every entry has a responsible researcher, called its guarantor: a named person who answers for it. Before anything
 is published, they confirm it by signing in with their ORCID iD. Nobody can publish in someone else's name, and an agent cannot publish
 on its own.</p>
+<p>"Guarantor" is the format's technical term, used in the <a href="/spec/claimset">specification</a>, the files and
+the API. On EntryLib's pages the guarantor is called the <strong>responsible researcher</strong>: the two words name
+the same person. Agents that wrote the paper are listed as what it was "written with". To submit, see
+<a href="/before-you-submit">Before you submit</a>.</p>
 
 <h2>What EntryLib checks, and what it does not</h2>
 <p>Every submission is checked against the specification: its claims, support and references must fit together. Its
@@ -87,6 +83,15 @@ at Lancaster University before founding EntryLib.</p>
 </div>
 </div>
 <p>EntryLib is independent and based in the United Kingdom. This website was created by Claude Opus 5.5.</p>
+
+<h2 id="governance">Who runs EntryLib</h2>
+<p>EntryLib is not yet a company. Until it is, Ivan Svetunkov runs it personally and is responsible for it: for the
+site and its rules, for what is published and for every decision about an entry after publication. He decides
+retractions, removals and expressions of concern, and disputes about an entry or its scores, following the published
+<a href="/removal">retraction and removal</a> policy, and says on the entry's page what was decided and why. The rules
+that check and score entries are public, and a change to them is a new, published version, never a quiet edit.</p>
+<p>To raise a problem with an entry, or with a decision, write to
+<a href="mailto:mail@entrylib.org">mail@entrylib.org</a>.</p>
 
 <h2>Contact</h2>
 <p><a href="mailto:mail@entrylib.org">mail@entrylib.org</a> · <a href="/privacy">Privacy</a> ·
