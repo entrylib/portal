@@ -82,7 +82,7 @@ def finder(conn, concept):
 
 def _warnings(doc):
     """The current validator's warnings for a published file, which the rubric reads from 0.3 (warning 17: numbers no
-    recorded result holds; warning 45: a limitation restating the declared competing interest). None if it fails."""
+    recorded result holds; warning 46: a limitation restating the declared competing interest). None if it fails."""
     try:
         from claimset.validate import validate
         return validate(doc, published=True).warnings
