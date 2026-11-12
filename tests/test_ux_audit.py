@@ -20,8 +20,9 @@ def page_of(env, doc=None):
 def test_the_score_says_what_it_measures(env):
     out, page = page_of(env)
     assert f"<h2>{score_html.NAME}</h2>" in page and score_html.CAPTION in page
-    assert any(f'<span class="score-band">{w}</span>' in page for w in score_html.BANDS.values())
-    assert 'class="dot-legend small">Dots, in order:' in page
+    assert '<ul class="dot-list small">' in page and '<p class="dot-key small">' in page   # dots, named, with a key
+    assert "Mean of " in page.split('score-basis">')[1][:200] or "Its lowest principal claim" in page
+    assert not any(f">{w}<" in page.split('<aside class="panel"')[1][:3000] for w in score_html.BANDS.values())
     assert "Issues as text, for an agent" in page.split('<h2>For models</h2>')[1]   # agent links in their row
     assert "no close match on EntryLib" not in page                     # says nothing while the library is small
     home = (out / "index.html").read_text()
@@ -185,7 +186,7 @@ def test_one_word_for_what_readers_see():
         assert not words, (name, words)                  # "entries" lives on only in the library's name
     assert 'for v, label in (("claimsets", "Papers")' in Path(read.__file__).read_text()
     home = (pages / "home.html").read_text()
-    assert "<h1>Research papers you can check claim by claim</h1>" in home and 'class="home-score"' in home
+    assert "<h1>Research papers you can check claim by claim</h1>" in home and 'class="home-score"' not in home
 
 
 def test_the_contents_count_evidence_and_arguments_apart():
