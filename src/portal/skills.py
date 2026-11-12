@@ -5,8 +5,11 @@ assistant that can do none of these still has them.
 
     /skills/                                  every skill
     /skills/<name>, /skills/<name>.md         one skill, as a page and as text
-    /convert/message.txt                      what /convert copies: the request, then the skills it needs and an
-                                              example claimset
+    /convert/message.txt                      the full message /convert offers to download and attach: the
+                                              request, then the skills it needs and an example claimset
+
+/convert shows and copies the short message (short()): the request, with where to read the rules (the MCP tool
+`guide`, the skills' addresses, the package), and to stop rather than write from memory when none can be read.
 
 Written by the indexer when the app starts, from the claimset package, like the specifications (specs.py): a new
 claimset release publishes its skills. The words around them (the request, the page) are the portal's own.
@@ -25,8 +28,6 @@ FROM_PAPER, SUBMIT = "claimset-from-paper", "claimset-submit"
 EXAMPLE = "submission-native.json"
 #: Where a skill the installed package does not ship yet is read (the claimset repository's main branch, as text).
 RAW = "https://raw.githubusercontent.com/entrylib/claimset/main/skills/{name}/SKILL.md"
-#: What follows the request in the message, and what the page shows in its place.
-FOLLOWS = "[The skills claimset-from-paper and claimset-submit and an example claimset follow here.]"
 
 
 def skills_dir():
@@ -127,10 +128,36 @@ def message(base_url, cat, example=None):
     return "\n".join(parts)
 
 
+def short(base_url, cat):
+    """The message /convert shows and copies: what to do, and where to read the rules, in the order an assistant can
+    use them (EntryLib's connector, an address, the package), then to stop if it can use none. It is short, so that
+    it copies in every browser; the full message, with the rules in it, is downloaded instead (message())."""
+    base = base_url.rstrip("/")
+    texts = " and ".join(f"{base}/skills/{n}.md" if n in cat else RAW.format(name=n) for n in (FROM_PAPER, SUBMIT))
+    return (
+        f"I am an author of the attached paper and want to publish it on EntryLib ({base}) as a claimset.\n\n"
+        f"Follow the claimset-from-paper skill, which builds on claimset-submit. Read both before you build anything, "
+        f"from the first of these you can use:\n"
+        f"1. EntryLib's connector (the MCP server at {base}/mcp): call its guide tool with name claimset-from-paper, "
+        f"then claimset-submit, and specification for the format.\n"
+        f"2. The web: read {texts}, and the specification at {base}/spec/claimset.md.\n"
+        "3. A terminal: pip install claimset, then claimset guide claimset-from-paper.\n"
+        "If you can use none of these, tell me and stop: do not write a claimset from memory. I will attach the "
+        "rules instead.\n\n"
+        "- Write the claimset only from what you have read. Do not invent a format: use only the fields these texts "
+        "name, and ask me when you need something they do not give.\n"
+        "- Ask me the skill's questions before you build anything.\n"
+        "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
+        "worse.\n"
+        "- Draft a plain-language summary of at most 150 words for me to approve.\n"
+        "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
+        f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "
+        "and submit only when I say so.\n")
+
+
 def shown(base_url, cat=None):
-    """The request as /convert shows it: the message, with a line in place of the skills it carries."""
-    cat = catalogue() if cat is None else cat
-    return request(base_url, cat) + (f"\n{FOLLOWS}" if complete(cat) else "")
+    """The message as /convert shows and copies it: the short one (short())."""
+    return short(base_url, catalogue() if cat is None else cat)
 
 
 def paths(cat):
