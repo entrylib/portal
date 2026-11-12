@@ -219,7 +219,9 @@ def test_a_real_page_starts_with_its_summary_or_its_highlights(env):
     doc["paper"]["summary"] = "In plain words."
     _, page = page_of(env, doc)
     body = page.split('<article class="cs-body">')[1]
-    assert body.index('id="summary"') < body.index("<h2>Highlights</h2>") and "In brief" not in body
+    assert body.startswith('<section class="cs-section" id="summary">') and "In brief" not in body
+    if "<h2>Highlights</h2>" in body:                   # claimset 0.41.10-11 put the summary in their place
+        assert body.index('id="summary"') < body.index("<h2>Highlights</h2>")
 
 
 def test_a_page_without_a_summary_starts_with_its_highlights(env):
