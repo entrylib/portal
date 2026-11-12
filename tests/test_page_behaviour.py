@@ -24,6 +24,11 @@ def test_copying_works_in_every_browser():
             assert re.search(r'<script src="/page\.js[^"]*" defer>', page), name
     convert = site.fixed_page("convert", "https://entrylib.test")
     assert 'data-copy="convert-prompt"' in convert and 'download="entrylib-convert-message.txt"' in convert
+    box = convert.index('<div class="connect">')                     # the grey box holds only the message
+    end = convert.index("</div>", box)
+    button, paste = convert.index('data-copy="convert-prompt"'), convert.index("Paste it with the paper")
+    assert end < button < paste < convert.index('download="entrylib-convert-message.txt"')
+    assert "</button></p>\n<p>Paste it" in convert                    # the explanation under the button
 
 
 def test_the_panel_scrolls_on_its_own_only_beside_the_page():
