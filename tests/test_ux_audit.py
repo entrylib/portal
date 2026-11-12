@@ -285,9 +285,9 @@ def test_a_paper_its_authors_prepared_says_so():
     doc["artefacts"] = list(doc.get("artefacts") or []) + [
         {"id": "AR99", "kind": "manuscript", "uri": "https://doi.org/10.1/x", "description": "The article, 2025"}]
     if site.pageview.origin(doc) == "native":
-        assert "From the authors&#x27; paper" in site.card(doc)
+        assert "Converted by its authors" in site.card(doc)
         line = site._origin_line(doc, "native", None)
-        assert ('Prepared by its authors from their paper: <a href="https://doi.org/10.1/x">The article, 2025</a>'
+        assert ('Converted by its authors from their paper: <a href="https://doi.org/10.1/x">The article, 2025</a>'
                 in line)
     assert site.own_paper({"artefacts": [{"kind": "manuscript", "uri": "doi:10.1/y"}]})[0] == "https://doi.org/10.1/y"
 
@@ -297,6 +297,7 @@ def test_the_pages_agree():
     lab, about = (pages / "lab.html").read_text(), (pages / "about.html").read_text()
     assert '<span class="origin">lab</span>' not in lab and "Made with the lab" in lab
     assert "mean of its principal claims" in about and "scores as its\nlowest" not in about
-    assert "From the authors' paper" in about and "From the authors' paper" in (pages / "how-to-judge.html").read_text()
+    judge = (pages / "how-to-judge.html").read_text()
+    assert "Converted by its authors" in about and "Converted by its authors" in judge
     assert "conversion guarantor" not in (pages / "how-to-judge.html").read_text()
     assert "conversion guarantor" not in site._origin_line({"paper": {}, "artefacts": []}, "converted", None)

@@ -40,6 +40,22 @@ def outcome_text(outcome):
     return text
 
 
+def _source_box(ctx):
+    """The published paper a claimset restates, and what the portal found about its authors (design §4.5)."""
+    src = ctx.get("source")
+    if not src or not src.get("doi"):
+        return ""
+    doi = escape(src["doi"])
+    named = escape(src.get("title") or f"doi:{src['doi']}")
+    more = ""
+    if src.get("coauthor_orcids"):
+        more = ('<p class="muted">The paper\'s record gives ORCID iDs for co-authors this claimset does not name: '
+                + "; ".join(escape(x) for x in src["coauthor_orcids"]) + ". Your agent can add them in a new "
+                "version.</p>")
+    return (f'<p>Converted by its authors from <a href="https://doi.org/{doi}">{named}</a>. Authorship: '
+            f'{escape(src.get("authorship") or "")}.</p>{more}')
+
+
 def consent(ctx, start_url, status_url, attach_url=None, attached=False):
     """The page a guarantor opens from their consent link. A submission waiting for its package (design §4.4) asks
     for it first: the Confirm button comes once it is attached."""
@@ -67,7 +83,7 @@ def consent(ctx, start_url, status_url, attach_url=None, attached=False):
 <p><strong>{escape(ctx['title'])}</strong></p>
 <p class="muted">{ctx['n_claims']} claims · licence {escape(ctx['licence'])}</p>
 <p class="muted">Subfield: {escape(ctx.get('subfield') or '')}</p>
-<p>Principal claims:</p><ul>{principal}</ul>
+{_source_box(ctx)}<p>Principal claims:</p><ul>{principal}</ul>
 <details><summary>The whole claimset, as models will read it</summary><pre>{escape(ctx['reading_view'])}</pre></details>
 </div>
 <p>By confirming, you state that you are the main author of this work and the person to contact about it, that you

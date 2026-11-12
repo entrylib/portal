@@ -35,7 +35,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import crossref, history, ids, notices, reading, scores, site
+from . import crossref, history, ids, notices, reading, scores, site, source
 
 
 def _write(path, text):
@@ -152,6 +152,8 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
                   sorted({s.get("kind") for s in c.get("support") or [] if isinstance(s, dict) and s.get("kind")}),
                   plain(c.get("statement")), claim_text(c, defs), paper_c)
                  for c in doc.get("claims") or [] if isinstance(c, dict)])
+        conn.execute("UPDATE papers SET source_doi = %s WHERE concept_id = %s AND current_version = %s",
+                     (source.doi(doc), concept, n))
         conn.execute("UPDATE papers SET licence = %s, guarantors = %s, title_key = %s,"
                      " search = setweight(to_tsvector('english', %s), 'A')"
                      " || setweight(to_tsvector('english', %s), 'B') || setweight(to_tsvector('english', %s), 'C')"
