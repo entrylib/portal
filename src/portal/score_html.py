@@ -227,14 +227,16 @@ def claim_section(scores, cids):
             + "".join(_claim_explain(scores, c) for c in shown) + "</section>")
 
 
-def section(scores, issues_url=None):
-    """The section *Score*: the paper's explanation, then every claim's. The pop-ups show parts of it."""
+def section(scores, issues_url=None, paper=None, url=None):
+    """The section *Score*: the paper's explanation, then every claim's. The pop-ups show parts of it, and copy the
+    issues they list for the authors' agent (page.js), naming the version (`paper`, `entrylib:…@v3`) and its `url`."""
     if not scores:
         return ""
     note = (f'<p class="score-note">{esc(scores["note"])} <a href="{RUBRIC_URL}">The rubric</a>.'
             + (f' <a href="{esc(issues_url)}">Every issue as text</a>, for an agent preparing the next version.'
                if issues_url else "") + "</p>")
-    out = ['<section class="cs-section score-section" id="score"><h2>Score</h2>']
+    named = (f' data-paper="{esc(paper)}"' if paper else "") + (f' data-url="{esc(url)}"' if url else "")
+    out = [f'<section class="cs-section score-section" id="score"{named}><h2>Score</h2>']
     p = scores.get("paper")
     if p:
         problems = "".join(_problem(scores, pid) for pid in p["problems"])
