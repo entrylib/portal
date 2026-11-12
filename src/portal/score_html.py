@@ -131,20 +131,23 @@ def panel_rows(scores, lights=None):
     rows = "".join(f'<li><span class="score-badge small band-{b}">{counts[b]}</span>{w.lower()}</li>'
                    for b, w in BANDS.items())
     return (f'<div class="panel-row score-row"><h2>{NAME}</h2>'
-            + score_block(p["score"], p["band"], "score-paper", _basis(p) + " · ") + dot_list(scores)
+            + score_block(p["score"], p["band"], "score-paper", _basis(p, short=True) + " · ") + dot_list(scores)
             + f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
             + (f'<span class="small"> · {esc(check)}</span>' if check else "") + "</p></div>"
             f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
 
 
-def _basis(p):
-    """How the paper's score was made, in a few words, with a link to the lowest principal claim
-    (scores.paper_basis)."""
+def _basis(p, short=False):
+    """How the paper's score was made, with a link to the lowest principal claim (scores.paper_basis); `short`: in
+    a few words, for beside the number in the panel."""
     link = f'<a href="#{esc(p["lowest"])}">{esc(p["lowest"])}</a>'
     if "lowest_score" in p:
         n = len(p.get("principal") or [])
-        return f"Mean of {n} principal claim{'s' if n != 1 else ''}; lowest {link} at {esc(p['lowest_score'])}"
-    return f"Its lowest principal claim, {link}"
+        if short:
+            return f"Mean of {n} principal claim{'s' if n != 1 else ''}; lowest {link} at {esc(p['lowest_score'])}"
+        return (f"The mean of its {n} principal claim{'s' if n != 1 else ''}; the lowest is {link} at "
+                f"{esc(p['lowest_score'])}")
+    return f"Its lowest principal claim, {link}" if short else f"The paper scores as its lowest principal claim, {link}"
 
 
 def _sentence(text):
