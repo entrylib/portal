@@ -214,7 +214,7 @@ def page(docs, q, base_url=""):
     """The Read page. `docs`: the current version of every published claimset. Its canonical address is the area's
     own, without filters, so that search engines index one page per area."""
     tabs = "".join(f'<a href="{q.url(view=v, offset="")}"' + (' aria-current="page"' if v == q.view else "")
-                   + f">{label}</a>" for v, label in (("claimsets", "Claimsets"), ("claims", "Claims")))
+                   + f">{label}</a>" for v, label in (("claimsets", "Papers"), ("claims", "Claims")))
     if q.view == "claims":
         rows = claims(docs, q)
         shown = rows[q.offset:q.offset + PAGE]
@@ -224,9 +224,9 @@ def page(docs, q, base_url=""):
     else:
         rows = claimsets(docs, q)
         shown = rows[q.offset:q.offset + PAGE]
-        what = "claimsets"
+        what = "papers"
         body = (f'<div class="cards">{"".join(site.card(d) for d in shown)}</div>' if shown
-                else '<p class="muted">No claimsets here match.</p>')
+                else '<p class="muted">No papers here match.</p>')
     more = []
     if q.offset:
         more.append(f'<a href="{q.url(offset=max(0, q.offset - PAGE))}">Previous</a>')
@@ -238,10 +238,10 @@ def page(docs, q, base_url=""):
             f'<p class="muted">{len(rows)} {what}' + (f", {q.offset + 1}–{q.offset + len(shown)}" if len(rows) > PAGE
                                                      else "") + "</p>"
             f'{body}' + (f'<p class="pager">{" · ".join(more)}</p>' if more else "") + "</div></div></div>")
-    title = "Read" if not q.area else f"{area_name(q.area)}: claims and claimsets"
+    title = "Read" if not q.area else f"{area_name(q.area)}: papers and claims"
     count = sum(1 for d in docs if in_area(area_of(d), q.area))
-    description = (f"{area_name(q.area)} on EntryLib: {count} claimset{'s' if count != 1 else ''}, their claims with "
+    description = (f"{area_name(q.area)} on EntryLib: {count} paper{'s' if count != 1 else ''}, their claims with "
                    "their support scores, each with what it rests on." if q.area else
-                   "What EntryLib holds, by field: its claims with their support scores, and its claimsets.")
+                   "What EntryLib holds, by field: its papers, and their claims with their support scores.")
     return site.shell(title, main, active="read", description=description,
                       canonical=base_url + areas.path(q.area) if base_url else None)

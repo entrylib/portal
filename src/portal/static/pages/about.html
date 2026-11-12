@@ -4,34 +4,55 @@ it is now read first by AI, which has to guess where a finding is, what it rests
 publishes research so that nothing has to be guessed: each finding is stated on its own, with its evidence, its
 assumptions and its limits, for people and for AI alike.</p>
 
-<h2>What an entry is</h2>
-<p>An entry is a claimset: a paper written as claims. Each claim says one thing and points to what supports it, the
+<h2>What a paper on EntryLib is</h2>
+<p>Every paper on EntryLib is written as a claimset, an open format for papers written as claims. Each claim says one thing and points to what supports it, the
 data, the proof or the experiment, and to what it assumes and where it may not hold. Its terms are defined, its numbers
 come in tables, and the earlier work it builds on is linked. The format is open and documented in the
 <a href="/spec/claimset">Claimset specification</a>.</p>
 
 <h2 id="reading">How to read a paper page</h2>
 {how_to_read}
-<p>Before relying on a claim, see <a href="/how-to-judge">How to judge an entry</a>.</p>
+<p>Before relying on a claim, see <a href="/how-to-judge">How to judge a paper</a>.</p>
+
+<h2 id="glossary">Words used on a paper's page</h2>
+<dl class="glossary">
+<dt>Claim (C1, C2…)</dt><dd>One finding of the paper, stated exactly, with the conditions it holds under.</dd>
+<dt>Principal claim</dt><dd>One of the paper's main findings, the ones it puts first.</dd>
+<dt>Evidence (E1, E2…)</dt><dd>What a claim rests on: a result, a table, a proof, an experiment, or a cited
+paper's finding.</dd>
+<dt>Argument (W1, W2…)</dt><dd>The reasoning that links evidence to a claim, when the link is not plain.</dd>
+<dt>Assumption (A1, A2…)</dt><dd>What must hold for a claim to follow; some are checked in the paper, some are
+not.</dd>
+<dt>Definition (D1, D2…)</dt><dd>A term as the paper uses it. Underlined terms show their definitions.</dd>
+<dt>Scope and conditions</dt><dd>Where a claim holds: a data set, a population, a range of settings.</dd>
+<dt>Limitation</dt><dd>Where the authors think a claim may not hold.</dd>
+<dt>Artefact</dt><dd>Material behind the paper: data, code, a manuscript, a figure.</dd>
+<dt>Support</dt><dd>A score from 0 to 100 for how well the paper's own record backs a claim (<a
+href="#quality">Scores</a>).</dd>
+<dt>Responsible researcher</dt><dd>The person who answers for the paper; in the format and the files, its
+guarantor.</dd>
+<dt>Version</dt><dd>Each published state of a paper, never changed; a correction is a new version.</dd>
+<dt>Claimset</dt><dd>The open format every paper here is written in, and its file.</dd>
+</dl>
 
 <h2>One format for every field, with extensions</h2>
 <p>The core of the format is what research in every field shares: claims, their evidence, assumptions and limits, and
 the terms they use. That is what lets a model compare findings across fields. What only one kind of work needs is added
-by an extension: the glosses of examples in linguistics, the coding of sources in qualitative research. An entry names
+by an extension: the glosses of examples in linguistics, the coding of sources in qualitative research. A paper names
 the extensions it uses, and stays complete without them: a reader that does not know an extension still reads every
 claim. Extensions are specified and versioned like the core. Today there are two, <a href="/spec/extensions">linguistics and
 qualitative research</a>; more come as fields need them.</p>
 
-<h2>Where entries come from</h2>
+<h2>Where papers come from</h2>
 <ul>
 <li><span class="origin">Made with the lab</span> Written from a record of the research kept while it was done, with
-<a href="/lab">claimset-lab</a>. The record is linked from the entry.</li>
+<a href="/lab">claimset-lab</a>. The record is linked from the paper.</li>
 <li><span class="origin">Written as a claimset</span> Written directly as a claimset, usually with an AI agent.</li>
 <li><span class="origin">From a published paper</span> Made from a paper already published elsewhere, which it links.</li>
 </ul>
 
-<h2>Who answers for an entry</h2>
-<p>Every entry has a responsible researcher, called its guarantor: a named person who answers for it. Before anything
+<h2>Who answers for a paper</h2>
+<p>Every paper has a responsible researcher, called its guarantor: a named person who answers for it. Before anything
 is published, they confirm it by signing in with their ORCID iD. Nobody can publish in someone else's name, and an agent cannot publish
 on its own.</p>
 <p>"Guarantor" is the format's technical term, used in the <a href="/spec/claimset">specification</a>, the files and
@@ -44,30 +65,33 @@ the same person. Agents that wrote the paper are listed as what it was "written 
 text is screened for content aimed at manipulating AI readers. A lab record is checked for tampering, and each claim
 is scored by public rules.</p>
 <h3 id="quality">Scores</h3>
-<p><strong>Support</strong>, from 0 to 100, says how far an entry's own record supports each claim. It checks the
+<p><strong>Support</strong>, from 0 to 100, says how far a paper's own record supports each claim. It checks the
 record, not the science: it does not say whether a claim is true, and it is not peer review. (The rubric calls it
 reliability.) Every claim
 starts at 100 and loses points for named problems: weak support, a test not planned beforehand, material a reader
 cannot obtain, a missing scope or link to earlier work, open limitations and unchecked assumptions. Five dots beside
-each claim show where the points went: support, plan, checkable, context and open problems. An entry scores as its
+each claim show where the points went: support, plan, checkable, context and open problems. A paper scores as its
 lowest principal claim. Well supported is 80 and over, Partly supported 60 to 79, Weakly supported under 60. Click a score to see why. The
 rules are in <a href="https://github.com/entrylib/rubric/blob/main/RUBRIC.md">the rubric</a>.</p>
 <p><strong>Novelty</strong> is the authors' own account (new, extends, replicates or refutes earlier work), checked
-against the claims already on EntryLib: a close match the entry does not acknowledge puts it in question.</p>
-<p>The scores are computed by rules from the entry's file. They check the record, not the science, and may change as
+against the claims already on EntryLib: a close match the paper does not acknowledge puts it in question.</p>
+<p>The scores are computed by rules from the paper's file. They check the record, not the science, and may change as
 the rules and reviews develop. The rules are public: <a href="https://github.com/entrylib/rubric/blob/main/RUBRIC.md">the
 EntryLib rubric</a>.</p>
 
 <h2>Citing, versions and corrections</h2>
-<p>Every entry has a permanent identifier, such as <code>entrylib:2026.000001</code>, and each version its own, such
+<p>Every paper has a permanent identifier, such as <code>entrylib:2026.000001</code>, and each version its own, such
 as <code>entrylib:2026.000001@v2</code>. Cite a claim by adding its number:
 <code>entrylib:2026.000001@v2#C4</code>. A published version is never changed. A correction is a new version, and a
-problem with an entry is shown in a notice at its top (<a href="/removal">retraction and removal</a>).</p>
+problem with a paper is shown in a notice at its top (<a href="/removal">retraction and removal</a>).</p>
 
 <h2>Open by design</h2>
-<p>Reading, searching and publishing are free. Entries carry open licences chosen by their guarantors. Every published
+<p>Reading, searching and publishing are free. Papers carry open licences chosen by their guarantors. Every published
 version is also kept in a public registry on GitHub, and the specification, the tools and this site's code are open
 source.</p>
+<p>If EntryLib stopped, its papers would not be lost: every published version, with its notices, is in the public
+<a href="https://github.com/entrylib/registry">registry</a> under the licence its guarantor chose, and its identifiers
+can be resolved from it.</p>
 
 <h2>Who we are</h2>
 <div class="person">
@@ -85,12 +109,15 @@ at Lancaster University before founding EntryLib.</p>
 <p>EntryLib is independent and based in the United Kingdom. This website was created by Claude Opus 5.5.</p>
 
 <h2 id="governance">Who runs EntryLib</h2>
+<p><strong>EntryLib is new.</strong> It opened on 9 November 2026, and in its first weeks most papers on it are
+guaranteed by Ivan Svetunkov, who runs it. Judge them as you would any other: by their claims and what each rests
+on.</p>
 <p>EntryLib is not yet a company. Until it is, Ivan Svetunkov runs it personally and is responsible for it: for the
-site and its rules, for what is published and for every decision about an entry after publication. He decides
-retractions, removals and expressions of concern, and disputes about an entry or its scores, following the published
-<a href="/removal">retraction and removal</a> policy, and says on the entry's page what was decided and why. The rules
-that check and score entries are public, and a change to them is a new, published version, never a quiet edit.</p>
-<p>To raise a problem with an entry, or with a decision, write to
+site and its rules, for what is published and for every decision about a paper after publication. He decides
+retractions, removals and expressions of concern, and disputes about a paper or its scores, following the published
+<a href="/removal">retraction and removal</a> policy, and says on the paper's page what was decided and why. The rules
+that check and score papers are public, and a change to them is a new, published version, never a quiet edit.</p>
+<p>To raise a problem with a paper, or with a decision, write to
 <a href="mailto:mail@entrylib.org">mail@entrylib.org</a>.</p>
 
 <h2>Contact</h2>
