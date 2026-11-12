@@ -10,7 +10,7 @@ removed and mathematics rendered, by the claimset package's own MathML (design Â
 import html as _html
 import re
 
-from claimset import html as cshtml
+from . import page as pageview
 
 TERM_MARKUP = re.compile(r"\[\[D\d+:([^\]]*)\]\]")
 INLINE_MATH = re.compile(r"\$\$(.+?)\$\$|\$([^$\s][^$]*?)\$", re.S)
@@ -29,7 +29,7 @@ def html(text):
     out, last, text = [], 0, plain(text)
     for m in INLINE_MATH.finditer(text):
         out.append(esc(text[last:m.start()]))
-        out.append(cshtml.math(m.group(1) or m.group(2)))
+        out.append(pageview.math(m.group(1) or m.group(2)))
         last = m.end()
     out.append(esc(text[last:]))
     return "".join(out)
@@ -41,6 +41,6 @@ def one_line(text):
 
 def readable(text):
     def symbols(m):
-        shown = _html.unescape(TAG.sub("", cshtml.math(m.group(1) or m.group(2))))
+        shown = _html.unescape(TAG.sub("", pageview.math(m.group(1) or m.group(2))))
         return re.sub(r"\s+", "", shown)
     return re.sub(r"\s+", " ", INLINE_MATH.sub(symbols, plain(text))).strip()
