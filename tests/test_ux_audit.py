@@ -205,6 +205,8 @@ def test_about_has_a_glossary_preservation_and_the_early_stage():
     about = site.fixed_page("about", BASE)
     assert 'id="glossary"' in about and "<dt>Argument (W1, W2…)</dt>" in about
     assert "would not be lost" in about and "EntryLib is new." in about
+    assert "<strong>Funding.</strong> EntryLib has no funding yet" in about        # who pays, and what if it closes
+    assert "Only the address entrylib.org would stop working" in about
     assert 'href="/about#glossary"' in site.INTRO_STRIP
     assert "examples/submission-native.json" in site.fixed_page("before-you-submit", BASE)
 
