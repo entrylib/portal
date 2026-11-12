@@ -82,6 +82,7 @@ FLAG_WORDS = {"code_changed_after_plan": "the code changed after the plan",
               "holdout_used_elsewhere": "the held-out data was used elsewhere",
               "reproduces_prompting_result": "it repeats the result that suggested it",
               "sources_captured_after_plan": "sources were captured after the plan",
+              "diagnostic_missing": "a run left out a check the plan required",
               "coded_before_plan": "material was coded before the plan",
               "codebook_changed_after_plan": "the codebook changed after the plan"}
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
@@ -629,6 +630,8 @@ def _claim(P, c, principal=False):
         head.append(NOVELTY_WORDS[c["novelty"]])
     if c.get("planning") == "confirmatory":
         head.append("planned test")
+    elif c.get("planning") == "planned_estimate":
+        head.append("planned estimate")
     before, after = P.mark(c, "claim")
     lines = [f'<p class="cs-claim-meta">{before}' + " · ".join(h for h in head if h) + f"{after}</p>",
              f'<p class="cs-statement">{P.text(c.get("statement", ""))}</p>']
@@ -670,6 +673,18 @@ def _claim(P, c, principal=False):
         if t.get("flags"):
             links.append('<span class="k">Weaknesses:</span> '
                          + esc("; ".join(FLAG_WORDS.get(f, _words(f)) for f in t["flags"])))
+    e = c.get("estimate")
+    if isinstance(e, dict):
+        plan = _join([f"lab plan {e['lab_plan']}" if e.get("lab_plan") else "",
+                      f"registered {e['registration']}" if e.get("registration") else "",
+                      f"planned {_date(c['planned_at'])}" if c.get("planned_at") else ""], ", ")
+        if plan:
+            links.append(f'<span class="k">Planned:</span> {esc(plan)}')
+        if e.get("not_obtained"):
+            links.append('<span class="k">Not obtained:</span> ' + esc(", ".join(map(str, e["not_obtained"]))))
+        if e.get("flags"):
+            links.append('<span class="k">Weaknesses:</span> '
+                         + esc("; ".join(FLAG_WORDS.get(f, _words(f)) for f in e["flags"])))
     if not principal:
         used = P.users(c["id"])
         if used:

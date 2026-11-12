@@ -222,6 +222,20 @@ class TestImages(unittest.TestCase):
         self.assertIn('<img src="images/gel.jpg"', H.render_parts(doc)["body"])
 
 
+class TestPlannedEstimates(unittest.TestCase):
+    def test_a_planned_estimate_is_shown_as_planned(self):
+        doc = example()
+        c = claim("C9", role="secondary", planning="planned_estimate", planned_at="2026-11-12T10:00:00Z",
+                  estimate={"estimands": {"m": {"variable": "MASE"}, "u": {"variable": "coverage"}},
+                            "lab_plan": "PL3", "not_obtained": ["u"], "flags": ["diagnostic_missing"]})
+        doc["claims"].append(c)
+        body = H.render_parts(doc)["body"]
+        self.assertIn("planned estimate", body)
+        self.assertIn("lab plan PL3, planned 12 November 2026", body)
+        self.assertIn("Not obtained:</span> u", body)
+        self.assertIn("a run left out a check the plan required", body)
+
+
 class TestDigits(unittest.TestCase):
     def doc(self):
         doc = example()

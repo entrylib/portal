@@ -41,8 +41,8 @@ RECENT = 10
 #: How many entries the feed carries.
 FEED_ENTRIES = 30
 
-NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
-       ("/about", "About", "about")]
+NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/convert", "Convert your paper", "convert"),
+       ("/agents", "For agents", "agents"), ("/about", "About", "about")]
 FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/submissions", "Your submissions"),
           ("/privacy", "Privacy"),
           ("/removal", "Removal requests"), ("/spec/", "Specification"),
@@ -57,7 +57,7 @@ PAGES = {
     "agents": ("agents.html", "For agents", "agents",
                "The MCP server, the API, the formats and the limits for programs and AI agents."),
     "privacy": ("privacy.html", "Privacy", None, "What EntryLib records about people, and why."),
-    "convert": ("convert.html", "Turn your paper into a claimset", "about",
+    "convert": ("convert.html", "Turn your paper into a claimset", "convert",
                 "How an author turns their own paper into a claimset with their AI agent, and why."),
     "how-to-judge": ("how-to-judge.html", "How to judge a paper", "about",
                      "What to look at before relying on a claim on EntryLib, and what its scores do not say."),
@@ -350,9 +350,12 @@ def lab_summary(events):
         return None
     counts = s.get("counts") or {}
     planned = sum(1 for p in s.get("plans") or [] if p.get("kind") == "confirmatory")
-    parts = [(len(s.get("hypotheses") or []), "hypothesis", "hypotheses"), (planned, "planned test", "planned tests"),
-             (counts.get("deviation", 0), "deviation from plans", "deviations from plans"),
-             (counts.get("run", 0), "run", "runs")]
+    estimates = sum(1 for p in s.get("plans") or [] if p.get("kind") == "estimation")
+    parts = [(len(s.get("hypotheses") or []), "hypothesis", "hypotheses"), (planned, "planned test", "planned tests")]
+    if estimates:
+        parts.append((estimates, "planned estimate", "planned estimates"))
+    parts += [(counts.get("deviation", 0), "deviation from plans", "deviations from plans"),
+              (counts.get("run", 0), "run", "runs")]
     return ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in parts)
 
 
