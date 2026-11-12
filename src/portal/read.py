@@ -17,7 +17,8 @@ PAGE = 50
 TYPES = ["descriptive", "associational", "causal", "mechanistic", "predictive", "interpretive", "formal",
          "methodological"]
 NOVELTY = {"no_prior_found": "New", "extension": "Extends", "replication": "Replicates", "refutation": "Refutes"}
-PLANNING = {"confirmatory": "Planned test", "exploratory": "Exploratory"}
+PLANNING = {"confirmatory": "Planned test", "planned_estimate": "Planned estimate",
+            "exploratory": "Exploratory"}
 BANDS = {b: f"{w} ({r})" for (b, w), r in zip(score_html.BANDS.items(), ("80+", "60–79", "under 60"), strict=True)}
 #: Newest first by default: sorted by score, the library reads as a league table (UX audit, 11 November 2026).
 SORTS = {"newest": "Newest", "reliability": f"{score_html.NAME}, highest first"}

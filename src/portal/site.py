@@ -349,9 +349,12 @@ def lab_summary(events):
         return None
     counts = s.get("counts") or {}
     planned = sum(1 for p in s.get("plans") or [] if p.get("kind") == "confirmatory")
-    parts = [(len(s.get("hypotheses") or []), "hypothesis", "hypotheses"), (planned, "planned test", "planned tests"),
-             (counts.get("deviation", 0), "deviation from plans", "deviations from plans"),
-             (counts.get("run", 0), "run", "runs")]
+    estimates = sum(1 for p in s.get("plans") or [] if p.get("kind") == "estimation")
+    parts = [(len(s.get("hypotheses") or []), "hypothesis", "hypotheses"), (planned, "planned test", "planned tests")]
+    if estimates:
+        parts.append((estimates, "planned estimate", "planned estimates"))
+    parts += [(counts.get("deviation", 0), "deviation from plans", "deviations from plans"),
+              (counts.get("run", 0), "run", "runs")]
     return ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in parts)
 
 

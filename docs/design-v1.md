@@ -280,7 +280,7 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 
 - **A tree** of OpenAlex domains, fields and subfields (`data/fields.json`, `data/subfields.json`), only the parts that have claimsets, each with how many. A claimset is in the subfield of its classification.
 - **For the part chosen** (or everything): its **claimsets** as cards by default, or its **principal claims**, or all claims (a switch). Each claim shows its reliability, dots and novelty, and links to its claimset.
-- **Filters:** claim type, novelty label, planned or exploratory, reliability band; **sort** by reliability or newest; 50 a page. The search box stays at the top.
+- **Filters:** claim type, novelty label, planned test, planned estimate or exploratory, reliability band; **sort** by reliability or newest; 50 a page. The search box stays at the top.
 - **Search** is the same page: with a query (`/read?q=…`) it searches the whole library, claimsets or claims (the same two tabs, claimsets first), says how many it found, and links back to browsing by field; the tree and filters step aside while searching. `/search` redirects here.
 - Scores come from the rubric over each current file, kept in memory per version and rubric version; when the library grows, the indexer should store them in the database instead.
 
