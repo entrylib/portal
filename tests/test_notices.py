@@ -66,7 +66,7 @@ def test_the_guarantor_removes(app_client, settings):
     assert r.status_code == 200, r.text
     out = settings.published_dir / "p"
     page = (out / f"{key}.html").read_text()
-    assert "This entry has been removed" in page and "Personal data" in page
+    assert "This paper has been removed" in page and "Personal data" in page
     assert json.loads((out / f"{key}@v1.json").read_text())["status"] == "removed"
     assert not (out / key / "C1.txt").exists() and not (out / f"{key}.bib").exists()
     assert app_client.get("/api/search/papers", params={"q": "seasonal"}).json()["results"] == []

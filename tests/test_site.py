@@ -40,7 +40,8 @@ def test_listings_and_feed(env):
     ctx, concept = published(env)
     out = ctx["published_dir"]
     home = (out / "index.html").read_text()
-    assert "The open library of machine-readable entries" in home and f'href="/p/{KEY}"' in home
+    assert "Research papers you can check claim by claim" in home and f'href="/p/{KEY}"' in home
+    assert "open library of machine-readable entries" in home
     assert 'action="/read"' in home and "Recently published" in home
     assert f'href="/p/{KEY}"' in (out / "all.html").read_text()
     sitemap = (out / "sitemap.xml").read_text()
@@ -210,7 +211,7 @@ def test_search_page(app_client):
 
 
 def test_home_and_submit_pages(app_client):
-    assert "The open library" in app_client.get("/").text
+    assert "Research papers you can check" in app_client.get("/").text
     r = app_client.get("/submit")
     assert r.status_code == 200 and 'src="/submit.js"' in r.text and "script-src 'self'" in r.headers[
         "content-security-policy"]

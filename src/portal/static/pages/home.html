@@ -1,10 +1,11 @@
 <section class="hero">
 <div class="hero-text">
-<h1>The open library of machine-readable entries</h1>
+<p class="hero-kicker">EntryLib, the open library of machine-readable entries</p>
+<h1>Research papers you can check claim by claim</h1>
 <p class="lead">EntryLib publishes research in a form that both people and AI can read and check. Instead of a long PDF,
-each paper is broken down into its findings, one by one. Every finding shows what it is based on (the data, the proof
-or the experiment) along with what it assumes and where it may not hold, so you can see quickly what a study really
-shows and how solid it is. A named researcher vouches for every entry, and it is free to read, search and publish.</p>
+each paper is broken down into its claims, one finding each. Every claim shows what it is based on (the data, the proof
+or the experiment) along with what it assumes and where it may not hold, so you can see quickly what a paper really
+shows and how solid it is. A named researcher vouches for every paper, and it is free to read, search and publish.</p>
 {search}
 </div>
 <aside class="start-here" aria-labelledby="start-here">
@@ -26,10 +27,12 @@ shows and how solid it is. A named researcher vouches for every entry, and it is
 </ol>
 </div>
 </div>
-<h3>{score_name}</h3>
-<p>{reliability}</p>
-<p><a href="/about#quality">How scores are given</a> · <a href="/how-to-judge">How to judge an entry</a></p>
 </aside>
+<div class="score-note">
+<h2>{score_name}</h2>
+<p>{reliability}</p>
+<p><a href="/about#quality">How scores are given</a> · <a href="/how-to-judge">How to judge a paper</a></p>
+</div>
 </section>
 <section class="paths">
 <div class="path">
@@ -47,8 +50,8 @@ assistants read your findings as you wrote them.</p>
 <div class="path">
 <h2>Read research claim by claim</h2>
 <p>Find papers by what they claim and open any claim with what it rests on. Agents start at
-<a href="/llms.txt">/llms.txt</a> or the MCP server at <code>entrylib.org/mcp</code>; every claimset is also JSON at the
+<a href="/llms.txt">/llms.txt</a> or the MCP server at <code>entrylib.org/mcp</code>; every paper is also JSON at the
 same address.</p>
-<p><a href="/read">Browse claimsets</a></p>
+<p><a href="/read">Browse papers</a></p>
 </div>
 </section>

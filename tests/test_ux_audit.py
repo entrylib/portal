@@ -61,7 +61,7 @@ def test_read_is_newest_first_and_search_counts():
     found = site.search_page("x", "claims", {"results": [{"paper": "entrylib:2026.000001", "claim": "C1",
                                                          "statement": "$a$", "version": 1}]})
     assert "1 claim</p>" in found and "<math" in found
-    assert 'href="/all">browse all claimsets</a>' in site.search_page("x", "papers", {"results": []})
+    assert 'href="/all">browse all papers</a>' in site.search_page("x", "papers", {"results": []})
 
 
 def test_not_found_is_a_page_for_people_and_json_for_programs(app_client):
@@ -173,3 +173,32 @@ def test_the_convert_page():
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy
     assert 'href="/convert"' in (Path(site.__file__).parent / "static" / "pages" / "home.html").read_text()
+
+
+# Round 5: vocabulary, headline, the rest of the audit
+
+def test_one_word_for_what_readers_see():
+    pages = Path(site.__file__).parent / "static" / "pages"
+    for name in ("about.html", "home.html", "how-to-judge.html", "removal.html", "privacy.html"):
+        text = (pages / name).read_text().replace("machine-readable entries", "")
+        words = re.findall(r"\b(?:entry|entries|study|studies)\b", text, flags=re.I)
+        assert not words, (name, words)                  # "entries" lives on only in the library's name
+    assert 'for v, label in (("claimsets", "Papers")' in Path(read.__file__).read_text()
+    home = (pages / "home.html").read_text()
+    assert "<h1>Research papers you can check claim by claim</h1>" in home and 'class="score-note"' in home
+
+
+def test_the_contents_count_evidence_and_arguments_apart():
+    doc = example()
+    doc["warrants"] = [{"id": "W1"}]
+    nav = site.contents([("evidence", "Evidence", 3), ("claims", "Claims", 4)], doc=doc)
+    assert '<span class="count">2 · 1 argument</span>' in nav and '<span class="count">4</span>' in nav
+    assert '<span class="count">3</span>' in site.contents([("evidence", "Evidence", 3)])
+
+
+def test_about_has_a_glossary_preservation_and_the_early_stage():
+    about = site.fixed_page("about", BASE)
+    assert 'id="glossary"' in about and "<dt>Argument (W1, W2…)</dt>" in about
+    assert "would not be lost" in about and "EntryLib is new." in about
+    assert 'href="/about#glossary"' in site.INTRO_STRIP
+    assert "examples/submission-native.json" in site.fixed_page("before-you-submit", BASE)
