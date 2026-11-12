@@ -72,10 +72,36 @@ def marker(scores):
 
 
 def legend():
-    """What the dots mean, in words on the page (hover does not reach touch screens or keyboards)."""
-    names = ", ".join(label.lower() for _, label in _groups())
-    return (f'<p class="dot-legend small">Dots, in order: {esc(names)}. Green: nothing lost; amber: some points; '
-            "red: many.</p>")
+    """What the dots' colours mean, with the dots themselves (hover does not reach touch screens or keyboards)."""
+    return ('<p class="dot-key small">' + " ".join(f'<span class="dot dot-{c}" aria-hidden="true"></span> {w}'
+                                                  for c, w in (("green", "nothing lost"), ("amber", "some"),
+                                                               ("red", "many"))) + "</p>")
+
+
+def dot_list(scores, cid=None):
+    """The five dots as a list, each beside its group's name and explained on hover: a claim's (cid), or the
+    paper's; the key below says what each colour means."""
+    item = scores["claims"][cid] if cid else scores["paper"]
+    costs = item.get("costs") or {p: scores["problems"][p]["cost"] for p in item["problems"]}
+    rows = []
+    for name, label in _groups():
+        mine = [p for p in item["problems"] if scores["problems"][p]["group"] == name and costs.get(p)]
+        lost = sum(costs[p] for p in mine)
+        colour = item["dots"][name]
+        title = (f"{label}: −{lost}. " + "; ".join(f"−{costs[p]} {text.readable(scores['problems'][p]['text'])}"
+                                                    for p in mine)) if mine else f"{label}: nothing lost"
+        rows.append(f'<li title="{esc(title)}"><span class="dot dot-{colour}" aria-hidden="true"></span>'
+                    f'{esc(label)}<span class="visually-hidden">: {DOT_WORDS[colour]}</span>'
+                    + (f' <span class="lost">−{lost}</span>' if lost else "") + "</li>")
+    return f'<ul class="dot-list small">{"".join(rows)}</ul>{legend()}'
+
+
+def score_block(score, band, popup, basis=""):
+    """The score as the panel shows it: the number, with how it was made beside it, and the caption under it."""
+    return (f'<div class="score-line band-{band}"><a class="score-num" href="#score" data-popup="{popup}" '
+            f'aria-label="{NAME} {score} of 100: what lowered it">{score}</a>'
+            f'<p class="small score-basis">{basis}<a href="#score" data-popup="{popup}">What lowered it</a></p></div>'
+            f'<p class="small caption">{CAPTION} <a href="/about#quality">How</a></p>')
 
 
 def panel_rows(scores, lights=None):
@@ -105,23 +131,20 @@ def panel_rows(scores, lights=None):
     rows = "".join(f'<li><span class="score-badge small band-{b}">{counts[b]}</span>{w.lower()}</li>'
                    for b, w in BANDS.items())
     return (f'<div class="panel-row score-row"><h2>{NAME}</h2>'
-            f'<p class="score-big band-{p["band"]}"><a href="#score" data-popup="score-paper">'
-            f'<span class="score-num">{p["score"]}</span> <span class="score-band">{BANDS[p["band"]]}</span></a></p>'
-            f'<p class="small caption">{CAPTION}</p>{dots(scores)}{legend()}'
-            f'<p class="small">{_basis(p)}. <a href="#score" data-popup="score-paper">What lowered it</a></p>'
-            f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
+            + score_block(p["score"], p["band"], "score-paper", _basis(p) + " · ") + dot_list(scores)
+            + f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
             + (f'<span class="small"> · {esc(check)}</span>' if check else "") + "</p></div>"
             f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
 
 
 def _basis(p):
-    """How the paper's score was made, with a link to the lowest principal claim (scores.paper_basis)."""
+    """How the paper's score was made, in a few words, with a link to the lowest principal claim
+    (scores.paper_basis)."""
     link = f'<a href="#{esc(p["lowest"])}">{esc(p["lowest"])}</a>'
     if "lowest_score" in p:
         n = len(p.get("principal") or [])
-        return (f"The mean of its {n} principal claim{'s' if n != 1 else ''}; the lowest is {link} at "
-                f"{esc(p['lowest_score'])}")
-    return f"The paper scores as its lowest principal claim, {link}"
+        return f"Mean of {n} principal claim{'s' if n != 1 else ''}; lowest {link} at {esc(p['lowest_score'])}"
+    return f"Its lowest principal claim, {link}"
 
 
 def _sentence(text):

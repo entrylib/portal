@@ -511,24 +511,42 @@ def ask_ai(doc, base_url, cid=None):
             f"the whole {what} instead</a></p></details></div>")
 
 
+#: How much of a competing-interests statement the panel shows before "more".
+INTERESTS_SHOWN = 90
+
+
 def _interests_row(doc):
     """Who did the work and why, beside the score (design §7.6): the competing interests and funding the authors
-    declare (claimset §3.1), as text. Shown, not scored: the rubric charges nothing for them."""
+    declare (claimset §3.1), shown, not scored. Only what is declared, in a line or two; a long statement opens
+    in full on request."""
     dec = (doc.get("paper") or {}).get("declarations")
     dec = dec if isinstance(dec, dict) else {}
     interests = dec.get("competing_interests")
-    interests = interests.strip() if isinstance(interests, str) and interests.strip() else "Not declared."
+    interests = " ".join(interests.split()) if isinstance(interests, str) and interests.strip() else ""
+    if interests.rstrip(".").lower() in ("none", "none declared", "no competing interests", "nothing to declare"):
+        interests = ""
     funding = dec.get("funding")
-    if isinstance(funding, list):
-        funders = [f"{f.get('funder')}" + (f" ({f.get('award')})" if f.get("award") else "")
-                   for f in funding if isinstance(f, dict) and f.get("funder")]
-        funded = "; ".join(funders) if funders else "None declared."
-    else:
-        funded = "Not declared."
-    return ('<div class="panel-row interests-row"><h2>Competing interests</h2>'
-            f'<p class="small">{esc(interests)}</p><p class="small">Funding: {esc(funded)}</p>'
-            '<p class="small muted">Declared by the authors: who did the work and why, for readers to weigh. Not part '
-            "of the score.</p></div>")
+    funders = [f"{f.get('funder')}" + (f" ({f.get('award')})" if f.get("award") else "")
+               for f in (funding if isinstance(funding, list) else []) if isinstance(f, dict) and f.get("funder")]
+    if not interests and not funders:
+        said = "None declared" if dec else "Not declared"
+        return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Interests</h2>'
+                f'<p class="small">{said}.</p></div>')
+    rows = []
+    if interests:
+        if len(interests) > INTERESTS_SHOWN:
+            cut = interests[:INTERESTS_SHOWN].rsplit(" ", 1)[0].rstrip(",;:")
+            rows.append(f'<details class="small interests"><summary>{esc(cut)}… <span class="more">more</span>'
+                        f'</summary><p>{esc(interests)}</p></details>')
+        else:
+            rows.append(f'<p class="small">{esc(interests)}</p>')
+    if funders:
+        rows.append(f'<p class="small">Funding: {esc("; ".join(funders))}</p>')
+    return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Interests</h2>{"".join(rows)}'
+            "</div>")
+
+
+INTERESTS_NOTE = "Competing interests and funding, as the authors declare them. Not part of the score."
 
 
 def _panel(doc, parts, base_url, key, scores=None):
@@ -833,12 +851,8 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
            esc(p.get("date"))]
     if item:
         reliability = (f'<div class="panel-row score-row"><h2>{score_html.NAME}</h2>'
-                       f'<p class="score-big band-{item["band"]}"><a href="#score" data-popup="score-{esc(cid)}">'
-                       f'<span class="score-num">{item["score"]}</span> <span class="score-band">'
-                       f'{score_html.BANDS[item["band"]]}</span></a></p>'
-                       f'<p class="small caption">{score_html.CAPTION}</p>{score_html.dots(scores, cid)}'
-                       f'{score_html.legend()}<p class="small"><a href="#score" data-popup="score-{esc(cid)}">What '
-                       'lowered it</a> · <a href="/about#quality">How scores are given</a></p></div>')
+                       + score_html.score_block(item["score"], item["band"], f"score-{esc(cid)}")
+                       + score_html.dot_list(scores, cid) + "</div>")
     else:
         reliability = (f'<div class="panel-row"><h2>{score_html.NAME}</h2><p class="score">–</p>'
                        f'<p class="small">{score_html.CAPTION} <a href="/about#quality">How scores are given</a>'

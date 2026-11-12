@@ -367,7 +367,7 @@ def test_reading_aids(env):
     assert 'Claude &lt;Code&gt; <span class="cs-label">· drafting</span>' in shown
     assert 'aria-label="Person"' in site.person({"type": "human", "name": "A. B"}, "author")
     home = (out / "index.html").read_text()
-    assert 'class="start-here"' in home and "<strong>Support (0–100)</strong> says how well" in home
+    assert 'class="start-here"' in home and "<strong>Support</strong> score, 0 to 100, says how well" in home
     assert "{reliability}" not in home and "{rubric}" not in home
     assert f'title="{site.esc(site.RELIABILITY)}"' in home
     site.write_fixed(out, BASE)
@@ -414,12 +414,18 @@ def test_competing_interests_beside_the_score():
     panel = page[page.index('<aside class="panel"'):]
     row = panel[panel.index('class="panel-row interests-row"'):]
     assert "The author develops &lt;b&gt;smooth&lt;/b&gt;, evaluated here." in row and "<b>smooth" not in row
-    assert "Funding: Example Council (EX-1)" in row and "Not part of the score." in row
+    assert "Funding: Example Council (EX-1)" in row and "Not part of the score." in row   # in the heading's title
     doc = example()
     doc["paper"].pop("declarations", None)
     row = _page(doc).split('class="panel-row interests-row"')[1]
-    assert "<p class=\"small\">Not declared.</p>" in row and "Funding: Not declared." in row
+    assert "<p class=\"small\">Not declared.</p>" in row and "Funding:" not in row     # only what is declared
     doc = example()
     doc["paper"]["declarations"] = {"competing_interests": "None declared.", "funding": []}
     row = _page(doc).split('class="panel-row interests-row"')[1]
-    assert "None declared." in row and "Funding: None declared." in row
+    assert "<p class=\"small\">None declared.</p>" in row and "Funding:" not in row
+    doc = example()
+    long = "The guarantor owns EntryLib, which develops the claimset tools, skills and rubric the study evaluates; " \
+           "the study was done to improve them."
+    doc["paper"]["declarations"] = {"competing_interests": long, "funding": []}
+    row = _page(doc).split('class="panel-row interests-row"')[1].split("</div>")[0]
+    assert '<details class="small interests"><summary>' in row and f"<p>{long}</p>" in row and "Funding" not in row
