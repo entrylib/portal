@@ -173,7 +173,7 @@ def test_a_summary_leads_the_card_and_the_description():
 
 def test_the_convert_page():
     page = site.fixed_page("convert", BASE)
-    assert 'id="convert-prompt"' in page and 'data-copy-url="/convert/message.txt"' in page and "page.js" in page
+    assert 'id="convert-prompt"' in page and 'data-copy="convert-prompt"' in page and "page.js" in page
     assert "claimset-from-paper" in page and "Only the paper's authors" in page
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy

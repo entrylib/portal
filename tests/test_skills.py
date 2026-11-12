@@ -32,8 +32,11 @@ def test_the_message_carries_the_skills(tmp_path):
     order = [msg.index(x) for x in ("Body of claimset-from-paper", "Body of claimset-submit", '"schema_version"')]
     assert order == sorted(order)
     assert "name: claimset-submit" not in msg                       # front matter left out
-    assert skills.shown(BASE, cat).endswith(skills.FOLLOWS)
-    assert "Body of" not in skills.shown(BASE, cat)
+    shown = skills.shown(BASE, cat)
+    assert "Body of" not in shown and len(shown) < 3000                 # short: it copies in every browser
+    assert "call its guide tool with name claimset-from-paper" in shown
+    assert f"{BASE}/skills/claimset-from-paper.md and {BASE}/skills/claimset-submit.md" in shown
+    assert "pip install claimset" in shown and "do not write a claimset from memory" in shown
 
 
 def test_without_the_from_paper_skill_the_request_names_where_to_read(tmp_path):
@@ -43,7 +46,7 @@ def test_without_the_from_paper_skill_the_request_names_where_to_read(tmp_path):
     assert skills.RAW.format(name="claimset-from-paper") in msg
     assert f"{BASE}/skills/claimset-submit.md" in msg and "Body of" not in msg
     assert "if you cannot read them, say so and stop" in msg
-    assert not skills.shown(BASE, cat).endswith(skills.FOLLOWS)
+    assert skills.RAW.format(name="claimset-from-paper") in skills.shown(BASE, cat)
 
 
 def test_pages_texts_and_guide(tmp_path):
@@ -89,7 +92,8 @@ def test_the_site_publishes_the_installed_skills(env):
     assert (out / "convert" / "message.txt").read_text() == skills.message(
         BASE, cat, (skills.examples_dir() / skills.EXAMPLE).read_text(encoding="utf-8"))
     convert = (out / "convert.html").read_text()
-    assert "Do not write it from memory" in convert and 'data-copy-url="/convert/message.txt"' in convert
+    assert "do not write a claimset from memory" in convert and 'data-copy="convert-prompt"' in convert
+    assert '<a href="/convert/message.txt"\ndownload="entrylib-convert-message.txt">' in convert
     assert "/skills/claimset-submit</loc>" in site.sitemap([], BASE)
     caddy = (Path(__file__).resolve().parent.parent / "deploy" / "Caddyfile").read_text()
     assert " /skills /skills/* " in caddy and " /convert/message.txt " in caddy and "/skills/*.md" in caddy
