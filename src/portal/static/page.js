@@ -242,11 +242,12 @@ window.entrylibOpen = (function () {
     var whose = el.id === "score-paper" ? "the paper's score" : "the score of claim " + el.id.slice(6);
     var text = "EntryLib scores " + paper + " (" + url + ") by its public rubric " +
       "(https://github.com/entrylib/rubric/blob/main/RUBRIC.md). The issues below lower " + whose + ", each with " +
-      "the points it costs and what would remove it. For each, make that change in the claimset, following the " +
-      "specification and the skills (" + location.origin + "/skills/) and the paper, never from memory; if the " +
-      "paper does not have what an issue asks for, tell me in one line instead of inventing it. Change nothing " +
-      "else, and give me the whole corrected claimset, to submit as a new version of " + paper.split("@")[0] +
-      " (its paper.id).\n\n" +
+      "the points it costs and what would remove it. For each issue, suggest how to fix it: what to change or add " +
+      "in the claimset, and where, following the specification and the skills (" + location.origin + "/skills/) " +
+      "and the paper, never from memory. If the paper does not have what an issue asks for, say so instead of " +
+      "inventing it, and say which issues are not worth fixing, and why. Do not rewrite the claimset yet: give me " +
+      "your suggestions, one per issue, and wait for me to decide which to make in a new version of " +
+      paper.split("@")[0] + ".\n\n" +
       Array.prototype.map.call(items, function (li) {
         return "- " + plain(li).replace(/\s+/g, " ").trim();
       }).join("\n") + "\n";

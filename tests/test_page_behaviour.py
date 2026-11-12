@@ -72,6 +72,8 @@ def test_the_score_popups_copy_their_issues_for_the_agent():
     script = (STATIC / "page.js").read_text(encoding="utf-8")
     assert "Copy the issues for your agent" in script and ".problems > li" in script
     assert 'annotation[encoding="application/x-tex"]' in script and "never from memory" in script
+    assert "suggest how to fix it" in script and "Do not rewrite the claimset yet" in script
+    assert "give me the whole corrected claimset" not in script                 # the authors decide what changes
     doc = json.loads((Path(__file__).parent / "data" / "2026.000003.json").read_text(encoding="utf-8"))
     listing = [{"version": n, "published_at": f"2026-11-1{n}T10:00:00Z"} for n in (1, 2, 3)]
     page = site.claimset_page(doc, base_url="https://entrylib.test", listing=listing, current=3,
