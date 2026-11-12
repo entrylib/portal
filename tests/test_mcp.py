@@ -9,7 +9,8 @@ from portal import fetch, mcp_server
 
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
            "MCP-Protocol-Version": "2025-06-18"}
-TOOLS = {"search_claims", "search_papers", "get_paper", "get_claim", "validate", "score", "submit", "submission_status"}
+TOOLS = {"search_claims", "search_papers", "get_paper", "get_claim", "upload_url", "validate", "score", "submit",
+         "submission_status"}
 
 
 def rpc(c, method, params=None):
@@ -87,7 +88,7 @@ def test_submit_and_status(app_client):
     assert data(app_client, "submit", claimset=titled(1))["consent"]          # as an object
     for args in ({}, {"claimset": "{}", "package_url": "https://e.org/p.zip"}):
         err, text = call(app_client, "submit", **args)
-        assert err and "either" in text
+        assert err and "give one of" in text
     bad = example()
     del bad["paper"]["title"]
     refused = data(app_client, "submit", claimset=json.dumps(bad))

@@ -1242,13 +1242,25 @@ def _pending(items):
             f"<p>Principal claims:</p><ul>{principal}</ul>"
             f"<details><summary>The whole claimset, as models will read it</summary><pre>"
             f"{esc(it.get('reading_view'))}</pre></details>"
-            f'<form method="post" action="/confirm" class="actions">{ticket}'
-            '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>'
-            '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
+            + (_attach_form(it, ticket) if it.get("waiting_package") else
+               f'<form method="post" action="/confirm" class="actions">{ticket}'
+               '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>')
+            + '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
             "submission and its file are deleted. To publish it later, submit it again.</p>"
             f'<form method="post" action="/confirm">{ticket}<button type="submit" class="button-quiet" '
             'name="action" value="cancel">Cancel it</button></form></details></section>')
     return "".join(rows)
+
+
+def _attach_form(it, ticket):
+    """For a submission waiting for its package (design §4.4): attach it and confirm, in one step."""
+    files = "".join(f"<li><code>{esc(f)}</code></li>" for f in it.get("package_files") or [])
+    return ('<p><strong>Attach the package to confirm.</strong> The agent sent the claimset without the files it '
+            "names; attach the package it made (the <code>.zip</code> file that <code>claimset package</code> builds), "
+            f"which holds the claimset and:</p><ul>{files}</ul>"
+            f'<form method="post" action="/confirm/package" enctype="multipart/form-data" class="actions">{ticket}'
+            '<input type="file" name="package" accept=".zip,application/zip" required> '
+            '<button type="submit">Attach and confirm</button></form>')
 
 
 def confirm_list(items, orcid, name=None):

@@ -20,7 +20,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claimset.validate import standalone_problems, validate_path
+from claimset.validate import is_relative_uri, standalone_problems, validate_path
 
 from . import limits
 from .indexer import title_key
@@ -66,8 +66,16 @@ def _items(rows):
     return [{"rule": e["rule"], "where": e["where"], "message": e["message"]} for e in rows]
 
 
-def check(path):
-    """The synchronous checks of a submission at `path` (a package zip or folder, or a claimset file)."""
+#: How EntryLib takes a package (design §4.4), told with rule 70: the claimset says only that it needs one.
+ROUTES = ("EntryLib takes the package as the request body (POST /api/submissions, or `claimset submit`), from a URL "
+          "(package_url), or through MCP: an upload_url address, or package_with_consent for the guarantor to attach "
+          "it on the consent page")
+
+
+def check(path, alone=True):
+    """The synchronous checks of a submission at `path` (a package zip or folder, or a claimset file). `alone=False`
+    leaves out rule 70 for a claimset file sent without its package, whose package comes with the guarantor's consent
+    (design §4.4)."""
     try:
         rep = validate_path(str(path))
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
@@ -76,9 +84,10 @@ def check(path):
         return Check([{"rule": "read", "where": "", "message": "cannot read the submission: not a claimset file "
                                                                "(JSON) or a package (BagIt zip)"}], [])
     errors, warnings = _items(rep.errors), _items(rep.warnings)
-    if Path(path).is_file() and not zipfile.is_zipfile(path):     # the claimset alone: it carries no files (rule 70)
+    if alone and Path(path).is_file() and not zipfile.is_zipfile(path):   # alone, it carries no files (rule 70)
         try:
-            errors += _items(standalone_problems(json.loads(Path(path).read_text(encoding="utf-8"))))
+            errors += [dict(e, message=f"{e['message']}. {ROUTES}")
+                       for e in _items(standalone_problems(json.loads(Path(path).read_text(encoding="utf-8"))))]
         except (OSError, ValueError):
             pass
     doc = None
@@ -134,12 +143,15 @@ def _sha256(path):
     return h.hexdigest()
 
 
-def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None, new_paper=False):
+def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None, new_paper=False,
+            package_with_consent=False):
     """Check an uploaded file and keep it as a pending submission. Returns the submission's description, with the
     consent links (each shown once: only their hashes are stored). Raises SubmissionError if it is refused.
 
     A new claimset that looks like one its guarantor already has (duplicate) is refused unless `new_paper` says it
-    is a different paper with the same title."""
+    is a different paper with the same title. With `package_with_consent`, a claimset file whose artefacts name files
+    by relative path is kept waiting for its package, which the guarantor attaches on the consent page (design §4.4);
+    without it, such a file is refused (rule 70)."""
     now = now or dt.datetime.now(dt.UTC)
     upload = Path(upload)
     if client_ip is not None:
@@ -148,7 +160,8 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
         if n >= MAX_PENDING_PER_IP:
             raise SubmissionError(f"this address already has {n} submissions waiting for consent; wait until they "
                                   f"are confirmed or expire", status=429)
-    result = check(upload)
+    alone = Path(upload).is_file() and not zipfile.is_zipfile(upload)
+    result = check(upload, alone=not (package_with_consent and alone))
     if not result.ok:
         raise SubmissionError(f"the submission is not valid: {len(result.errors)} error(s)", errors=result.errors,
                               warnings=result.warnings)
@@ -183,6 +196,7 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
                                   f"paper with the same title, submit it again with new_paper=true", status=409,
                                   warnings=result.warnings)
 
+    waiting = bool(package_with_consent and alone and standalone_problems(doc))
     sub_id = new_id()
     suffix = ".zip" if zipfile.is_zipfile(upload) else ".json"
     stored = Path(submissions_dir) / f"{sub_id}{suffix}"
@@ -193,27 +207,37 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
     with conn.transaction():
         conn.execute(
             "INSERT INTO submissions (id, received, expires, state, kind, target, title, title_key, new_paper,"
-            " file_name, sha256, size, report, client_ip)"
-            " VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            " file_name, sha256, size, report, client_ip, waiting_package)"
+            " VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (sub_id, now, expires, kind, target, paper.get("title"), title_key(paper.get("title")),
              bool(new_paper), stored.name, _sha256(stored), stored.stat().st_size, json.dumps(result.as_json()),
-             client_ip))
+             client_ip, waiting))
         for orcid, name in people:
             token = secrets.token_urlsafe(24)
             conn.execute("INSERT INTO submission_guarantors (submission_id, orcid, name, token_hash)"
                          " VALUES (%s, %s, %s, %s)", (sub_id, orcid, name, token_hash(token)))
             links.append({"orcid": orcid, "name": name, "consent_url": f"{base_url}/consent/{token}"})
-    return {**status(conn, sub_id, base_url), "consent": links, "report": result.as_json()}
+    out = {**status(conn, sub_id, base_url), "consent": links, "report": result.as_json()}
+    if waiting:
+        out["package"] = ("The guarantor attaches the package (the zip `claimset package` builds, holding "
+                          f"{', '.join(packaged_files(doc))}) on the consent page, then confirms: give them the zip "
+                          "with the consent link.")
+    return out
+
+
+def packaged_files(doc):
+    """The files a claimset's artefacts name by relative path: what its package holds besides it."""
+    return [a["uri"] for a in doc.get("artefacts") or [] if isinstance(a, dict) and is_relative_uri(a.get("uri"))]
 
 
 def status(conn, sub_id, base_url, registry_repo=None):
     """What may be told about a submission to whoever holds its ID: its state, never its content. While it is
     `publishing`, the registry pull request where its checks run (public)."""
-    row = conn.execute("SELECT id, received, expires, state, kind, target, published_id, detail, registry_pr"
-                       " FROM submissions WHERE id = %s", (sub_id,)).fetchone()
+    row = conn.execute("SELECT id, received, expires, state, kind, target, published_id, detail, registry_pr,"
+                       " waiting_package FROM submissions WHERE id = %s", (sub_id,)).fetchone()
     if row is None:
         return None
-    sid, received, expires, state, kind, target, published, detail, pr = row
+    sid, received, expires, state, kind, target, published, detail, pr, waiting = row
     people = conn.execute("SELECT orcid, confirmed IS NOT NULL FROM submission_guarantors WHERE submission_id = %s"
                           " ORDER BY orcid", (sid,)).fetchall()
     out = {"id": sid, "state": state, "kind": kind, "received": received.isoformat(), "expires": expires.isoformat(),
@@ -221,6 +245,8 @@ def status(conn, sub_id, base_url, registry_repo=None):
            "guarantors": [{"orcid": o, "confirmed": c} for o, c in people]}
     if state == "pending":                                  # the guarantor can confirm without the consent link
         out["confirm_url"] = f"{base_url}/confirm"
+        if waiting:                                         # design §4.4: attached with the guarantor's consent
+            out["waiting_for"] = "package"
     if target:
         out["corrects"] = target
     if published:

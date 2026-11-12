@@ -62,7 +62,7 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 ## MCP
 
 - {base}/mcp: an MCP server (Streamable HTTP, no sign-in) with the tools search_claims, search_papers, get_paper,
-  get_claim, validate, score, submit and submission_status. It does what this file describes.
+  get_claim, upload_url, validate, score, submit and submission_status. It does what this file describes.
 
 ## Submit
 
@@ -79,9 +79,13 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   the request body): submits it. A claimset whose files are deposited elsewhere (Zenodo, GitHub) is submitted as the
   JSON alone, its artefacts' `uri` being their https URLs. A claimset whose artefacts name files by a relative path
   (`files/results.csv`) is submitted as its package: alone it carries no files, and it is refused (rule 70).
-- The MCP tool submit (and validate, score) takes the claimset with the contents of the files its artefacts name, in
-  `files` (`{"path": "files/results.csv", "text": "..."}`, or "base64" for a file that is not text), and builds the
-  package from them: the route for an agent that cannot send a file or reach a public URL. Copy each file exactly.
+- An agent that reaches EntryLib through MCP sends a package outside the tool call, never in it (base64 is not
+  accepted): the MCP tool upload_url gives a one-time address; send the zip there with one request (`curl --fail -T
+  paper.zip <url>`), then call validate, score or submit with its upload_id. An agent that cannot send a request
+  submits the claimset with package_with_consent (or POST {base}/api/submissions?package_with_consent=true): the
+  guarantor attaches the zip on the consent page, which checks that it holds the claimset, and then confirms. A few
+  small text files may instead go with the claimset in the MCP tools' `files` ({"path": "files/results.csv", "text":
+  "..."}).
 - {base}/api/submissions/from-url (POST `{"url": "https://..."}`), or the MCP tool submit with package_url: submits a
   package or a claimset file deposited at a public https URL, for a file too large to send directly or an agent that
   cannot send a file (a package committed to a public repository, at its commit's raw address, or on Zenodo).
