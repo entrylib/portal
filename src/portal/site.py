@@ -798,7 +798,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{body}'
-            f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
+            f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
+            f'{_versions(listing, key, n)}</article></div>')
     description = _lead_text(doc)
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
             f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">'

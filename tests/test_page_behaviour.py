@@ -61,3 +61,20 @@ def test_consent_pages_are_in_the_sites_shell():
         assert '<header class="site-header">' in html_ and '<footer class="site-footer">' in html_
         assert 'href="/site.css' in html_ and "<style>" not in html_
         assert '<meta name="robots" content="noindex">' in html_
+
+
+def test_the_score_popups_copy_their_issues_for_the_agent():
+    """"Why 91?" and a claim's score: the pop-up copies the issues it lists, with what the agent is to do, naming the
+    version and where it is; a formula goes as its source, $…$, not as its symbols followed by its source."""
+    import json
+
+    from portal import scores
+    script = (STATIC / "page.js").read_text(encoding="utf-8")
+    assert "Copy the issues for your agent" in script and ".problems > li" in script
+    assert 'annotation[encoding="application/x-tex"]' in script and "never from memory" in script
+    doc = json.loads((Path(__file__).parent / "data" / "2026.000003.json").read_text(encoding="utf-8"))
+    listing = [{"version": n, "published_at": f"2026-11-1{n}T10:00:00Z"} for n in (1, 2, 3)]
+    page = site.claimset_page(doc, base_url="https://entrylib.test", listing=listing, current=3,
+                              scores=scores.compute(None, doc))
+    assert ('<section class="cs-section score-section" id="score" data-paper="entrylib:2026.000003@v3" '
+            'data-url="https://entrylib.test/p/2026.000003@v3">') in page

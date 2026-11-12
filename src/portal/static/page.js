@@ -219,6 +219,50 @@ window.entrylibOpen = (function () {
     if (row) el = row.closest(".cs-item") || row;
     return { el: el, row: row };
   }
+  // A score's explanation ("Why 91?", a claim's score): a button that copies the issues it lists, with what the
+  // authors' agent is to do with them, as one block to paste. The text is on the page, so the copy happens within the
+  // click.
+  // An element's text with each formula as its source, $…$ (MathML's text would give the symbols and then the source).
+  function plain(el) {
+    var copy = el.cloneNode(true);
+    copy.querySelectorAll("math").forEach(function (m) {
+      var tex = m.querySelector('annotation[encoding="application/x-tex"]');
+      m.replaceWith(tex ? "$" + tex.textContent.trim() + "$" : m.textContent);
+    });
+    return copy.textContent;
+  }
+  function issuesCopy(el) {
+    if (!navigator.clipboard || !/^score-/.test(el.id)) return null;
+    var items = el.querySelectorAll(".problems > li");
+    if (!items.length) return null;
+    var section = el.closest("section") || {};
+    var data = section.dataset || {};
+    var paper = data.paper || document.title.split(" · ")[0];
+    var url = data.url || location.href.split("#")[0];
+    var whose = el.id === "score-paper" ? "the paper's score" : "the score of claim " + el.id.slice(6);
+    var text = "EntryLib scores " + paper + " (" + url + ") by its public rubric " +
+      "(https://github.com/entrylib/rubric/blob/main/RUBRIC.md). The issues below lower " + whose + ", each with " +
+      "the points it costs and what would remove it. For each, make that change in the claimset, following the " +
+      "specification and the skills (" + location.origin + "/skills/) and the paper, never from memory; if the " +
+      "paper does not have what an issue asks for, tell me in one line instead of inventing it. Change nothing " +
+      "else, and give me the whole corrected claimset, to submit as a new version of " + paper.split("@")[0] +
+      " (its paper.id).\n\n" +
+      Array.prototype.map.call(items, function (li) {
+        return "- " + plain(li).replace(/\s+/g, " ").trim();
+      }).join("\n") + "\n";
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "button-quiet";
+    var label = "Copy the issues for your agent";
+    b.textContent = label;
+    b.addEventListener("click", function () {
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = "Copied";
+        setTimeout(function () { b.textContent = label; }, 4000);
+      });
+    });
+    return b;
+  }
   function show(id, again) {
     var t = target(id);
     if (!t) return false;
@@ -250,6 +294,8 @@ window.entrylibOpen = (function () {
       at.classList.add("flash");
     });
     foot.appendChild(inPage);
+    var issues = issuesCopy(t.el);
+    if (issues) foot.appendChild(issues);
     var own = t.el.querySelector("a.claim-page");
     if (own) {
       var a = document.createElement("a");
