@@ -41,7 +41,7 @@ def test_listings_and_feed(env):
     out = ctx["published_dir"]
     home = (out / "index.html").read_text()
     assert "Research papers you can check claim by claim" in home and f'href="/p/{KEY}"' in home
-    assert "open library of machine-readable entries" in home
+    assert "an open library of research papers written for people and AI" in home
     assert 'action="/read"' in home and "Recently published" in home
     assert f'href="/p/{KEY}"' in (out / "all.html").read_text()
     sitemap = (out / "sitemap.xml").read_text()
@@ -318,10 +318,12 @@ def test_reading_page_for_assistants(env):
 
 def test_a_correction_notice_is_folded():
     p = {"status": "corrected", "status_notice": {"date": "2026-11-10", "reason_code": "correction",
-                                                   "statement": "A typo <fixed>.", "issued_by": "platform"}}
+                                                   "statement": "A typo <fixed>.", "issued_by": "platform"},
+         "changes": [{"op": "replace", "path": "/claims/3/statement", "value": "…"}]}
     box = site._notice(p)
     assert box.startswith('<details class="notice notice-neutral">'
                           '<summary><strong>Corrected</strong> · 2026-11-10</summary>')
+    assert '<span class="status status-neutral">corrected</span>' == site._status(p)
     assert "A typo &lt;fixed&gt;." in box and "platform" not in box
     who = "A. B (ORCID 0000-0000-0000-0001)"
     named = site._notice({**p, "status_notice": {**p["status_notice"], "issued_by": who}})
@@ -367,7 +369,7 @@ def test_reading_aids(env):
     assert 'Claude &lt;Code&gt; <span class="cs-label">· drafting</span>' in shown
     assert 'aria-label="Person"' in site.person({"type": "human", "name": "A. B"}, "author")
     home = (out / "index.html").read_text()
-    assert 'class="start-here"' in home and "<strong>Support</strong> score, 0 to 100, says how well" in home
+    assert 'class="start-here"' in home and "<strong>Support</strong> score from 0 to 100" in home
     assert "{reliability}" not in home and "{rubric}" not in home
     assert f'title="{site.esc(site.RELIABILITY)}"' in home
     site.write_fixed(out, BASE)

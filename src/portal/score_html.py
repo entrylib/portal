@@ -25,26 +25,61 @@ def esc(x):
     return html.escape("" if x is None else str(x), quote=True)
 
 
+#: The site's names of the rubric's groups where they differ from the rubric's. Its group "support" is the strength
+#: of what a claim rests on; on the site "Support" is the score's own name, so the part is "Evidence".
+GROUP_LABELS = {"support": "Evidence"}
+
+
 def _groups():
-    return [(g["name"], g["label"]) for g in sc.rubric.RUBRIC["groups"]] if sc.rubric else []
+    return [(g["name"], GROUP_LABELS.get(g["name"], g["label"])) for g in sc.rubric.RUBRIC["groups"]] \
+        if sc.rubric else []
 
 
-def dots(scores, cid=None):
-    """Five dots, one per group, each explained on hover: a claim's (cid), or the paper's."""
+def _parts(scores, cid=None):
+    """[(group, label, colour, points lost, title)] for a claim's five parts, or the paper's. A claim's parts are its
+    own losses. The paper's are the average loss of its principal claims in each part, rounded, coloured by the
+    rubric's thresholds for a claim, so that they read as a claim's do (the paper's score is their mean)."""
     item = scores["claims"][cid] if cid else scores["paper"]
     costs = item.get("costs") or {p: scores["problems"][p]["cost"] for p in item["problems"]}
+    principal = [c for c in (item.get("principal") or []) if c in scores["claims"]] if not cid else []
+    limits = (sc.rubric.RUBRIC.get("dots") or {}) if sc.rubric else {}
     out = []
     for name, label in _groups():
         mine = [p for p in item["problems"] if scores["problems"][p]["group"] == name and costs.get(p)]
-        if mine:
-            why = "; ".join(f"−{costs[p]} {text.readable(scores['problems'][p]['text'])}" for p in mine)
-            title = f"{label}: −{sum(costs[p] for p in mine)}. {why}"
+        texts = [text.readable(scores["problems"][p]["text"]) for p in mine]
+        if principal:
+            total = sum(c_cost for c in principal for p, c_cost in scores["claims"][c]["costs"].items()
+                        if scores["problems"][p]["group"] == name)
+            mean = total / len(principal)
+            lost = int(mean + 0.5)
+            colour = ("green" if mean <= limits.get("green_max", 2) else
+                      "amber" if mean <= limits.get("amber_max", 10) else "red")
+            title = (f"{label}: " + (f"about −{lost} per principal claim" if lost else
+                                     "under one point per principal claim" if mean else "nothing lost")
+                     + (". " + "; ".join(texts) if texts else ""))
         else:
-            title = f"{label}: nothing lost"
-        colour = item["dots"][name]
-        out.append(f'<span class="dot dot-{colour}" title="{esc(title)}"></span>')
-    words = ", ".join(f"{label} {DOT_WORDS[item['dots'][name]]}" for name, label in _groups())
-    return f'<span class="dots" role="img" aria-label="{esc(words)}">{"".join(out)}</span>'
+            lost = sum(costs[p] for p in mine)
+            colour = item["dots"][name]
+            each = "; ".join(f"−{costs[p]} {t}" for p, t in zip(mine, texts, strict=True))
+            title = f"{label}: −{lost}. {each}" if mine else f"{label}: nothing lost"
+        out.append((name, label, colour, lost, title))
+    return out
+
+
+def dots(scores, cid=None, href=None):
+    """Five dots, one per part, each explained on hover: a claim's (cid), or the paper's. A claim's dots are a link
+    to its score's breakdown (`href`, by default the Score section on its page, opened as a pop-up there; False for
+    none), named for a screen reader with each part and its loss, so they work by touch and keyboard too."""
+    parts = _parts(scores, cid)
+    spans = "".join(f'<span class="dot dot-{colour}" title="{esc(title)}"></span>'
+                    for _n, _l, colour, _lost, title in parts)
+    if cid and href is not False:
+        said = "; ".join(f"{label}, " + (f"−{lost}" if lost else DOT_WORDS[colour]) for _n, label, colour, lost, _t
+                         in parts)
+        return (f'<a class="dots" href="{esc(href or "#score-" + cid)}" data-popup="score-{esc(cid)}" '
+                f'aria-label="{esc(f"{cid}, parts of the score: {said}. Show the breakdown.")}">{spans}</a>')
+    words = ", ".join(f"{label} {DOT_WORDS[colour]}" for _n, label, colour, _lost, _t in parts)
+    return f'<span class="dots" role="img" aria-label="{esc(words)}">{spans}</span>'
 
 
 def badge(scores, cid, small=False):
@@ -72,20 +107,13 @@ def marker(scores):
 
 
 def dot_list(scores, cid=None):
-    """The five dots as a list, each beside its group's name and explained on hover: a claim's (cid), or the
-    paper's. Each dot's colour and the points beside it say what it lost; no key is needed."""
-    item = scores["claims"][cid] if cid else scores["paper"]
-    costs = item.get("costs") or {p: scores["problems"][p]["cost"] for p in item["problems"]}
+    """The five parts as a list, each dot beside its part's name and the points it lost, explained on hover: a
+    claim's (cid), or the paper's (the average of its principal claims, _parts). No key is needed."""
     rows = []
-    for name, label in _groups():
-        mine = [p for p in item["problems"] if scores["problems"][p]["group"] == name and costs.get(p)]
-        lost = sum(costs[p] for p in mine)
-        colour = item["dots"][name]
-        title = (f"{label}: −{lost}. " + "; ".join(f"−{costs[p]} {text.readable(scores['problems'][p]['text'])}"
-                                                    for p in mine)) if mine else f"{label}: nothing lost"
+    for _name, label, colour, lost, title in _parts(scores, cid):
         rows.append(f'<li title="{esc(title)}"><span class="dot dot-{colour}" aria-hidden="true"></span>'
-                    f'{esc(label)}<span class="visually-hidden">: {DOT_WORDS[colour]}</span>'
-                    + (f' <span class="lost">−{lost}</span>' if lost else "") + "</li>")
+                    f'{esc(label)}' + (f' <span class="lost">−{lost}</span>' if lost else
+                                       '<span class="visually-hidden">: nothing lost</span>') + "</li>")
     return f'<ul class="dot-list small">{"".join(rows)}</ul>'
 
 
@@ -182,7 +210,7 @@ def _claim_explain(scores, cid):
     n = sc.label(scores["novelty"].get(cid))
     return (f'<div class="score-explain score-claim" id="score-{esc(cid)}"><h4><a href="#{esc(cid)}">'
             f'{esc(cid)}</a>: <span class="band-{c["band"]}">{c["score"]}, {BANDS[c["band"]]}</span> '
-            f'{dots(scores, cid)}</h4>'
+            f'{dots(scores, cid, href=False)}</h4>'
             + (f'<p class="small">Novelty: {esc(n)}</p>' if n else "")
             + (f'<ol class="problems">{problems}</ol>' if problems else '<p class="small">Nothing lost.</p>')
             + "</div>")

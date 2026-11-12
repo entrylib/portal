@@ -27,6 +27,7 @@ from . import (
     areas,
     consent,
     fetch,
+    history,
     mcp_server,
     notices,
     pages,
@@ -223,7 +224,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 rows = conn.execute("SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                                     " AND v.version = p.current_version ORDER BY p.first_published DESC,"
                                     " p.concept_id DESC LIMIT %s", (site.RECENT,)).fetchall()
-            return HTMLResponse(site.home([r[0] for r in rows], settings.base_url),
+                corrected = history.corrected_concepts(conn)
+            return HTMLResponse(site.home([r[0] for r in rows], settings.base_url, corrected),
                                 headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/search", include_in_schema=False)
@@ -238,7 +240,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
     def _search(q, view, offset):
         """The Read page with a query: the search API's results, rendered here, without scripts."""
-        results, files, error = None, {}, None
+        results, files, error, corrected = None, {}, None, None
         try:
             with pool.connection() as conn:
                 if view == "claims":
@@ -249,9 +251,11 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                     files = dict(conn.execute(
                         "SELECT p.concept_id, v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                         " AND v.version = p.current_version WHERE p.concept_id = ANY(%s)", (ids_,)).fetchall())
+                    corrected = history.corrected_concepts(conn)
         except search.SearchError as exc:
             error = str(exc)
-        page = site.search_page(q, view, results, error=error, offset=offset, limit=site.SEARCH_PAGE, files=files)
+        page = site.search_page(q, view, results, error=error, offset=offset, limit=site.SEARCH_PAGE, files=files,
+                                corrected=corrected)
         return HTMLResponse(page, status_code=400 if error else 200, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/read", response_class=HTMLResponse, include_in_schema=False)
@@ -280,7 +284,9 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             docs = [r[0] for r in conn.execute(
                 "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                 " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
-        return HTMLResponse(read.page(docs, q, settings.base_url), headers={"Content-Security-Policy": PAGE_CSP})
+            corrected = history.corrected_concepts(conn)
+        return HTMLResponse(read.page(docs, q, settings.base_url, corrected),
+                            headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():
@@ -483,11 +489,12 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                 " AND v.version = p.current_version WHERE %s = ANY(p.guarantors)"
                 " ORDER BY p.first_published DESC, p.concept_id DESC", (who,)).fetchall()
+            corrected = history.corrected_concepts(conn)
         docs = [r[0] for r in rows]
         if not docs:
             return HTMLResponse(site.message_page("Not found", "No claimset on EntryLib names this ORCID iD as its "
                                                   "guarantor."), status_code=404)
-        return HTMLResponse(site.person_page(who, docs, settings.base_url))
+        return HTMLResponse(site.person_page(who, docs, settings.base_url, corrected))
 
     @app.post("/confirm", response_class=HTMLResponse, include_in_schema=False)
     async def confirm_ticket(request: Request):

@@ -130,6 +130,8 @@ def _link_name(uri, limit=40):
     host = re.sub(r"^https?://", "", path).split("/")[0]
     tail = path.rsplit("/", 1)[-1] if "/" in re.sub(r"^https?://", "", path) else ""
     name = tail or host or str(uri)
+    if re.fullmatch(r"[0-9a-f]{40}", name) and re.search(r"/(tree|commit)/[0-9a-f]{40}$", path):
+        name = f"repository at {name[:7]}"           # a repository at a commit: its hash says nothing to a reader
     return name if len(name) <= limit else name[:limit - 1] + "…"
 
 
@@ -829,7 +831,7 @@ def _evidence(P, e, source_link):
     if steps:
         out.append('<ol class="cs-steps">' + "".join(
             f'<li id="{esc(e["id"])}.{esc(s.get("id", ""))}">{P.text(s.get("statement", ""))}'
-            f' <span class="cs-tail">({esc(s.get("rule", ""))}'
+            f' <span class="cs-tail">({P.text(s.get("rule", ""))}'
             f'{"; from " + P.ids(s["by"]) if s.get("by") else ""})</span></li>' for s in steps) + "</ol>")
     for x in e.get("records") or []:
         if isinstance(x, dict):
@@ -965,8 +967,8 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         src = P.image_src(a)
         uri = a.get("uri")                               # the description is read; the link is its file or site
         target = src or (uri if _href(uri) and desc != uri else None)
-        name = (f'{esc(desc)} <a class="cs-open" href="{esc(target)}">{esc(_link_name(target))}</a>' if target
-                else _link(uri) if _href(uri) else esc(desc))
+        name = (f'{P.text(desc)} <a class="cs-open" href="{esc(target)}">{esc(_link_name(target))}</a>' if target
+                else _link(uri) if _href(uri) and desc == uri else P.text(desc))
         bits = [esc(x) for x in (a.get("kind"), a.get("function")) if x]
         if a.get("reference"):
             bits.append(P.ref(a["reference"]))
