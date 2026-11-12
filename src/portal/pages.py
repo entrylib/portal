@@ -21,15 +21,28 @@ def page(title, body):
             f"<style>{STYLE}</style></head><body><h1>{escape(title)}</h1>{body}</body></html>")
 
 
-def message(title, text, status_url=None):
+def message(title, text, status_url=None, back=None):
     link = f"<p class=\"muted\">Status: <a href=\"{escape(status_url)}\">{escape(status_url)}</a></p>" \
         if status_url else ""
+    if back:                                                # (url, label): where to go next
+        link += f'<p><a href="{escape(back[0])}">{escape(back[1])}</a></p>'
     paragraphs = "".join(f"<p>{escape(t)}</p>" for t in str(text).split("\n\n") if t.strip())   # blank lines part them
     return page(title, f"{paragraphs}{link}")
 
 
-def consent(ctx, start_url, status_url):
-    """The page a guarantor opens from their consent link."""
+def outcome_text(outcome):
+    """An outcome's message as a sentence, with the errors of a package that is not valid, as text."""
+    text = outcome.message[:1].upper() + outcome.message[1:]
+    text = text if text.endswith(".") else text + "."
+    if outcome.errors:
+        text += " " + " ".join(f"Rule {e.get('rule')} at {e.get('where') or 'the file'}: {e.get('message')}."
+                               for e in outcome.errors[:10])
+    return text
+
+
+def consent(ctx, start_url, status_url, attach_url=None, attached=False):
+    """The page a guarantor opens from their consent link. A submission waiting for its package (design §4.4) asks
+    for it first: the Confirm button comes once it is attached."""
     state = ctx["state"]
     if state != "pending":
         texts = {"confirmed": "You have confirmed this claimset; it is being published.",
@@ -61,8 +74,35 @@ def consent(ctx, start_url, status_url):
 answer for its research (whether the claims are true and the work was done properly), and that it may be published
 under the licence {escape(ctx['licence'])}. Once published, a claimset stays: it can be corrected or retracted, and
 is removed only when it must be (<a href="/removal">retraction and removal</a>).</p>
-<p><a class="button" href="{escape(start_url)}">Sign in with ORCID and confirm</a></p>
+{_package_box(ctx, attach_url, attached)}
+{_confirm_button(ctx, start_url)}
 <p class="muted">Only {escape(ctx['orcid'])} can confirm. This link expires {escape(expires)}. If you did not
 expect this, ignore it: nothing is published without your confirmation.</p>
 """
     return page("Confirm a submission", body)
+
+
+def _confirm_button(ctx, start_url):
+    """The Confirm button, once nothing waits: a submission waiting for its package shows the package form instead."""
+    if ctx.get("waiting_package"):
+        return ""
+    return f'<p><a class="button" href="{escape(start_url)}">Sign in with ORCID and confirm</a></p>'
+
+
+def _package_box(ctx, attach_url, attached):
+    """The package form of a submission waiting for it, or the note that it was attached."""
+    if attached and not ctx.get("waiting_package"):
+        return '<p class="box"><strong>The package is attached and checked.</strong> You can now confirm.</p>'
+    if not ctx.get("waiting_package") or not attach_url:
+        return ""
+    files = "".join(f"<li><code>{escape(f)}</code></li>" for f in ctx.get("package_files") or [])
+    return f"""<div class="box">
+<p><strong>First, attach the package.</strong> The agent sent the claimset without the files it names; attach
+the package it made (the <code>.zip</code> file that <code>claimset package</code> builds), which holds the
+claimset and:</p>
+<ul>{files}</ul>
+<form method="post" action="{escape(attach_url)}" enctype="multipart/form-data">
+<p><input type="file" name="package" accept=".zip,application/zip" required> <button type="submit">Attach</button></p>
+</form>
+<p class="muted">EntryLib checks the package and that it holds the claimset shown here. Then you can confirm.</p>
+</div>"""

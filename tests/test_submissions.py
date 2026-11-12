@@ -273,10 +273,9 @@ def test_mcp_refuses_the_claimset_alone(app_client, tmp_path):
 
 
 def test_a_package_built_from_files_sent_inline(tmp_path):
-    """An agent that can send neither a file nor a URL gives the claimset with its files' contents (MCP `files`); the
-    portal builds the package with the claimset package's build_from (claimset spec §2.5, as amended)."""
-    import base64
-
+    """An agent with a few text files gives them with the claimset (MCP `files`); the portal builds the package with
+    the claimset package's build_from (claimset spec §2.5, as amended). Binary content, base64 included, is never sent
+    in a call (design §4.4)."""
     from claimset.package import sha256
     from mcp.server.mcpserver.exceptions import ToolError
 
@@ -284,20 +283,18 @@ def test_a_package_built_from_files_sent_inline(tmp_path):
     path = with_packaged_file(tmp_path)
     doc = json.loads(path.read_text())
     csv = (tmp_path / "files" / "results.csv").read_text()
-    for entry in ({"path": "files/results.csv", "text": csv},
-                  {"path": "files/results.csv", "base64": base64.b64encode(csv.encode()).decode()}):
-        package = _inline_package(json.dumps(doc), [entry], tmp_path / "incoming")
-        assert zipfile.is_zipfile(package) and submissions.check(package).ok
+    package = _inline_package(json.dumps(doc), [{"path": "files/results.csv", "text": csv}], tmp_path / "incoming")
+    assert zipfile.is_zipfile(package) and submissions.check(package).ok
     doc["artefacts"][-1]["version"] = f"sha256:{sha256(tmp_path / 'files' / 'results.csv')}"
     refused = [([{"path": "files/results.csv", "text": csv.replace("0.5", "0.6")}], "not the file the claimset"),
                ([{"path": "files/other.csv", "text": "x"}], "no artefact names files/other.csv"),
-               ([{"path": "files/results.csv"}], "either its text or its base64"),
-               ([{"path": "files/results.csv", "base64": "not base64!"}], "not base64"),
+               ([{"path": "files/results.csv"}], "binary content is never sent"),
+               ([{"path": "files/results.csv", "base64": "AAAA"}], "binary content is never sent"),
                ([{"path": "files/results.csv", "text": csv}] * 2, "given twice")]
     for files, words in refused:
         with pytest.raises(ToolError, match=words):
             _inline_package(doc, files, tmp_path / "incoming")
-    assert len(list((tmp_path / "incoming").glob("*.zip"))) == 2         # a refused one leaves nothing
+    assert len(list((tmp_path / "incoming").glob("*.zip"))) == 1          # a refused one leaves nothing
 
 
 def test_mcp_takes_the_files_with_the_claimset(app_client, tmp_path):
