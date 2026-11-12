@@ -9,8 +9,8 @@ from portal import fetch, mcp_server
 
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
            "MCP-Protocol-Version": "2025-06-18"}
-TOOLS = {"search_claims", "search_papers", "get_paper", "get_claim", "upload_url", "validate", "score", "submit",
-         "submission_status"}
+TOOLS = {"search_claims", "search_papers", "get_paper", "get_claim", "guide", "upload_url", "validate", "score",
+         "submit", "submission_status"}
 
 
 def rpc(c, method, params=None):
@@ -142,3 +142,17 @@ def test_registry_listing():
     assert listing["name"] == "io.github.entrylib/entrylib" and listing["$schema"].endswith("server.schema.json")
     assert listing["remotes"] == [{"type": "streamable-http", "url": "https://entrylib.org/mcp"}]
     assert 0 < len(listing["description"]) <= 100 and listing["version"]
+
+
+def test_guide(app_client):
+    from portal import skills
+
+    def guide(**arguments):
+        out = rpc(app_client, "tools/call", {"name": "guide", "arguments": arguments})
+        return bool(out.get("isError")), out["content"][0]["text"]
+
+    assert "claimset-submit" in guide()[1]
+    assert guide(name="claimset-submit") == (False, skills.catalogue()["claimset-submit"]["text"])
+    assert guide(name="specification", section="3.4")[1].startswith("### 3.4")
+    err, text = guide(name="nothing")
+    assert err and "no skill nothing" in text

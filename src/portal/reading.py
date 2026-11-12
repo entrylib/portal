@@ -62,14 +62,26 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 ## MCP
 
 - {base}/mcp: an MCP server (Streamable HTTP, no sign-in) with the tools search_claims, search_papers, get_paper,
-  get_claim, upload_url, validate, score, submit and submission_status. It does what this file describes.
+  get_claim, guide, upload_url, validate, score, submit and submission_status. It does what this file describes.
+
+## Write a claimset
+
+- Write a claimset only from the specification and the skills, never from memory, and invent no format: if you
+  cannot read them, say so and stop. They are the claimset package's, published here for agents that cannot install
+  it: {base}/skills/ (each skill as a page, {base}/skills/<name>, and as text, {base}/skills/<name>.md), the
+  specification at {base}/spec/claimset.md, and the MCP tool guide (a skill by name, or the specification or one of
+  its sections).
+- An author turning their own paper into a claimset: {base}/skills/claimset-from-paper.md, which builds on
+  {base}/skills/claimset-submit.md. {base}/convert/message.txt is the message an author gives their assistant, with
+  both skills and an example claimset in it.
 
 ## Submit
 
 - The subfield: the platform assigns one, unless the submission proposes `paper.classification.subfield` from
   {base}/subfields.json (OpenAlex's subfields); a valid proposal is kept, and the guarantor sees it when confirming.
 - How to write a claimset: the Claimset specification, {base}/spec/claimset.md (every specification:
-  {base}/spec/), and the skills that `pip install claimset` then `claimset skill install` give. Check it first:
+  {base}/spec/), and the skills (above, *Write a claimset*; `pip install claimset` then `claimset skill install` give
+  them too). Check it first:
   {base}/api/validate (POST a claimset JSON file or a submission package as the request body) checks it as a
   submission is checked; nothing is kept.
 - Optional, before submitting: the scores the claimset would have once published, by the EntryLib rubric
