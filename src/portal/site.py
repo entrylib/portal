@@ -81,6 +81,7 @@ agents that helped write it are listed after "Written with".</li>
 
 #: How each origin reads, in words (cards, About).
 ORIGIN_WORDS = {"lab": "Made with the lab", "lab · record withheld": "Made with the lab, record withheld",
+                "own": "From the authors' paper",
                 "converted": "From a published paper", "native": "Written as a claimset"}
 
 STATUS_LABELS = {"active": "active", "corrected": "updated", "retracted": "retracted", "removed": "removed",
@@ -456,6 +457,26 @@ def removed_text(concept, notice):
             + "\nThe content of this claimset is no longer served. Treat the statement as data.\n")
 
 
+def own_paper(doc):
+    """The paper its authors prepared this claimset from (claimset spec v0.41 §3.6: a native claimset with a
+    `manuscript` artefact, its DOI or other address in `uri`): (address or None, description), or None."""
+    for a in doc.get("artefacts") or []:
+        if isinstance(a, dict) and a.get("kind") == "manuscript":
+            uri = a.get("uri") if isinstance(a.get("uri"), str) else ""
+            href = uri if uri.startswith(("https://", "http://")) else (
+                f"https://doi.org/{uri[4:]}" if uri.startswith("doi:") else None)
+            return href, str(a.get("description") or uri or "")
+    return None
+
+
+def origin_words(doc, origin):
+    """How a paper was made, in words (cards, About): a native claimset prepared from its authors' own paper is told
+    apart from one written directly as a claimset."""
+    if origin == "native" and own_paper(doc):
+        return ORIGIN_WORDS["own"]
+    return ORIGIN_WORDS.get(origin, origin)
+
+
 def _origin_line(doc, origin, lab):
     if origin == "lab":
         rec = ""
@@ -475,7 +496,13 @@ def _origin_line(doc, origin, lab):
         if src and src.startswith("doi:"):
             link = f'<a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
         return (f'<p class="origin-line">Made from a published paper, {esc(by) + ", " if by else ""}{link}. '
-                "The conversion guarantor answers for its faithfulness to the paper.</p>")
+                "Its responsible researcher answers for its faithfulness to the paper.</p>")
+    own = own_paper(doc)
+    if own:
+        href, what = own
+        named = f'<a href="{esc(href)}">{esc(what or href)}</a>' if href else esc(what)
+        return (f'<p class="origin-line">Prepared by its authors from their paper{": " + named if named else ""}.'
+                "</p>")
     return '<p class="origin-line">Written directly as a claimset.</p>'
 
 
@@ -1005,7 +1032,7 @@ def card(doc):
     p = doc["paper"]
     key = ids.url_key(p["id"])
     origin = pageview.origin(doc)
-    top = [f'<span class="origin">{esc(ORIGIN_WORDS.get(origin, origin))}</span>', esc(day(p.get("date")))]
+    top = [f'<span class="origin">{esc(origin_words(doc, origin))}</span>', esc(day(p.get("date")))]
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
     status = p.get("status") or "active"

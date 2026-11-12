@@ -170,7 +170,7 @@ Checks are event-driven. Batch APIs (roughly half price, results within a day) a
 
 ## 7. Reading
 
-**Words (UX audit, 12 November 2026).** What a reader sees and reads is a **paper**; **claimset** names the format and its file, used where the file matters (Submit, For agents, the specification, turning a paper into a claimset); **claim** is the unit everywhere, "finding" only in explaining what a claim is. "Entry" is kept only in the library's name, and "study" is not used. The responsible researcher is the format's guarantor (§7.4). Machine names (`view=claimsets`, `reliability`) do not change.
+**Words (UX audit, 12 November 2026).** What a reader sees and reads is a **paper**; **claimset** names the format and its file, used where the file matters (Submit, For agents, the specification, turning a paper into a claimset); **claim** is the unit everywhere, "finding" only in explaining what a claim is. "Entry" is kept only in the library's name, and "study" is not used. The responsible researcher is the format's guarantor (§7.4). Machine names (`view=claimsets`, `reliability`) do not change. How a paper was made is said in words, on cards and pages alike: "Made with the lab", "From the authors' paper" (a native claimset with a `manuscript` artefact: its authors prepared it from their own paper, which it links), "Written as a claimset" (native, without one) and "From a published paper" (converted).
 
 ### 7.1 URLs
 
