@@ -66,6 +66,12 @@ def _items(rows):
     return [{"rule": e["rule"], "where": e["where"], "message": e["message"]} for e in rows]
 
 
+#: How EntryLib takes a package (design §4.4), told with rule 70: the claimset says only that it needs one.
+ROUTES = ("EntryLib takes the package as the request body (POST /api/submissions, or `claimset submit`), from a URL "
+          "(package_url), or through MCP: an upload_url address, or package_with_consent for the guarantor to attach "
+          "it on the consent page")
+
+
 def check(path, alone=True):
     """The synchronous checks of a submission at `path` (a package zip or folder, or a claimset file). `alone=False`
     leaves out rule 70 for a claimset file sent without its package, whose package comes with the guarantor's consent
@@ -80,7 +86,8 @@ def check(path, alone=True):
     errors, warnings = _items(rep.errors), _items(rep.warnings)
     if alone and Path(path).is_file() and not zipfile.is_zipfile(path):   # alone, it carries no files (rule 70)
         try:
-            errors += _items(standalone_problems(json.loads(Path(path).read_text(encoding="utf-8"))))
+            errors += [dict(e, message=f"{e['message']}. {ROUTES}")
+                       for e in _items(standalone_problems(json.loads(Path(path).read_text(encoding="utf-8"))))]
         except (OSError, ValueError):
             pass
     doc = None

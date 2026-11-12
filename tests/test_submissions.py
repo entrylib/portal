@@ -256,7 +256,7 @@ def test_a_claimset_alone_names_no_packaged_file(tmp_path):
     result = submissions.check(path)
     assert not result.ok
     assert [(e["rule"], e["where"]) for e in result.errors] == [("70", "artefacts:A9.uri")]
-    assert "package_url" in result.errors[0]["message"]
+    assert submissions.ROUTES in result.errors[0]["message"]                 # EntryLib's routes, with rule 70
     package = tmp_path / "paper.zip"
     build(str(path), str(package))
     assert submissions.check(package).ok                             # its package carries the file
