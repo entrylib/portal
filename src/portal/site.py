@@ -67,8 +67,8 @@ PAGES = {
 
 #: How a claimset's page works, shown in the pop-up of its first line and on About (design §7.4): written once.
 HOW_TO_READ = """<ol>
-<li><strong>In brief</strong> gives the paper in a few sentences of plain language, or, without them, its main
-findings: its principal claims.</li>
+<li><strong>Summary</strong>, when the authors wrote one, gives the paper in a few sentences of plain language.
+<strong>Highlights</strong> then lists its main claims.</li>
 <li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
 the record, not the science. Click the score to see what lowered it.</li>
 <li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
@@ -748,8 +748,8 @@ CLAIM_TITLES = {"principal": ("Principal claims", "The claim"),
 
 
 def _claim_sections(parts):
-    """The sections of a claim bundle's page view (the package's blocks), the claim first; In brief is left out,
-    since the page's heading is the claim."""
+    """The sections of a claim bundle's page view (the package's blocks), the claim first; Summary and Highlights are
+    left out, since the page's heading is the claim."""
     blocks = parts.get("blocks") or {}
     titles = {sid: (title, n) for sid, title, n in parts.get("sections") or []}
     order = [sid for sid in CLAIM_SECTIONS if sid in blocks]

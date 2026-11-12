@@ -173,3 +173,9 @@ def test_the_convert_page():
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy
     assert 'href="/convert"' in (Path(site.__file__).parent / "static" / "pages" / "home.html").read_text()
+
+
+def test_summary_and_highlights_stay_open():
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text()
+    assert "summary: true, highlights: true, brief: true" in js           # brief: older claimset releases
+    assert "<strong>Summary</strong>" in site.HOW_TO_READ and "<strong>Highlights</strong>" in site.HOW_TO_READ
