@@ -57,8 +57,8 @@ def badge(scores, cid, small=False):
 
 def marker(scores):
     """What marks a claim on the page (claimset's render_parts `marker`): its score and dots before its meta line and
-    its novelty after it; In brief, its score. None for a claim without a score: the package then shows its support
-    light (an assumption has neither)."""
+    its novelty after it; under Highlights, its score. None for a claim without a score: the package then shows its
+    support light (an assumption has neither)."""
     def mark(c, where):
         cid = c.get("id")
         if not scores or cid not in scores["claims"]:

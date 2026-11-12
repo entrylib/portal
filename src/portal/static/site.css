@@ -158,7 +158,7 @@ details.notice[open] summary { margin-bottom: 4px; }
 
 /* claimset page */
 .cs-page .cs-header { min-width: 0; }
-/* One grid: the header spans the contents and the body, so "In brief" follows it directly; the panel runs down the
+/* One grid: the header spans the contents and the body, so the first section follows it directly; the panel runs down the
    right beside both, from the top of the header, and stays in view while reading. */
 .entry { display: grid; grid-template-columns: 210px minmax(0, 1fr) 270px; column-gap: 40px;
   grid-template-areas: "head head panel" "nav body panel"; align-items: start; }
@@ -420,7 +420,7 @@ dialog.peek .cs-item, dialog.peek .cs-def { border: 0; }
 
 /* Long formulae (design §7.4): the page never scrolls sideways, however wide a claimset's formulae are. A formula
    wider than the screen scrolls on its own: on its own line always, in a sentence on narrow screens only (there it
-   may clip a little of an italic letter's overhang). In brief, a statement takes the line's width, not its formula's. */
+   may clip a little of an italic letter's overhang). Under Highlights, a statement takes the line's width, not its formula's. */
 math[display="block"] { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 @media (max-width: 640px) { math { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 0 0.1em; } }
 .cs-brief li > span:last-child { min-width: 0; }
