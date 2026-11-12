@@ -31,17 +31,11 @@ you submit</a>.</li>
 
 <h2>The message for your agent</h2>
 <div class="connect">
-<pre id="convert-prompt">I am an author of the attached paper and want to publish it on EntryLib (https://entrylib.org) as a claimset.
-
-Follow the claimset-from-paper skill. If you can run commands: pip install claimset, then claimset guide claimset-from-paper, and the skills and specification it names. If you cannot: read https://github.com/entrylib/claimset/blob/main/skills/claimset-from-paper/SKILL.md and what it names.
-
-- Ask me its questions before you build anything.
-- Use only what the paper says: add nothing, drop no condition, and keep results where the method did worse.
-- Draft a plain-language summary of at most 150 words for me to approve.
-- Before submitting, give me every claim with where it comes from in the paper, so I can check it.
-- Validate the file, and submit only when I say so.</pre>
-<p><button type="button" class="button-quiet" data-copy="convert-prompt" data-copied="Copied" hidden>Copy the
-message</button></p>
+<pre id="convert-prompt">{convert_request}</pre>
+<p><a class="button-quiet" href="/convert/message.txt" data-copy-url="/convert/message.txt" data-copied="Copied">Copy the
+message</a>: it copies the request with the skills it names and an example claimset after it (about 15,000
+tokens), so that your assistant has the rules even if it cannot open a link. Paste it with the paper. Without the
+script, the link opens the whole text to copy.</p>
 </div>
 <p>Agents that can run commands (Claude Code, Codex, Cursor and others) do all of it. A chat assistant without them
 can still write the claimset; connect EntryLib's <a href="/agents">MCP server</a> so it can check and submit it, or

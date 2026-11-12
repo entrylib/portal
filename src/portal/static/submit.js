@@ -16,10 +16,23 @@ function show(nodes) {
   box.replaceChildren(...nodes);
 }
 
-function problems(title, items) {
+function problems(title, items, forAssistant) {
   const out = [el("p", title, "error")];
   if (items && items.length) {
-    out.push(el("pre", items.map((e) => `rule ${e.rule} at ${e.where || "(file)"}: ${e.message}`).join("\n")));
+    const lines = items.map((e) => `rule ${e.rule} at ${e.where || "(file)"}: ${e.message}`).join("\n");
+    out.push(el("pre", lines));
+    // A refusal goes back to the assistant that wrote the file: one block to paste, with what to do with it.
+    if (forAssistant && navigator.clipboard) {
+      const text = "EntryLib refused the claimset you gave me. Fix each problem below in the claimset, following " +
+        `the specification and the skills (${location.origin}/skills/), never from memory, and give me the ` +
+        "whole corrected file.\n\n" + lines + "\n";
+      const button = el("button", "Copy the errors for your assistant", "button-quiet");
+      button.type = "button";
+      button.addEventListener("click", () => navigator.clipboard.writeText(text).then(() => {
+        button.textContent = "Copied";
+      }));
+      out.push(el("p")); out[out.length - 1].appendChild(button);
+    }
   }
   return out;
 }
@@ -45,7 +58,7 @@ document.getElementById("form").addEventListener("submit", async (event) => {
     });
     const body = await response.json();
     if (!response.ok) {
-      show(problems(body.error || `Refused (${response.status}).`, body.errors));
+      show(problems(body.error || `Refused (${response.status}).`, body.errors, true));
       // A claimset with the title of one the guarantor already has: offer to submit it as a different paper.
       if (response.status === 409 && /new_paper/.test(body.error || "")) {
         document.getElementById("new_paper_row").hidden = false;
