@@ -37,6 +37,7 @@ from . import (
     submissions,
     worker,
 )
+from . import uploads as uploads_
 from .config import Settings
 from .db import make_pool
 from .orcid import OrcidClient, OrcidError
@@ -129,11 +130,12 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                                  f"{settings.base_url}/consent/callback")
     publisher_ctx = {}
 
-    def receive(path, client_ip, new_paper=False):
+    def receive(path, client_ip, new_paper=False, package_with_consent=False):
         """Receive a submission file: the same for every route (design §4.4). Raises SubmissionError."""
         with pool.connection() as conn:
             return submissions.receive(conn, path, submissions_dir=settings.submissions_dir,
-                                       base_url=settings.base_url, client_ip=client_ip, new_paper=new_paper)
+                                       base_url=settings.base_url, client_ip=client_ip, new_paper=new_paper,
+                                       package_with_consent=package_with_consent)
 
     limiter = limiter or ratelimit.Limiter()
     mcp = mcp_server.build(mcp_server.Portal(settings, pool, receive, limiter))
@@ -148,6 +150,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
     def expire_now():
         with pool.connection() as conn:
             expired = submissions.expire(conn, settings.submissions_dir)
+            uploads_.expire(conn, settings.submissions_dir)
             notices.forget_stale(conn)
             consent.forget_old(conn)
         publish_now()                                       # confirmed submissions left by a restart or a failure
@@ -304,16 +307,16 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             path.unlink(missing_ok=True)
         return result.as_json()
 
-    async def _receive(path, request, new_paper):
+    async def _receive(path, request, new_paper, package_with_consent=False):
         try:
-            return await run_in_threadpool(receive, path, _client_ip(request), new_paper)
+            return await run_in_threadpool(receive, path, _client_ip(request), new_paper, package_with_consent)
         except submissions.SubmissionError as exc:
             return _error(exc.status, str(exc), exc.errors, exc.warnings)
         finally:
             path.unlink(missing_ok=True)
 
     @app.post("/api/submissions", status_code=201, tags=["submissions"])
-    async def submit(request: Request, new_paper: bool = False):
+    async def submit(request: Request, new_paper: bool = False, package_with_consent: bool = False):
         """Submit a claimset file (JSON) or a submission package (BagIt zip, `claimset package`) as the request body:
         `curl --data-binary @paper.zip -H 'Content-Type: application/zip' <portal>/api/submissions`.
 
@@ -324,12 +327,49 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
         A new version of a published claimset sets `paper.id` to its identifier. A new claimset with the same title
         and guarantor as one already on EntryLib is refused (409) unless `new_paper=true` says it is a different
-        paper."""
+        paper. A claimset file whose artefacts name files by relative path is refused alone (rule 70), unless
+        `package_with_consent=true`: it then waits for its package, which the guarantor attaches on the consent page
+        before confirming (design §4.4)."""
         try:
             path, _ = await _save_body(request, uploads)
         except UploadTooLarge:
             return _error(413, f"larger than {submissions.MAX_UPLOAD_BYTES} bytes")
-        return await _receive(path, request, new_paper)
+        return await _receive(path, request, new_paper, package_with_consent)
+
+    async def _put_upload(token, request):
+        """The file sent to an upload address (design §4.4)."""
+        def is_open():
+            with pool.connection() as conn:
+                return uploads_.open_for(conn, token)
+        if not await run_in_threadpool(is_open):            # before reading a body of up to 210 MB
+            return _error(404, "no such upload address, or it has expired or already received a file: ask for a "
+                               "new one with the MCP tool upload_url")
+        try:
+            path, size = await _save_body(request, uploads)
+        except UploadTooLarge:
+            return _error(413, f"larger than {submissions.MAX_UPLOAD_BYTES} bytes")
+
+        def keep():
+            with pool.connection() as conn:
+                return uploads_.receive(conn, token, path, size, settings.submissions_dir)
+        try:
+            return await run_in_threadpool(keep)
+        except uploads_.UploadError as exc:
+            return _error(exc.status, str(exc))
+        finally:
+            path.unlink(missing_ok=True)
+
+    @app.put("/api/uploads/{token}", tags=["submissions"])
+    async def put_upload(token: str, request: Request):
+        """Send a package (the zip `claimset package` builds) or a claimset file to an upload address from the MCP
+        tool upload_url: `curl --fail -T paper.zip <url>`. Single use; the address expires after 2 hours. Then call
+        the MCP tools validate, score or submit with its upload_id. The file never passes through the model."""
+        return await _put_upload(token, request)
+
+    @app.post("/api/uploads/{token}", include_in_schema=False)
+    async def post_upload(token: str, request: Request):
+        """The same as PUT, for clients that can only POST."""
+        return await _put_upload(token, request)
 
     @app.post("/api/submissions/from-url", status_code=201, tags=["submissions"])
     async def submit_from_url(request: Request, url: str = Body(..., embed=True), new_paper: bool = False):
@@ -490,6 +530,39 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return _page(site.message_page("Confirmed", "Thank you. You have confirmed the claimset; it will be "
                                        "published shortly.", ("/confirm", "Back to your submissions")))
 
+    @app.post("/confirm/package", response_class=HTMLResponse, include_in_schema=False)
+    async def confirm_package(request: Request):
+        """Attach and confirm, from the /confirm listing: the package of a submission waiting for it (design §4.4),
+        then its ticket's confirmation."""
+        back = ("/confirm", "Back to your submissions")
+        try:
+            path, fields = await _form_file(request)
+        except UploadTooLarge:
+            return _page(site.message_page("Not attached", f"The file is larger than "
+                                           f"{submissions.MAX_UPLOAD_BYTES} bytes.", back), 413)
+        if path is None:
+            return _page(site.message_page("Not attached", "Choose the package (the .zip file) to attach.", back), 400)
+        try:
+            outcome = await run_in_threadpool(_attach, path, ticket=fields.get("ticket", ""))
+        finally:
+            path.unlink(missing_ok=True)
+        if outcome.result != "attached":
+            return _page(site.message_page("Not attached", pages.outcome_text(outcome), back), 400)
+
+        def work():
+            with pool.connection() as conn:
+                return consent.complete_ticket(conn, fields.get("ticket", ""))
+        done = await run_in_threadpool(work)
+        if done.result != "confirmed":
+            return _page(site.message_page("Attached, not confirmed", "The package is attached. "
+                                           + pages.outcome_text(done), back), 400)
+        try:
+            await run_in_threadpool(publish_now)
+        except Exception:  # noqa: BLE001 - the periodic loop retries; the guarantor has confirmed either way
+            log.exception("publishing after confirmation failed")
+        return _page(site.message_page("Confirmed", "Thank you. The package is attached and you have confirmed the "
+                                       "claimset; it will be published shortly.", back))
+
     @app.get("/removal", response_class=HTMLResponse, include_in_schema=False)
     def removal_form():
         """Retraction and removal (design §7.5): the policy and the form."""
@@ -542,7 +615,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return _page(site.message_page("Confirmed", text, ("/", "Home")))
 
     @app.get("/consent/{token}", response_class=HTMLResponse, include_in_schema=False)
-    def consent_page(token: str):
+    def consent_page(token: str, attached: bool = False):
         """The page a guarantor opens from their consent link."""
         with pool.connection() as conn:
             ctx = consent.page_context(conn, token, settings.submissions_dir)
@@ -550,7 +623,55 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return HTMLResponse(pages.message("Unknown link", "This consent link is not valid. Links expire with "
                                               "their submission, after 48 hours."), status_code=404)
         status_url = f"{settings.base_url}/api/submissions/{ctx['submission']}"
-        return pages.consent(ctx, f"{settings.base_url}/consent/{token}/start", status_url)
+        return pages.consent(ctx, f"{settings.base_url}/consent/{token}/start", status_url,
+                             attach_url=f"/consent/{token}/package", attached=attached)
+
+    async def _form_file(request):
+        """The file of a form's `package` field, saved to a temporary file; None if absent. Raises UploadTooLarge."""
+        form = await request.form(max_files=1, max_fields=5)
+        f = form.get("package")
+        fields = {k: v for k, v in form.items() if isinstance(v, str)}
+        if f is None or isinstance(f, str) or not f.filename:
+            return None, fields
+        uploads.mkdir(parents=True, exist_ok=True)
+        fh = tempfile.NamedTemporaryFile(dir=uploads, prefix="attach-", delete=False)
+        size = 0
+        try:
+            while chunk := await f.read(1 << 20):
+                size += len(chunk)
+                if size > submissions.MAX_UPLOAD_BYTES:
+                    raise UploadTooLarge
+                fh.write(chunk)
+        except BaseException:
+            fh.close()
+            Path(fh.name).unlink(missing_ok=True)
+            raise
+        fh.close()
+        return Path(fh.name), fields
+
+    def _attach(path, **who):
+        with pool.connection() as conn:
+            return consent.attach(conn, path, settings.submissions_dir, **who)
+
+    @app.post("/consent/{token}/package", response_class=HTMLResponse, include_in_schema=False)
+    async def consent_package(token: str, request: Request):
+        """The guarantor attaches the package of a submission waiting for it (design §4.4), then confirms."""
+        try:
+            path, _ = await _form_file(request)
+        except UploadTooLarge:
+            return HTMLResponse(pages.message("Not attached", f"The file is larger than "
+                                              f"{submissions.MAX_UPLOAD_BYTES} bytes."), status_code=413)
+        if path is None:
+            return HTMLResponse(pages.message("Not attached", "Choose the package (the .zip file) to attach.",
+                                              back=(f"/consent/{token}", "Back to the consent page")), status_code=400)
+        try:
+            outcome = await run_in_threadpool(_attach, path, token=token)
+        finally:
+            path.unlink(missing_ok=True)
+        if outcome.result != "attached":
+            return HTMLResponse(pages.message("Not attached", pages.outcome_text(outcome),
+                                              back=(f"/consent/{token}", "Back to the consent page")), status_code=400)
+        return RedirectResponse(f"{settings.base_url}/consent/{token}?attached=1", status_code=303)
 
     @app.get("/consent/{token}/start", include_in_schema=False)
     def consent_start(token: str):

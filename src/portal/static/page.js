@@ -119,12 +119,12 @@ window.entrylibPopup = function (className, label) {
   });
 })();
 
-// Claimset and claim pages: the long sections start folded (design §7.4). In brief and the principal claims stay open;
+// Claimset and claim pages: the long sections start folded (design §7.4). Summary, Highlights and the principal claims stay open;
 // any other section opens with its title, from the contents, or when the page is opened at something in it. Without
 // this script every section is open.
 window.entrylibOpen = (function () {
   "use strict";
-  var OPEN = { brief: true, principal: true };
+  var OPEN = { summary: true, highlights: true, brief: true, principal: true };   // brief: claimset < 0.41.12
   var body = document.querySelector(".cs-body");
   function setOpen(section, open) {
     if (!section || !section.classList.contains("fold")) return;

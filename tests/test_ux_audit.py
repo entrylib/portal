@@ -185,7 +185,7 @@ def test_one_word_for_what_readers_see():
         assert not words, (name, words)                  # "entries" lives on only in the library's name
     assert 'for v, label in (("claimsets", "Papers")' in Path(read.__file__).read_text()
     home = (pages / "home.html").read_text()
-    assert "<h1>Research papers you can check claim by claim</h1>" in home and 'class="score-note"' in home
+    assert "<h1>Research papers you can check claim by claim</h1>" in home and 'class="home-score"' in home
 
 
 def test_the_contents_count_evidence_and_arguments_apart():
@@ -202,3 +202,58 @@ def test_about_has_a_glossary_preservation_and_the_early_stage():
     assert "would not be lost" in about and "EntryLib is new." in about
     assert 'href="/about#glossary"' in site.INTRO_STRIP
     assert "examples/submission-native.json" in site.fixed_page("before-you-submit", BASE)
+
+
+def test_summary_and_highlights_stay_open():
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text()
+    assert "summary: true, highlights: true, brief: true" in js           # brief: older claimset releases
+    assert "<strong>Summary</strong>" in site.HOW_TO_READ and "<strong>Highlights</strong>" in site.HOW_TO_READ
+
+
+# The paper page from the package's blocks: order and names are the site's
+
+def _parts(**blocks):
+    sections = [(sid, title, 0) for sid, (title, _) in blocks.items()]
+    return {"blocks": {sid: f'<section class="cs-section" id="{sid}"><h2>{t}</h2>{body}</section>'
+                       for sid, (t, body) in blocks.items()}, "sections": sections, "body": "unused"}
+
+
+def test_the_page_takes_its_order_and_names_from_the_site():
+    doc = example()
+    parts = _parts(evidence=("Evidence", "E"), highlights=("Highlights", "H"), summary=("Summary", "S"),
+                   brandnew=("Something new", "N"))
+    body, shown = site.page_sections(parts, doc)
+    assert [s[0] for s in shown] == ["summary", "highlights", "evidence", "brandnew"]
+    assert body.index('id="summary"') < body.index('id="highlights"') < body.index('id="evidence"')
+    assert "<h2>Something new</h2>" in body                              # the package's title when the site has none
+
+
+def test_an_older_package_gets_the_same_page():
+    doc = example()
+    doc["paper"]["summary"] = "In plain words, with $x_t$."
+    old = _parts(brief=("In brief", '<ul class="cs-brief"><li>C1</li></ul>'), context=("Context", "X"))
+    body, shown = site.page_sections(old, doc)                           # claimset 0.41.9: In brief, no summary
+    assert [s[:2] for s in shown] == [("summary", "Summary"), ("brief", "Highlights"), ("context", "Context")]
+    assert "<h2>Highlights</h2>" in body and "<h2>In brief</h2>" not in body and "<math" in body
+    replaced = _parts(brief=("In brief", '<p class="cs-summary">S</p>'))  # claimset 0.41.10-11: summary In brief
+    body, shown = site.page_sections(replaced, doc)
+    assert [s[0] for s in shown] == ["summary"] and body.count("cs-summary") == 1
+    del doc["paper"]["summary"]
+    body, shown = site.page_sections(_parts(brief=("In brief", "<ul></ul>")), doc)
+    assert [s[:2] for s in shown] == [("brief", "Highlights")] and 'id="summary"' not in body
+
+
+def test_a_real_page_starts_with_its_summary_or_its_highlights(env):
+    doc = example()
+    doc["paper"]["summary"] = "In plain words."
+    _, page = page_of(env, doc)
+    body = page.split('<article class="cs-body">')[1]
+    assert body.startswith('<section class="cs-section" id="summary">') and "In brief" not in body
+    if "<h2>Highlights</h2>" in body:                   # claimset 0.41.10-11 put the summary in their place
+        assert body.index('id="summary"') < body.index("<h2>Highlights</h2>")
+
+
+def test_a_page_without_a_summary_starts_with_its_highlights(env):
+    _, page = page_of(env, example())
+    assert page.split('<article class="cs-body">')[1].startswith('<section class="cs-section" id="')
+    assert 'id="summary"' not in page and "<h2>Highlights</h2>" in page

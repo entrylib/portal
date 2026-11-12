@@ -67,8 +67,8 @@ PAGES = {
 
 #: How a claimset's page works, shown in the pop-up of its first line and on About (design §7.4): written once.
 HOW_TO_READ = """<ol>
-<li><strong>In brief</strong> gives the paper in a few sentences of plain language, or, without them, its main
-findings: its principal claims.</li>
+<li><strong>Summary</strong>, when the authors wrote one, gives the paper in a few sentences of plain language.
+<strong>Highlights</strong> then lists its main claims.</li>
 <li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
 the record, not the science. Click the score to see what lowered it.</li>
 <li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
@@ -708,7 +708,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     if current and current != n:
         newer = (f'<p class="notice notice-warn">This is version {esc(n)}. '
                  f'<a href="/p/{key}">The current version is {esc(current)}</a>.</p>')
-    nav = contents(parts["sections"], ('<li><a href="#score">Score</a></li>' if scores else "")
+    body, sections = page_sections(parts, doc)
+    nav = contents(sections, ('<li><a href="#score">Score</a></li>' if scores else "")
                    + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>', doc)
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
@@ -716,7 +717,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'{INTRO_STRIP}<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
-            f'{nav}<article class="cs-body">{parts["body"]}'
+            f'{nav}<article class="cs-body">{body}'
             f'{score_html.section(scores, issues)}{_versions(listing, key, n)}</article></div>')
     description = _lead_text(doc)
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
@@ -735,6 +736,47 @@ CLAIM_ID = re.compile(r"C[0-9]+")
 #: The order of a claim page's sections: the claim first, then what it rests on.
 CLAIM_SECTIONS = ("principal", "supporting", "evidence", "limitations", "assumptions", "definitions", "context",
                   "references", "artefacts")
+
+
+#: The paper page's sections, in EntryLib's order and under EntryLib's names (design §7.4). The package renders each
+#: section (`render_parts` blocks); which ones the page shows, in what order and what they are called is the site's.
+#: `brief` is the id older claimset releases (< 0.41.12) gave the highlights. A section the package adds later and
+#: this table does not name is shown after these, under the package's title.
+PAGE_SECTIONS = {"summary": "Summary", "highlights": "Highlights", "brief": "Highlights", "context": "Context",
+                 "definitions": "Definitions", "assumptions": "Assumptions", "principal": "Principal claims",
+                 "supporting": "Supporting claims", "evidence": "Evidence", "limitations": "Limitations",
+                 "questions": "Open questions", "references": "References", "artefacts": "Artefacts"}
+
+
+def _retitle(block, old, new):
+    """A package section under another title: only its own heading changes."""
+    return block if old == new else block.replace(f"<h2>{old}</h2>", f"<h2>{esc(new)}</h2>", 1)
+
+
+def page_sections(parts, doc):
+    """The paper page's body and its contents' entries [(id, title, count)], from the package's blocks in
+    PAGE_SECTIONS's order and names. The authors' summary comes first: from the package (claimset ≥ 0.41.12), or else
+    written here from `paper.summary`; an older package that put it In brief in place of the highlights loses that
+    block, since the summary is already shown."""
+    blocks = dict(parts.get("blocks") or {})
+    titles = {sid: (title, n) for sid, title, n in parts.get("sections") or []}
+    if not blocks:                                      # a package without blocks: its body, as it is
+        return parts.get("body", ""), list(parts.get("sections") or [])
+    summary = _summary(doc)
+    if "brief" in blocks and 'class="cs-summary"' in blocks["brief"]:
+        del blocks["brief"]
+    if summary and "summary" not in blocks:
+        blocks["summary"] = (f'<section class="cs-section" id="summary"><h2>Summary</h2>'
+                             f'<p class="cs-summary">{plain_html(summary)}</p></section>')
+        titles["summary"] = ("Summary", 0)
+    order = [sid for sid in PAGE_SECTIONS if sid in blocks] + [sid for sid in blocks if sid not in PAGE_SECTIONS]
+    out, shown = [], []
+    for sid in order:
+        old, n = titles.get(sid, (PAGE_SECTIONS.get(sid, sid), 0))
+        title = PAGE_SECTIONS.get(sid, old)
+        out.append(_retitle(blocks[sid], old, title))
+        shown.append((sid, title, n))
+    return "\n".join(out), shown
 
 
 def claim_pages(doc):
@@ -756,8 +798,8 @@ CLAIM_TITLES = {"principal": ("Principal claims", "The claim"),
 
 
 def _claim_sections(parts):
-    """The sections of a claim bundle's page view (the package's blocks), the claim first; In brief is left out,
-    since the page's heading is the claim."""
+    """The sections of a claim bundle's page view (the package's blocks), the claim first; Summary and Highlights are
+    left out, since the page's heading is the claim."""
     blocks = parts.get("blocks") or {}
     titles = {sid: (title, n) for sid, title, n in parts.get("sections") or []}
     order = [sid for sid in CLAIM_SECTIONS if sid in blocks]
@@ -1208,13 +1250,25 @@ def _pending(items):
             f"<p>Principal claims:</p><ul>{principal}</ul>"
             f"<details><summary>The whole claimset, as models will read it</summary><pre>"
             f"{esc(it.get('reading_view'))}</pre></details>"
-            f'<form method="post" action="/confirm" class="actions">{ticket}'
-            '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>'
-            '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
+            + (_attach_form(it, ticket) if it.get("waiting_package") else
+               f'<form method="post" action="/confirm" class="actions">{ticket}'
+               '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>')
+            + '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
             "submission and its file are deleted. To publish it later, submit it again.</p>"
             f'<form method="post" action="/confirm">{ticket}<button type="submit" class="button-quiet" '
             'name="action" value="cancel">Cancel it</button></form></details></section>')
     return "".join(rows)
+
+
+def _attach_form(it, ticket):
+    """For a submission waiting for its package (design §4.4): attach it and confirm, in one step."""
+    files = "".join(f"<li><code>{esc(f)}</code></li>" for f in it.get("package_files") or [])
+    return ('<p><strong>Attach the package to confirm.</strong> The agent sent the claimset without the files it '
+            "names; attach the package it made (the <code>.zip</code> file that <code>claimset package</code> builds), "
+            f"which holds the claimset and:</p><ul>{files}</ul>"
+            f'<form method="post" action="/confirm/package" enctype="multipart/form-data" class="actions">{ticket}'
+            '<input type="file" name="package" accept=".zip,application/zip" required> '
+            '<button type="submit">Attach and confirm</button></form>')
 
 
 def confirm_list(items, orcid, name=None):

@@ -15,22 +15,27 @@ uses the same sign-in and shows, besides, everything else they submitted and gua
     complete_ticket(conn, ticket, orcid) -> Outcome, as complete()
     cancel_ticket(conn, ticket, submissions_dir) -> Outcome: cancelled, or why not
     history(conn, orcid)            -> the rest of what `orcid` submitted, and the claimsets they guarantee
+    attach(conn, path, dir, token=|ticket=) -> Outcome: the package of a submission waiting for it (design §4.4)
 
 A submission is confirmed when the person who signs in with ORCID is its guarantor, the submission is still
 pending, and the guarantor is within the limits of design §8. Confirmed submissions are published by the worker.
 """
 
+import copy
 import datetime as dt
+import json
 import secrets
+import shutil
 import tempfile
-from dataclasses import dataclass
+import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from claimset.render import render
 
 from . import limits
 from .publish import load_submission
-from .submissions import CANCELLED, duplicate, token_hash
+from .submissions import CANCELLED, _sha256, check, duplicate, packaged_files, token_hash
 
 #: How long a sign-in started from a consent page may take.
 SIGNIN_WINDOW = dt.timedelta(minutes=30)
@@ -38,9 +43,10 @@ SIGNIN_WINDOW = dt.timedelta(minutes=30)
 
 @dataclass
 class Outcome:
-    result: str            # confirmed | cancelled | wrong_person | not_pending | limit | duplicate | unknown
-    message: str
+    result: str            # confirmed | cancelled | attached | needs_package | wrong_person | not_pending | limit |
+    message: str           # duplicate | unknown | not_waiting | not_package | invalid | different
     submission: str | None = None
+    errors: list = field(default_factory=list)
 
 
 def _guarantor(conn, token):
@@ -59,13 +65,14 @@ def page_context(conn, token, submissions_dir):
 def _context_by_hash(conn, hash_, submissions_dir):
     row = conn.execute(
         "SELECT g.submission_id, g.orcid, g.name, g.confirmed, s.state, s.kind, s.target, s.expires, s.file_name,"
-        " s.published_id, s.detail FROM submission_guarantors g JOIN submissions s ON s.id = g.submission_id"
-        " WHERE g.token_hash = %s", (hash_,)).fetchone()
+        " s.published_id, s.detail, s.waiting_package FROM submission_guarantors g"
+        " JOIN submissions s ON s.id = g.submission_id WHERE g.token_hash = %s", (hash_,)).fetchone()
     if row is None:
         return None
-    sid, orcid, name, confirmed, state, kind, target, expires, file_name, published, detail = row
+    sid, orcid, name, confirmed, state, kind, target, expires, file_name, published, detail, waiting = row
     ctx = {"submission": sid, "orcid": orcid, "name": name, "confirmed": confirmed is not None, "state": state,
-           "kind": kind, "target": target, "expires": expires, "published": published, "detail": detail}
+           "kind": kind, "target": target, "expires": expires, "published": published, "detail": detail,
+           "waiting_package": bool(waiting)}
     if state == "pending" and file_name:
         with tempfile.TemporaryDirectory() as tmp:
             doc, _ = load_submission(Path(submissions_dir) / file_name, tmp)
@@ -74,7 +81,7 @@ def _context_by_hash(conn, hash_, submissions_dir):
         ctx.update(title=paper.get("title", ""), licence=paper.get("licence", ""),
                    principal=[claims[c].get("statement", "") for c in paper.get("contributions") or [] if c in claims],
                    n_claims=len(claims), reading_view=render(doc), subfield=_subfield_line(doc),
-                   correction_reason=paper.get("correction_reason"))
+                   correction_reason=paper.get("correction_reason"), package_files=packaged_files(doc))
     return ctx
 
 
@@ -103,15 +110,18 @@ def complete(conn, state, orcid, now=None):
 def _confirm(conn, token_hash_, orcid, now):
     """Confirm for the guarantor whose consent token has this hash, if `orcid` is theirs; inside a transaction."""
     g = conn.execute(
-        "SELECT g.submission_id, g.orcid, s.state, s.kind, s.target, s.title_key, s.new_paper, s.expires"
-        " FROM submission_guarantors g JOIN submissions s ON s.id = g.submission_id"
+        "SELECT g.submission_id, g.orcid, s.state, s.kind, s.target, s.title_key, s.new_paper, s.expires,"
+        " s.waiting_package FROM submission_guarantors g JOIN submissions s ON s.id = g.submission_id"
         " WHERE g.token_hash = %s FOR UPDATE OF s", (token_hash_,)).fetchone()
-    sid, expected, sub_state, kind, target, key, new_paper, expires = g
+    sid, expected, sub_state, kind, target, key, new_paper, expires, waiting = g
     if orcid != expected:
         return Outcome("wrong_person", f"you signed in as {orcid}, but this claimset names {expected} as its "
                                        f"guarantor; only the guarantor can confirm it", sid)
     if sub_state != "pending":
         return Outcome("not_pending", f"this submission is {sub_state}", sid)
+    if waiting:                                         # design §4.4: the package comes with the consent
+        return Outcome("needs_package", "this submission waits for its package: attach the zip on the consent "
+                                        "page first, then confirm", sid)
     over = limits.reached(conn, kind, orcid, target, now, exclude=sid)
     if over:                                            # the publication limits (design §8)
         why, from_, later = over
@@ -249,6 +259,58 @@ def history(conn, orcid, now=None):
             "closed": [x for x in subs if x["state"] in ("refused", "expired")],
             "published": [dict(zip(("id", "version", "title", "status", "date"), r, strict=True))
                           for r in published]}
+
+
+def _comparable(doc):
+    """A claimset as the package must hold it: the artefacts' `version` of packaged files aside, which `claimset
+    package` writes."""
+    doc = copy.deepcopy(doc)
+    for a in doc.get("artefacts") or []:
+        if isinstance(a, dict) and a.get("uri") in packaged_files(doc):
+            a.pop("version", None)
+    return json.dumps(doc, sort_keys=True, ensure_ascii=False)
+
+
+def attach(conn, upload, submissions_dir, *, token=None, ticket=None, now=None):
+    """Attach the package of a submission waiting for it (design §4.4), by its consent link (`token`) or by a ticket
+    of the /confirm listing (not used up: its Confirm button still works). The package is checked as an upload, and
+    must hold the claimset submitted; it then replaces the claimset file."""
+    now = now or dt.datetime.now(dt.UTC)
+    with conn.transaction():
+        if token is not None:
+            row = conn.execute("SELECT submission_id FROM submission_guarantors WHERE token_hash = %s",
+                               (token_hash(token),)).fetchone()
+        else:
+            row = conn.execute("SELECT submission_id FROM confirm_tickets WHERE ticket_hash = %s AND used IS NULL"
+                               " AND expires > %s", (token_hash(ticket or ""), now)).fetchone()
+        if row is None:
+            return Outcome("unknown", "this link has expired or is not valid")
+        sid = row[0]
+        sub = conn.execute("SELECT state, waiting_package, file_name FROM submissions WHERE id = %s FOR UPDATE",
+                           (sid,)).fetchone()
+        if sub[0] != "pending":
+            return Outcome("not_pending", f"this submission is {sub[0]}", sid)
+        if not sub[1]:
+            return Outcome("not_waiting", "this submission already has its package", sid)
+        if not zipfile.is_zipfile(upload):
+            return Outcome("not_package", "attach the package: the zip that `claimset package` builds, holding the "
+                                          "claimset and the files its artefacts name", sid)
+        result = check(upload)
+        if not result.ok:
+            return Outcome("invalid", f"the package is not valid: {len(result.errors)} error(s)", sid,
+                           result.errors)
+        stored = Path(submissions_dir) / sub[2]
+        if _comparable(json.loads(stored.read_text(encoding="utf-8"))) != _comparable(result.doc):
+            return Outcome("different", "the package holds another claimset than the one submitted: attach the "
+                                        "package built from the claimset that was submitted", sid)
+        target = Path(submissions_dir) / f"{sid}.zip"
+        shutil.copyfile(upload, target)
+        conn.execute("UPDATE submissions SET file_name = %s, sha256 = %s, size = %s, report = %s,"
+                     " waiting_package = false WHERE id = %s",
+                     (target.name, _sha256(target), target.stat().st_size, json.dumps(result.as_json()), sid))
+    if stored != target:
+        stored.unlink(missing_ok=True)
+    return Outcome("attached", "the package is attached; you can now confirm", sid)
 
 
 def forget_old(conn, now=None):

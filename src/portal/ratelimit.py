@@ -30,6 +30,7 @@ LIMITS = {
     "validate": Limit(30, 3600),    # POST /api/validate, MCP validate and score
     "submit": Limit(20, 3600),      # POST /api/submissions, MCP submit
     "fetch": Limit(10, 3600),       # submission by URL: the server downloads up to 210 MB
+    "upload": Limit(10, 3600),      # MCP upload_url, each file sent to an upload address, a package attached at consent
     "request": Limit(10, 3600),     # POST /removal: retraction and removal requests
 }
 
@@ -88,6 +89,11 @@ def kind_of(method, path):
         return "read"
     if method == "GET" and (path.startswith("/api/search/") or path.startswith("/api/submissions/")):
         return "read"
+    if method in ("PUT", "POST") and path.startswith("/api/uploads/"):
+        return "upload"
+    attach = path == "/confirm/package" or (path.startswith("/consent/") and path.endswith("/package"))
+    if method == "POST" and attach:                         # a package attached at consent (design §4.4)
+        return "upload"
     if method == "POST":
         return {"/api/validate": "validate", "/api/submissions": "submit",
                 "/api/submissions/from-url": "fetch", "/removal": "request"}.get(path)
