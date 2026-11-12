@@ -369,7 +369,7 @@ window.entrylibOpen = (function () {
     if (!tpl || !tpl.content) return;
     e.preventDefault();
     if (!popups[id]) {
-      popups[id] = window.entrylibPopup("help", a.textContent);
+      popups[id] = window.entrylibPopup("help", a.getAttribute("data-title") || a.textContent);
       popups[id].body.appendChild(tpl.content.cloneNode(true));
     }
     popups[id].open();

@@ -24,7 +24,7 @@ def test_scores_are_written_and_shown(env):
     assert data["note"].startswith("Scores are computed by rules")
     page = (p / f"{KEY}.html").read_text()
     paper = data["paper"]
-    num = f'aria-label="Support {paper["score"]} of 100: what lowered it">{paper["score"]}</a>'
+    num = f'aria-label="Support {paper["score"]} of 100: why">{paper["score"]}</a>'
     assert 'class="score-num" href="#score" data-popup="score-paper"' in page and num in page
     assert 'id="score"' in page and 'id="score-paper"' in page and '<a href="#score">Score</a>' in page
     for cid in data["claims"]:
