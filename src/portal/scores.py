@@ -2,14 +2,17 @@
 
     compute(conn, doc)    -> the scores of one version, or None without the rubric installed
     finder(conn, concept) -> find(statement) for rubric.assess: the candidates for the close-match check
+    use_published(folder) -> score cited claims published on EntryLib by their scores in the published folder
     text(scores)          -> the scores in plain text, for the end of the reading view
     issues_text(...)      -> every issue, for the authors' agent (rubric.report)
     version()             -> the rubric version, or None
 
 The rubric decides every cost and every match (rubric.assess) and writes the report (rubric.report); the portal only
 finds the candidates for the close-match check: claims of claimsets first published before this one (every published
-claimset, for one not yet submitted), by the full-text search of their statements. A claimset is scored before it is
-submitted by the same functions (`claimset score`, the MCP tool score; design §7.6).
+claimset, for one not yet submitted), by the full-text search of their statements; and, from rubric 0.5, the scores of
+the published claims a claimset cites, from the score files the portal writes for each version
+(`p/<key>@v<n>.score.json`), read by the claimset package (claimset.score.published_scores). A claimset is scored
+before it is submitted by the same functions (`claimset score`, the MCP tool score; design §7.6).
 """
 
 import contextlib
@@ -91,11 +94,46 @@ def _warnings(doc):
         return None
 
 
+#: score_of(global claim ID) for the cited claims published on EntryLib (use_published), or None.
+_cited = None
+
+
+def use_published(folder):
+    """Score the cited claims published on EntryLib by their scores in `folder`, the portal's published folder
+    (rubric 0.5). Without a claimset package that reads them (before 0.42.7), they cost as any cited work."""
+    global _cited
+    try:
+        from claimset.score import published_scores
+    except ImportError:
+        _cited = None
+        return
+    _cited = published_scores(folder=folder)
+
+
+def _cited_scores(doc):
+    """{global claim ID: score} of the published claims `doc` cites, or None."""
+    if _cited is None:
+        return None
+    try:
+        from claimset.score import cited_claims
+        return {t: v for t in cited_claims(doc) for v in [_cited(t)] if v is not None}
+    except Exception as exc:  # noqa: BLE001 - scored as before rubric 0.5
+        rubric_error("reading the scores of cited claims", f"{type(exc).__name__}: {exc}")
+        return None
+
+
 def _with_warnings(fn, doc, *args):
-    """fn(doc, *args), given the validator's warnings when the installed rubric reads them."""
-    if "warnings" in inspect.signature(fn).parameters:
-        return fn(doc, *args, warnings=_warnings(doc))
-    return fn(doc, *args)
+    """fn(doc, *args), given the validator's warnings when the installed rubric reads them, and the scores of the
+    cited published claims when it reads those (rubric 0.5)."""
+    params = inspect.signature(fn).parameters
+    kw = {}
+    if "warnings" in params:
+        kw["warnings"] = _warnings(doc)
+    if "cited" in params:
+        cited = _cited_scores(doc)
+        if cited:
+            kw["cited"] = cited
+    return fn(doc, *args, **kw)
 
 
 def compute(conn, doc):

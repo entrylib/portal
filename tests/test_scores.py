@@ -172,3 +172,28 @@ def test_a_failing_report_leaves_out_the_issues(env, monkeypatch):
     publish(write(tmp, example()), **ctx)
     p = ctx["published_dir"] / "p"
     assert (p / f"{KEY}.score.json").exists() and not (p / f"{KEY}.issues.txt").exists()
+
+
+def test_cited_claims_published_here_go_to_the_rubric(tmp_path, monkeypatch):
+    """Design §7.6, cited claims: a claim citing a claim published here costs by its score here (rubric 0.5)."""
+    claimset_score = pytest.importorskip("claimset.score")
+    if not hasattr(claimset_score, "published_scores"):
+        pytest.skip("the installed claimset is older than 0.42.7")
+    target = "entrylib:2026.000014@v2#C3"
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "2026.000014@v2.score.json").write_text(json.dumps({"claims": {"C3": {"score": 92}}}))
+    seen = {}
+
+    def assess(doc, find=None, warnings=None, cited=None):
+        seen["cited"] = cited
+        return {"rubric": "9.9", "claims": {}, "paper": None, "problems": {}, "novelty": {}}
+    monkeypatch.setattr(scores.rubric, "assess", assess)
+    doc = example()
+    doc.setdefault("references", []).append({"id": "B77", "target": target, "id_type": "claimset"})
+    doc["claims"][0].setdefault("support", []).append({"kind": "cited", "reference": "B77"})
+    monkeypatch.setattr(scores, "_cited", None)
+    scores.compute(None, doc)
+    assert seen["cited"] is None                                  # no published folder given: none read
+    scores.use_published(tmp_path)
+    scores.compute(None, doc)
+    assert seen["cited"] == {target: 92}
