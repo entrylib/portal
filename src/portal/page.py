@@ -561,14 +561,16 @@ def _header(P):
                    + (f" ({esc(cf['source_version'])})" if cf.get("source_version") else "")
                    + (f" by {by}" if by else "") + "</p>")
     else:
-        # People besides the responsible researcher (design §7.4): every author of a paper its authors converted, in
-        # the file's order; else those who supervised and those who contributed. The position `author` is for agents.
+        # People besides the responsible researcher (design §7.4): every author of the original paper, for a paper its
+        # authors converted, in the file's order; else the co-authors, those who supervised and those who contributed.
+        # The position `author` is for agents.
         humans = [c for c in people if c.get("type") != "agent"]
         if source_paper.own_paper(P.doc) and len(humans) > 1:
-            out.append('<p class="cs-authors">' + _line(P, "paper_authors", humans, "Authors of the paper: "
+            out.append('<p class="cs-authors">' + _line(P, "paper_authors", humans, "Authors of the original paper: "
                        + ", ".join(_author(c, P, "author") for c in humans)) + "</p>")
         else:
-            for role, label, position in (("supervisors", "Supervised by: ", "supervisor"),
+            for role, label, position in (("coauthors", "Co-authors: ", "coauthor"),
+                                          ("supervisors", "Supervised by: ", "supervisor"),
                                           ("contributors", "Contributors: ", "contributor")):
                 group = [c for c in humans if position in (c.get("positions") or [])
                          and "guarantor" not in (c.get("positions") or [])]

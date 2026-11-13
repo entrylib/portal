@@ -315,7 +315,7 @@ def test_a_paper_its_authors_converted_names_every_author():
                              "availability": {"level": "public"}})
     doc["contributors"].append({"id": "P9", "type": "human", "name": "Co Author", "positions": ["contributor"]})
     lines = _people_lines(doc)
-    authors = next(x for x in lines if x.startswith("Authors of the paper: "))
+    authors = next(x for x in lines if x.startswith("Authors of the original paper: "))
     g = next(c for c in doc["contributors"] if "guarantor" in c["positions"])
     assert g["name"] in authors and "Co Author" in authors                   # the guarantor among them, in order
     assert authors.index(g["name"]) < authors.index("Co Author")
@@ -324,9 +324,11 @@ def test_a_paper_its_authors_converted_names_every_author():
 def test_supervisors_and_contributors_are_named():
     doc = example()
     doc["paper"]["id"] = "entrylib:2026.000001"
-    doc["contributors"] += [{"id": "P8", "type": "human", "name": "Sue Pervisor", "positions": ["supervisor"]},
+    doc["contributors"] += [{"id": "P7", "type": "human", "name": "Co Writer", "positions": ["coauthor"]},
+                            {"id": "P8", "type": "human", "name": "Sue Pervisor", "positions": ["supervisor"]},
                             {"id": "P9", "type": "human", "name": "Con Tributor", "positions": ["contributor"]}]
     lines = _people_lines(doc)
+    assert any(x.startswith("Co-authors: ") and "Co Writer" in x for x in lines)
     assert any(x.startswith("Supervised by: ") and "Sue Pervisor" in x for x in lines)
     assert any(x.startswith("Contributors: ") and "Con Tributor" in x for x in lines)
-    assert not any(x.startswith("Authors of the paper") for x in lines)
+    assert not any(x.startswith("Authors of the original paper") for x in lines)
