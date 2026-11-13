@@ -4,9 +4,9 @@
     start(conn, token)              -> an OAuth state for ORCID sign-in
     complete(conn, state, orcid)    -> Outcome: confirmed, or why not
 
-Without the link (the guarantor lost it): at /confirm the guarantor signs in with ORCID and sees every pending
-submission that names their iD; each has a one-time ticket behind its Confirm and Cancel buttons. /submissions
-uses the same sign-in and shows, besides, everything else they submitted and guarantee.
+Without the link (the guarantor lost it): at /submissions (/confirm redirects there) the guarantor signs in with
+ORCID and sees every pending submission that names their iD, each with a one-time ticket behind its Confirm and Cancel
+buttons, and, besides, everything else they submitted and guarantee.
 
     start_listing(conn, kind)       -> an OAuth state for that sign-in ("confirm" or "submissions")
     listing_kind(state)             -> which page a sign-in was for, or None if it is not a listing's
@@ -144,7 +144,7 @@ def _confirm(conn, token_hash_, orcid, now):
     return Outcome("confirmed", "confirmed", sid)
 
 
-#: How long the Confirm buttons of a /confirm listing stay valid.
+#: How long the Confirm buttons of Your submissions stay valid.
 TICKET_WINDOW = dt.timedelta(minutes=30)
 
 
@@ -195,12 +195,13 @@ def listing(conn, state, orcid, submissions_dir, now=None):
 
 
 def complete_ticket(conn, ticket, orcid=None, now=None):
-    """Confirm the submission behind a ticket from /confirm: the ticket is bound to the iD that signed in."""
+    """Confirm the submission behind a ticket from Your submissions: the ticket is bound to the iD that signed in."""
     now = now or dt.datetime.now(dt.UTC)
     with conn.transaction():
         row = _ticket(conn, ticket, now)
         if row is None:
-            return Outcome("unknown", "this confirmation has expired or was already used; sign in again at /confirm")
+            return Outcome("unknown", "this confirmation has expired or was already used; sign in again at "
+                           "/submissions")
         sid, signed_in = row
         g = conn.execute("SELECT token_hash FROM submission_guarantors WHERE submission_id = %s AND orcid = %s",
                          (sid, signed_in)).fetchone()
@@ -210,7 +211,7 @@ def complete_ticket(conn, ticket, orcid=None, now=None):
 
 
 def _ticket(conn, ticket, now):
-    """Use a ticket of a /confirm listing: (submission, the iD that signed in), or None if it is unknown, expired or
+    """Use a ticket of Your submissions: (submission, the iD that signed in), or None if it is unknown, expired or
     used."""
     return conn.execute("UPDATE confirm_tickets SET used = %s WHERE ticket_hash = %s AND used IS NULL AND"
                         " expires > %s RETURNING submission_id, orcid", (now, token_hash(ticket or ""), now)
@@ -224,7 +225,7 @@ def cancel_ticket(conn, ticket, submissions_dir, now=None):
     with conn.transaction():
         row = _ticket(conn, ticket, now)
         if row is None:
-            return Outcome("unknown", "this button has expired or was already used; sign in again at /confirm")
+            return Outcome("unknown", "this button has expired or was already used; sign in again at /submissions")
         sid, signed_in = row
         if conn.execute("SELECT 1 FROM submission_guarantors WHERE submission_id = %s AND orcid = %s",
                         (sid, signed_in)).fetchone() is None:
@@ -273,7 +274,7 @@ def _comparable(doc):
 
 def attach(conn, upload, submissions_dir, *, token=None, ticket=None, now=None):
     """Attach the package of a submission waiting for it (design §4.4), by its consent link (`token`) or by a ticket
-    of the /confirm listing (not used up: its Confirm button still works). The package is checked as an upload, and
+    of Your submissions (not used up: its Confirm button still works). The package is checked as an upload, and
     must hold the claimset submitted; it then replaces the claimset file."""
     now = now or dt.datetime.now(dt.UTC)
     with conn.transaction():

@@ -295,7 +295,7 @@ def status(conn, sub_id, base_url, registry_repo=None):
            "status_url": f"{base_url}/api/submissions/{sid}",
            "guarantors": [{"orcid": o, "confirmed": c} for o, c in people]}
     if state == "pending":                                  # the guarantor can confirm without the consent link
-        out["confirm_url"] = f"{base_url}/confirm"
+        out["confirm_url"] = f"{base_url}/submissions"
         if waiting:                                         # design §4.4: attached with the guarantor's consent
             out["waiting_for"] = "package"
     if target:
