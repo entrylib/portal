@@ -119,10 +119,10 @@ def test_the_guarantor_attaches_the_package_and_confirms(app_client, settings, t
     assert files and (settings.published_dir / "p" / f"{key}.json").exists()   # published with its file
 
 
-def test_attach_and_confirm_from_the_confirm_listing(app_client, tmp_path):
+def test_attach_and_confirm_from_your_submissions(app_client, tmp_path):
     doc, zip_path = package_of(tmp_path)
     out, _ = submit_waiting(app_client, doc)
-    r = app_client.get("/confirm/start")
+    r = app_client.get("/submissions/start")
     state = urllib.parse.parse_qs(urllib.parse.urlparse(r.headers["location"]).query)["state"][0]
     page = app_client.get("/consent/callback", params={"state": state, "code": GUARANTOR}).text
     assert "Attach the package to confirm" in page and 'action="/confirm/package"' in page

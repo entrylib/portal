@@ -1,4 +1,5 @@
-"""Confirming without the consent link (/confirm): sign in with ORCID, see the submissions naming you, confirm one."""
+"""Confirming without the consent link (Your submissions, once /confirm): sign in with ORCID, see the submissions
+naming you, confirm or cancel one."""
 
 import re
 import urllib.parse
@@ -7,10 +8,7 @@ from test_consent import GUARANTOR, submit, titled
 
 
 def sign_in_at_confirm(c, as_orcid=GUARANTOR):
-    r = c.get("/confirm/start")
-    assert r.status_code == 303, r.text
-    state = urllib.parse.parse_qs(urllib.parse.urlparse(r.headers["location"]).query)["state"][0]
-    return c.get("/consent/callback", params={"state": state, "code": as_orcid})
+    return sign_in_at(c, "confirm", as_orcid)          # the old address leads to the same page
 
 
 def tickets(page):
@@ -24,41 +22,47 @@ def confirm(c, ticket, action="confirm"):
 
 
 def sign_in_at(c, page, as_orcid=GUARANTOR):
-    r = c.get(f"/{page}/start")
+    r = c.get(f"/{page}/start", follow_redirects=False)
+    if r.status_code == 301:                              # /confirm/start -> /submissions/start
+        r = c.get(r.headers["location"], follow_redirects=False)
     assert r.status_code == 303, r.text
     state = urllib.parse.parse_qs(urllib.parse.urlparse(r.headers["location"]).query)["state"][0]
     return c.get("/consent/callback", params={"state": state, "code": as_orcid})
 
 
 def test_the_page(app_client):
-    r = app_client.get("/confirm")
-    assert r.status_code == 200 and 'href="/confirm/start"' in r.text and "Sign in with ORCID" in r.text
+    r = app_client.get("/confirm", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/submissions"   # one page: Your submissions
+    r = app_client.get("/confirm", follow_redirects=True)
+    assert r.status_code == 200 and "Your submissions</h1>" in r.text and 'href="/submissions/start"' in r.text
+    assert "confirm or cancel each" in r.text
 
 
 def test_the_guarantor_confirms_without_the_link(app_client):
     out, _ = submit(app_client)
-    assert app_client.get(f"/api/submissions/{out['id']}").json()["confirm_url"].endswith("/confirm")
+    assert app_client.get(f"/api/submissions/{out['id']}").json()["confirm_url"].endswith("/submissions")
     r = sign_in_at_confirm(app_client)
-    assert r.status_code == 200 and "1 submission names you" in r.text and "Confirm and publish" in r.text
+    assert r.status_code == 200 and "Waiting for you" in r.text and "Confirm and publish" in r.text
+    assert "Cancel" in r.text and "Published</h2>" in r.text                      # the same page as /submissions
     [ticket] = tickets(r.text)
     r = confirm(app_client, ticket)
     assert r.status_code == 200 and "published as entrylib:" in r.text, r.text
     s = app_client.get(f"/api/submissions/{out['id']}").json()
     assert s["state"] == "published" and "confirm_url" not in s
     assert confirm(app_client, ticket).status_code == 400                          # used once
-    assert "No submission is waiting" in sign_in_at_confirm(app_client).text
+    assert "Nothing waits for your confirmation" in sign_in_at_confirm(app_client).text
 
 
 def test_someone_else_sees_nothing(app_client):
     submit(app_client)
     r = sign_in_at_confirm(app_client, as_orcid="0000-0002-1825-0097")
-    assert r.status_code == 200 and "No submission is waiting" in r.text and not tickets(r.text)
+    assert r.status_code == 200 and "Nothing waits for your confirmation" in r.text and not tickets(r.text)
     assert confirm(app_client, "made-up").status_code == 400
 
 
 def test_a_listing_sign_in_is_used_once(app_client):
     submit(app_client)
-    r = app_client.get("/confirm/start")
+    r = app_client.get("/submissions/start")
     state = urllib.parse.parse_qs(urllib.parse.urlparse(r.headers["location"]).query)["state"][0]
     assert app_client.get("/consent/callback", params={"state": state, "code": GUARANTOR}).status_code == 200
     assert app_client.get("/consent/callback", params={"state": state, "code": GUARANTOR}).status_code == 400
@@ -85,7 +89,7 @@ def test_the_guarantor_cancels_a_submission(app_client, settings):
     assert s["state"] == "refused" and "cancelled by its guarantor" in str(s)
     assert not list(settings.submissions_dir.glob(f"{out['id']}.*"))         # the file is deleted
     assert confirm(app_client, ticket, "cancel").status_code == 400          # the ticket is used
-    assert "No submission is waiting" in sign_in_at_confirm(app_client).text
+    assert "Nothing waits for your confirmation" in sign_in_at_confirm(app_client).text
 
 
 def test_your_submissions(app_client):

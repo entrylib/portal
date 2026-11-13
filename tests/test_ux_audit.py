@@ -79,7 +79,7 @@ def test_not_found_is_a_page_for_people_and_json_for_programs(app_client):
 
 
 def test_labels_and_the_submit_page(app_client):
-    assert "Confirm a submission" in app_client.get("/confirm").text
+    assert "Your submissions</h1>" in app_client.get("/confirm", follow_redirects=True).text   # old address, one page
     page = app_client.get("/submit").text
     assert page.index("Publish a paper</h1>") < page.index("Waiting for your confirmation")
     assert '<p id="new_paper_row" hidden>' in page

@@ -409,15 +409,12 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             def listing():
                 with pool.connection() as conn:
                     items = consent.listing(conn, state, who, settings.submissions_dir)
-                    return items, (consent.history(conn, who) if items is not None and kind == "submissions"
-                                   else None)
+                    return items, (consent.history(conn, who) if items is not None else None)
             items, past = await run_in_threadpool(listing)
             if items is None:
                 return _page(site.message_page("Sign-in expired", "This sign-in has expired or was already used. "
-                                               "Sign in again.", (f"/{kind}", "Sign in again")), 400)
-            if kind == "submissions":
-                return _page(site.submissions_list(items, past, who, name))
-            return _page(site.confirm_list(items, who, name))
+                                               "Sign in again.", ("/submissions", "Sign in again")), 400)
+            return _page(site.submissions_list(items, past, who, name))   # one page, whichever started it
 
         def work():
             with pool.connection() as conn:
@@ -456,18 +453,15 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return Response(status_code=404)
         return RedirectResponse(f"{settings.base_url}{row[0]}", status_code=301)
 
-    @app.get("/confirm", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/confirm", include_in_schema=False)
     def confirm_page():
-        """For a guarantor without the consent link: sign in with ORCID to see the submissions waiting for them."""
-        return _page(site.confirm_page(orcid.configured))
+        """The old address of the guarantor's listing: it is now Your submissions, one page for confirming,
+        cancelling and seeing what you submitted."""
+        return RedirectResponse("/submissions", status_code=301)
 
     @app.get("/confirm/start", include_in_schema=False)
     def confirm_start():
-        if not orcid.configured:
-            return _page(site.confirm_page(False), 503)
-        with pool.connection() as conn:
-            state = consent.start_listing(conn)
-        return RedirectResponse(orcid.authorize_url(state), status_code=303)
+        return RedirectResponse("/submissions/start", status_code=301)
 
     @app.get("/submissions", response_class=HTMLResponse, include_in_schema=False)
     def submissions_page():
@@ -501,11 +495,11 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
     @app.post("/confirm", response_class=HTMLResponse, include_in_schema=False)
     async def confirm_ticket(request: Request):
-        """A Confirm or Cancel button of the /confirm listing: its ticket is bound to the submission and the iD that
+        """A Confirm or Cancel button of Your submissions: its ticket is bound to the submission and the iD that
         signed in."""
         body = await request.body()
         form = {k: v[0] for k, v in urllib.parse.parse_qs(body[:2000].decode("utf-8", "replace")).items()}
-        back = ("/confirm", "Back to your submissions")
+        back = ("/submissions", "Back to your submissions")
         if form.get("action") == "cancel":
             def cancel():
                 with pool.connection() as conn:
@@ -526,7 +520,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             code_ = {"wrong_person": 403, "limit": 429, "not_pending": 409, "duplicate": 409}.get(outcome.result, 400)
             text = outcome.message[:1].upper() + outcome.message[1:]
             return _page(site.message_page("Not confirmed", text if text.endswith(".") else text + ".",
-                                           ("/confirm", "Confirm a submission")), code_)
+                                           ("/submissions", "Back to your submissions")), code_)
         try:
             done = dict(await run_in_threadpool(publish_now))
         except Exception:  # noqa: BLE001 - the periodic loop retries; the guarantor has confirmed either way
@@ -538,13 +532,13 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return _page(site.message_page("Published", f"Thank you. The claimset is published as {published}.",
                                            (f"/p/{key}", "Open it")))
         return _page(site.message_page("Confirmed", "Thank you. You have confirmed the claimset; it will be "
-                                       "published shortly.", ("/confirm", "Back to your submissions")))
+                                       "published shortly.", ("/submissions", "Back to your submissions")))
 
     @app.post("/confirm/package", response_class=HTMLResponse, include_in_schema=False)
     async def confirm_package(request: Request):
-        """Attach and confirm, from the /confirm listing: the package of a submission waiting for it (design §4.4),
+        """Attach and confirm, from Your submissions: the package of a submission waiting for it (design §4.4),
         then its ticket's confirmation."""
-        back = ("/confirm", "Back to your submissions")
+        back = ("/submissions", "Back to your submissions")
         try:
             path, fields = await _form_file(request)
         except UploadTooLarge:

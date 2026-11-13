@@ -52,7 +52,7 @@ PUBLISH = [("/submit", "Publish a paper", "Submit a paper your AI agent has prep
 BUTTON = ' class="button"'
 CARET = ('<svg class="caret" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">'
          '<path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>')
-FOOTER = [("/about", "About"), ("/confirm", "Confirm a submission"), ("/submissions", "Your submissions"),
+FOOTER = [("/about", "About"), ("/submissions", "Your submissions"),
           ("/privacy", "Privacy"),
           ("/removal", "Removal requests"), ("/spec/", "Specification"), ("/llms.txt", "llms.txt, for AI agents"),
           (SOURCE_CODE, "Source code"), (f"mailto:{CONTACT}", CONTACT)]
@@ -1286,25 +1286,15 @@ def _sign_in(path, orcid_ready):
             '<p class="muted">ORCID sign-in is not available now.</p>')
 
 
-def confirm_page(orcid_ready=True):
-    """/confirm: sign in with ORCID to see the submissions waiting for you, without the consent link."""
-    main = ('<div class="wrap prose"><h1>Confirm a submission</h1><p class="lead">When an AI agent submits a paper, '
-            "its responsible researcher (the guarantor, in the claimset format) confirms it before it is published. "
-            "The consent link the agent was given leads straight "
-            "to it; without the link, sign in here with your ORCID iD to see every submission waiting for you, and "
-            f"confirm or cancel each.</p>{_sign_in('/confirm', orcid_ready)}<p class=\"muted\">Submissions wait 48 "
-            "hours for confirmation; then they are deleted and can be submitted again. "
-            '<a href="/submissions">Your submissions</a> shows everything you submitted.</p></div>')
-    return shell("Confirm a submission", main, active="submissions",
-                 head='<meta name="robots" content="noindex">')
-
-
 def submissions_page(orcid_ready=True):
     """/submissions: sign in with ORCID to see what you submitted and what you guarantee."""
-    main = ('<div class="wrap prose"><h1>Your submissions</h1><p class="lead">Sign in with your ORCID iD to see '
-            "what waits for your confirmation, what waits for others or is being published, what closed recently, "
-            "and every paper you are the responsible researcher for (its guarantor, in the claimset format).</p>"
-            f"{_sign_in('/submissions', orcid_ready)}</div>")
+    main = ('<div class="wrap prose"><h1>Your submissions</h1><p class="lead">When an AI agent submits a paper, its '
+            "responsible researcher (the guarantor, in the claimset format) confirms it before it is published. The "
+            "consent link the agent was given leads straight to it; without the link, sign in here with your ORCID "
+            "iD. You see what waits for you, with a button to confirm or cancel each, what waits for others or is "
+            "being published, what closed recently, and every paper you are the responsible researcher for.</p>"
+            f"{_sign_in('/submissions', orcid_ready)}<p class=\"muted\">Submissions wait 48 hours for "
+            "confirmation; then they are deleted and can be submitted again.</p></div>")
     return shell("Your submissions", main, active="submissions",
                  head='<meta name="robots" content="noindex">')
 
@@ -1350,22 +1340,6 @@ def _attach_form(it, ticket):
             f'<form method="post" action="/confirm/package" enctype="multipart/form-data" class="actions">{ticket}'
             '<input type="file" name="package" accept=".zip,application/zip" required> '
             '<button type="submit">Attach and confirm</button></form>')
-
-
-def confirm_list(items, orcid, name=None):
-    """The submissions waiting for the guarantor who signed in, each with its claims and its buttons."""
-    who = _who_signed_in(orcid, name)
-    if not items:
-        body = (f"<p>No submission is waiting for {who}. A submission is deleted 48 hours after it was made; if "
-                "yours has expired, submit it again.</p>")
-    else:
-        body = (f"<p>Signed in as {who}. {len(items)} submission{'s' if len(items) != 1 else ''} "
-                f"name{'s' if len(items) == 1 else ''} you as the responsible researcher.</p>"
-                f"<p>{esc(CONSENT)}</p>" + _pending(items)
-                + '<p class="muted">These buttons work for 30 minutes; then sign in again.</p>')
-    main = f'<div class="wrap prose"><h1>Confirm a submission</h1>{body}</div>'
-    return shell("Confirm a submission", main, active="submissions",
-                 head='<meta name="robots" content="noindex">')
 
 
 SUBMISSION_STATES = {"pending": "waiting for another guarantor", "confirmed": "confirmed, being published",
@@ -1446,8 +1420,8 @@ def message_page(title, text, link=None):
 def submit_page(body):
     """The upload page: its form and script (static/submit.html) in the site's page."""
     waiting = ('<p class="small">Waiting for your confirmation as the responsible researcher? '
-               '<a href="/confirm">See your submissions</a>: sign in with ORCID to confirm them, without the '
-               'consent link.</p>')
+               '<a href="/submissions">See your submissions</a>: sign in with ORCID to confirm or cancel them, '
+               'without the consent link.</p>')
     intro_end = body.find("</p>") + len("</p>")                     # the guarantor's note after the introduction
     body = body[:intro_end] + waiting + body[intro_end:] if intro_end > 3 else waiting + body
     return shell("Publish a paper", f'<div class="wrap prose">{body}</div>', active="submit",
