@@ -135,7 +135,7 @@ def test_search_and_read(app_client):
     assert "paper_warnings" in cards[0] and "warnings" not in cards[0]          # a count, not dozens per paper
     assert all(isinstance(h["warnings"], list) and "paper_warnings" in h for h in hits)
     raw = ok(app_client, "get_paper", id=concept, format="json")
-    assert "\n" not in raw and ", " not in raw.split('"statement"')[0]          # compact
+    assert "\n" not in raw.strip() and json.loads(raw) and ": " not in raw.split('"claims"')[0]   # compact
     overview = ok(app_client, "get_paper", id=concept, part="overview")
     assert overview.startswith("CLAIMSET") and "SECTIONS" in overview and "  claims: " in overview
     assert len(overview) < len(view)
