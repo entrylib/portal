@@ -168,6 +168,7 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
 def write_static(conn, registry, folder, published_dir, base_url):
     """The static files of one claimset, from its registry folder, and the index."""
     published_dir = Path(published_dir)
+    scores.use_published(published_dir)                  # cited claims, by their scores here (rubric 0.5)
     versions = registry.versions(folder)
     notes = registry.notices(folder)
     raws = {n: registry.read(folder, n) for n in versions}

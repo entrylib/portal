@@ -326,7 +326,8 @@ def build(portal):
     def score(ctx: Context, claimset: dict | str | None = None, files: list[PackagedFile] | None = None,
               upload_id: str | None = None, package_url: str | None = None) -> dict:
         """Optional, before submit: the scores a claimset would have once published, by EntryLib's rubric
-        (https://github.com/entrylib/rubric), with its close-match check against the claims published here. Give the
+        (https://github.com/entrylib/rubric), with its close-match check against the claims published here, and the
+        claims it cites that are published here scored by their scores here. Give the
         claimset (its files are not needed to score it), or upload_id or package_url as for validate. Nothing is kept.
         `report` is plain text for your human: the paper's score, the biggest issues with what would fix them, every
         issue and every claim's score; `scores` holds the same as data. A file with errors is not scored: `valid` is
@@ -336,7 +337,12 @@ def build(portal):
         path = _source(ctx, claimset, files, package_url, "validate", upload_id)
         try:
             with portal.pool.connection() as conn:
-                out = claimset_score.score(path, scores.finder(conn, None))
+                find = scores.finder(conn, None)
+                if hasattr(claimset_score, "published_scores"):     # cited claims, by their scores here (rubric 0.5)
+                    out = claimset_score.score(path, find, claimset_score.published_scores(
+                        folder=portal.settings.published_dir))
+                else:                                               # a claimset older than 0.42.7
+                    out = claimset_score.score(path, find)
                 by = "by EntryLib, on the file sent to it; nothing was kept"
                 try:
                     out["report"] = claimset_score.describe(out, by=by, name=scores.NAME)
