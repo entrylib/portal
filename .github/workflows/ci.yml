@@ -35,8 +35,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e '.[dev]'
-      # The scoring rubric (design §7.6); its tests are skipped while it cannot be installed.
-      - run: pip install "entrylib-rubric @ git+https://github.com/entrylib/rubric" || echo "rubric not installed"
+      # The scoring rubric (design §7.6), so that the scores' tests run.
+      - run: pip install "entrylib-rubric>=0.4"
       - run: ruff check .
       - run: pytest -q
       - run: python -m unittest discover -s classifier/tests

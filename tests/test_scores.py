@@ -59,7 +59,7 @@ def test_the_rubric_scores_and_reports():
     assert {k: v for k, v in result.items() if k != "note"} == rubric.assess(doc)
     assert all(not n["checked"] for n in result["novelty"].values())       # no database: nothing compared
     text = scores.issues_text(result, "entrylib:2026.000001", 1, "https://entrylib.org")
-    assert text.endswith(rubric.report(result)) and "claimset score" in text
+    assert text.endswith(scores.report(result)) and "claimset score" in text     # the rubric's, under the site's name
 
 
 def test_the_rubric_reads_the_validators_warnings(monkeypatch):

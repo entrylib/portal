@@ -26,8 +26,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.28.1", "ruff>=0.6"]
-# EntryLib's scoring rubric (design §7.6), from GitHub: without it the pages show "–" for scores.
-scores = ["entrylib-rubric @ git+https://github.com/entrylib/rubric"]
+# EntryLib's scoring rubric (design §7.6), from PyPI: without it the pages show "–" for scores.
+scores = ["entrylib-rubric>=0.4"]
 
 [project.scripts]
 portal = "portal.cli:main"
