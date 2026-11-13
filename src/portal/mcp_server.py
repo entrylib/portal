@@ -286,7 +286,10 @@ def build(portal):
         """How to write a claimset: a skill of the claimset package by name (claimset-from-paper for an author's own
         paper, claimset-submit for any submission, claimset-lab, claimset-revise, claimset-review), or
         name='specification' for the Claimset specification, whole or one numbered section (section='3.4'). Without a
-        name: the list. Write a claimset only from these texts, not from memory."""
+        name: the list. Write a claimset only from these texts, not from memory. For planning a study:
+        name='study-planning' lists EntryLib's good practice (which measure, test or design fits a kind of study, and
+        why, with references); 'study-planning/prediction' gives one guide, and section='mean-forecasts' (or
+        'study-planning/prediction#mean-forecasts') one entry, the reference a plan cites."""
         try:
             return skills.guide(name, section)
         except KeyError as exc:

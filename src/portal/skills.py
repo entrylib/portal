@@ -179,19 +179,52 @@ def write(published_dir, shell, write_file, base_url, root=None, examples=None):
     return cat
 
 
-def guide(name=None, section=None, root=None, spec_text=None):
-    """The text the MCP tool `guide` returns: the list of skills; one skill; or the specification, whole or one
-    numbered section (`3.4`, with its subsections)."""
+PLANNING = "study-planning"
+PLANNING_URL = "https://github.com/entrylib/study-planning"
+
+
+def guide(name=None, section=None, root=None, spec_text=None, planning=None):
+    """The text the MCP tool `guide` returns: the list of skills; one skill; the specification, whole or one
+    numbered section (`3.4`, with its subsections); or EntryLib's good practice for planning a study
+    (`study_planning`)."""
     cat = catalogue(root)
     if not name:
         return ("Skills: " + ", ".join(cat) + ". Ask for one by name, or for name='specification' (optionally a "
-                "section such as '3.4'). Write a claimset only from these texts, never from memory.")
+                "section such as '3.4'). Write a claimset only from these texts, never from memory. "
+                "name='study-planning' gives EntryLib's good practice for planning a study: which measure, test or "
+                "design fits a kind of study, and why, with its references.")
+    if name.split("/")[0].split("#")[0] == PLANNING:
+        return study_planning(name, section, planning)
     if name == "specification":
         text = spec_text if spec_text is not None else _spec()
         return _section(text, section) if section else text
     if name not in cat:
         raise KeyError(f"no skill {name}: the skills are {', '.join(cat)}, and 'specification'")
     return cat[name]["text"]
+
+
+def study_planning(name, entry=None, planning=None):
+    """EntryLib's good practice for planning a study, from the copy the installed claimset package carries
+    (`claimset.bundle.study_planning`): 'study-planning' the list of guides, 'study-planning/prediction' one guide,
+    'study-planning/prediction#mean-forecasts' (or `entry` 'mean-forecasts') one entry with its references. A
+    claimset too old to carry it gets the repository's address instead. `planning` replaces the package's function
+    (tests)."""
+    ref = name if not entry or "#" in name else f"{name}#{entry}"
+    if planning is None:
+        try:
+            from claimset.bundle import study_planning as planning
+        except ImportError:
+            planning = None
+    try:
+        if planning is None:
+            raise FileNotFoundError
+        return planning(ref)
+    except FileNotFoundError:
+        return (f"The claimset package installed here carries no copy of the good practice for planning a study. "
+                f"Read it at {PLANNING_URL}: the list in README.md, each guide as GUIDE.md, each entry under its "
+                f"heading ({ref}).")
+    except ValueError as exc:
+        raise KeyError(str(exc)) from None
 
 
 def _spec():

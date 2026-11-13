@@ -71,6 +71,10 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   it: {base}/skills/ (each skill as a page, {base}/skills/<name>, and as text, {base}/skills/<name>.md), the
   specification at {base}/spec/claimset.md, and the MCP tool guide (a skill by name, or the specification or one of
   its sections).
+- Planning a study (the claimset-lab skill): EntryLib's good practice for planning a study, which measure, test or
+  design fits a kind of study and why, with references, is at https://github.com/entrylib/study-planning and from the
+  MCP tool guide (name 'study-planning', one guide 'study-planning/prediction', one entry with section
+  'mean-forecasts'). Propose its defaults to the person you work with; they are not requirements.
 - An author turning their own paper into a claimset: {base}/skills/claimset-from-paper.md, which builds on
   {base}/skills/claimset-submit.md. {base}/convert/message.txt is the message an author gives their assistant, with
   both skills and an example claimset in it.
