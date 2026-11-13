@@ -99,3 +99,38 @@ def test_the_site_publishes_the_installed_skills(env):
     assert " /skills /skills/* " in caddy and " /convert/message.txt " in caddy and "/skills/*.md" in caddy
     llms = reading.llms_txt(BASE)
     assert f"{BASE}/skills/claimset-from-paper.md" in llms and "never from memory" in llms and " guide," in llms
+
+
+def test_guide_gives_good_practice_for_planning_a_study():
+    asked = []
+
+    def planning(ref):
+        asked.append(ref)
+        if ref.endswith("#nothing"):
+            raise ValueError("no entry 'nothing' in study-planning/prediction: the entries are mean-forecasts")
+        return f"text of {ref}"
+
+    assert skills.guide("study-planning", planning=planning) == "text of study-planning"
+    assert skills.guide("study-planning/prediction", "mean-forecasts", planning=planning) == \
+        "text of study-planning/prediction#mean-forecasts"
+    assert skills.guide("study-planning/prediction#mean-forecasts", "ignored", planning=planning) == \
+        "text of study-planning/prediction#mean-forecasts"
+    with pytest.raises(KeyError, match="the entries are"):
+        skills.guide("study-planning/prediction", "nothing", planning=planning)
+    assert "study-planning" in skills.guide()
+
+
+def test_guide_without_a_copy_of_good_practice_points_to_the_repository():
+    def planning(ref):
+        raise FileNotFoundError(ref)
+
+    text = skills.guide("study-planning/prediction", planning=planning)
+    assert skills.PLANNING_URL in text and "study-planning/prediction" in text
+
+
+def test_guide_reads_the_copy_the_installed_claimset_carries():
+    bundle = pytest.importorskip("claimset.bundle")
+    if not hasattr(bundle, "study_planning"):
+        pytest.skip("the installed claimset carries no study-planning")
+    text = skills.guide("study-planning/prediction", "mean-forecasts")
+    assert "## mean-forecasts" in text and "## References" in text
