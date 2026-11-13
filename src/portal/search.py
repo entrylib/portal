@@ -147,6 +147,8 @@ def search_papers(conn, base_url, q, limit=10, offset=0, licence=None, guarantor
     for concept, version, status, file, warnings, rank in rows:
         card = paper_card(file, base_url)
         card.update(_version_fields(concept, version, status, file, warnings, base_url))
+        del card["warnings"]                                # dozens per paper: a count, and validate(url) lists them
+        card["paper_warnings"] = len(warnings or [])
         if rank is not None:
             card["rank"] = round(float(rank), 6)
         results.append(card)

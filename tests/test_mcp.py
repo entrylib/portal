@@ -132,6 +132,17 @@ def test_search_and_read(app_client):
                        (f"{concept}@vx#C1", "version"), (f"{concept}@v9#C1", "not published")):
         err, text = call(app_client, "get_claim", id=bad)
         assert err and words in text, (bad, text)
+    assert "paper_warnings" in cards[0] and "warnings" not in cards[0]          # a count, not dozens per paper
+    assert all(isinstance(h["warnings"], list) and "paper_warnings" in h for h in hits)
+    raw = ok(app_client, "get_paper", id=concept, format="json")
+    assert "\n" not in raw and ", " not in raw.split('"statement"')[0]          # compact
+    overview = ok(app_client, "get_paper", id=concept, part="overview")
+    assert overview.startswith("CLAIMSET") and "SECTIONS" in overview and "  claims: " in overview
+    assert len(overview) < len(view)
+    claims = ok(app_client, "get_paper", id=concept, part="Claims")
+    assert claims.startswith("CLAIMS\n") and "DEFINITIONS" not in claims
+    err, text = call(app_client, "get_paper", id=concept, part="nowhere")
+    assert err and "part: overview, or one of" in text
 
 
 def test_registry_listing():

@@ -148,6 +148,18 @@ def label(n):
     return words + (f" · {CHECK[n['check']]}" if n.get("checked") and n.get("check") == "unacknowledged" else "")
 
 
+#: What the site calls the reliability score (design §7.6); score_html shows it, and the texts for models use it.
+NAME = "Support"
+
+
+def report(scores, top=0):
+    """The rubric's report, with the score under the site's name when the installed rubric can take one."""
+    try:
+        return rubric.report(scores, top, name=NAME)
+    except TypeError:                                   # a rubric older than its `name`
+        return rubric.report(scores, top)
+
+
 def text(scores):
     """The scores in plain text, for the end of the reading view."""
     if not scores:
@@ -155,10 +167,10 @@ def text(scores):
     out = ["", "SCORES", scores["note"]]
     paper = scores.get("paper")
     if paper:
-        out.append(f"Reliability of the paper: {paper['score']} ({paper['band']}), {paper_basis(paper)}.")
+        out.append(f"{NAME} of the paper: {paper['score']} ({paper['band']}), {paper_basis(paper)}.")
     for cid, c in scores["claims"].items():
         n = label(scores["novelty"].get(cid))
-        out.append(f"{cid}: reliability {c['score']} ({c['band']})" + (f"; novelty: {n}" if n else ""))
+        out.append(f"{cid}: {NAME} {c['score']} ({c['band']})" + (f"; novelty: {n}" if n else ""))
     problems = paper["problems"] if paper else []
     if problems:
         out.append("Open problems in the principal claims and what they rest on:")
@@ -176,7 +188,7 @@ def issues_text(scores, concept, n, base_url):
     if not scores:
         return ""
     key = concept.split(":", 1)[-1]
-    out = [f"EntryLib: the issues that lower the reliability scores of {concept}@v{n}, by the EntryLib rubric "
+    out = [f"EntryLib: the issues that lower the {NAME} scores of {concept}@v{n}, by the EntryLib rubric "
            f"{scores['rubric']}.",
            "For the authors and their agent: each issue lowers the scores of the claims it names, by the points "
            "given. Address what you can in a correction (a new version of the claimset) and submit it; the scores are "
@@ -186,8 +198,8 @@ def issues_text(scores, concept, n, base_url):
            "Rubric: https://github.com/entrylib/rubric/blob/main/RUBRIC.md",
            f"Page: {base_url}/p/{key}@v{n}#score · Scores as JSON: {base_url}/p/{key}@v{n}.score.json", ""]
     try:
-        report = rubric.report(scores)
+        text_ = report(scores)
     except Exception as exc:  # noqa: BLE001 - the rubric's failure leaves the issues out, nothing else
         rubric_error(f"writing the issues of {concept}@v{n} (rubric {version()})", f"{type(exc).__name__}: {exc}")
         return ""
-    return "\n".join(out) + "\n" + report
+    return "\n".join(out) + "\n" + text_
