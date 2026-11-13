@@ -129,6 +129,14 @@ class TestSearch:
         hits = search.search_claims(ctx["conn"], BASE, "yearly cycles")["results"]
         assert [(r["claim"], r["version"], r["status"]) for r in hits] == [("C1", 2, "corrected")]
         assert hits[0]["status_notice"]["statement"] == "Clearer wording."
+        flags = dict(((v, c), cur) for v, c, cur in ctx["conn"].execute(
+            "SELECT version, claim_id, is_current FROM claims WHERE concept_id = %s", (concept,)).fetchall())
+        assert flags[(1, "C1")] is False and flags[(2, "C1")] is True     # migration 0016: only v2 is searched
+
+    def test_a_statement_match_ranks_above_a_match_through_the_paper(self, env):
+        ctx, _, _ = published(env)
+        wide = [r["claim"] for r in search.search_claims(ctx["conn"], BASE, "seasonality")["results"]]
+        assert wide[-1] == "C3"                                             # C3 only through the paper's title
 
     def test_reindex_rebuilds_the_search(self, env):
         ctx, _, _ = published(env)
