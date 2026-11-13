@@ -47,7 +47,8 @@ def test_the_pieces_agree():
         assert f"{name}=" in setup and name in compose, name
 
 
-def test_start_reinstalls_the_rubric():
-    # pip keeps a git install whose version number is unchanged, and the rubric's code changes without it
-    line = next(x for x in (ROOT / "deploy" / "start.sh").read_text().splitlines() if "entrylib-rubric @ git+" in x)
-    assert "--force-reinstall" in line
+def test_start_updates_the_rubric_from_pypi():
+    # a release has a new version number, so --upgrade installs it, as for claimset
+    line = next(x for x in (ROOT / "deploy" / "start.sh").read_text().splitlines()
+                if "pip install" in x and "entrylib-rubric" in x)
+    assert "--upgrade" in line and "git+" not in line
