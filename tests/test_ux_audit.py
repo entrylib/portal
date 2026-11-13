@@ -301,3 +301,32 @@ def test_the_pages_agree():
     assert "Converted by its authors" in about and "Converted by its authors" in judge
     assert "conversion guarantor" not in (pages / "how-to-judge.html").read_text()
     assert "conversion guarantor" not in site._origin_line({"paper": {}, "artefacts": []}, "converted", None)
+
+
+def _people_lines(doc):
+    header = site.render(doc)["header"]
+    return [re.sub(r"<[^>]+>", "", x) for x in re.findall(r'<p class="cs-(?:guarantor|authors)">(.*?)</p>', header)]
+
+
+def test_a_paper_its_authors_converted_names_every_author():
+    doc = example()
+    doc["paper"]["id"] = "entrylib:2026.000001"
+    doc["artefacts"].append({"id": "A9", "kind": "manuscript", "uri": "https://doi.org/10.1/x",
+                             "availability": {"level": "public"}})
+    doc["contributors"].append({"id": "P9", "type": "human", "name": "Co Author", "positions": ["contributor"]})
+    lines = _people_lines(doc)
+    authors = next(x for x in lines if x.startswith("Authors of the paper: "))
+    g = next(c for c in doc["contributors"] if "guarantor" in c["positions"])
+    assert g["name"] in authors and "Co Author" in authors                   # the guarantor among them, in order
+    assert authors.index(g["name"]) < authors.index("Co Author")
+
+
+def test_supervisors_and_contributors_are_named():
+    doc = example()
+    doc["paper"]["id"] = "entrylib:2026.000001"
+    doc["contributors"] += [{"id": "P8", "type": "human", "name": "Sue Pervisor", "positions": ["supervisor"]},
+                            {"id": "P9", "type": "human", "name": "Con Tributor", "positions": ["contributor"]}]
+    lines = _people_lines(doc)
+    assert any(x.startswith("Supervised by: ") and "Sue Pervisor" in x for x in lines)
+    assert any(x.startswith("Contributors: ") and "Con Tributor" in x for x in lines)
+    assert not any(x.startswith("Authors of the paper") for x in lines)
