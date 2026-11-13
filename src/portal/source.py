@@ -129,3 +129,23 @@ def authorship(record, people):
         if any(f in words or all(w in words for w in f.split()) for f in families):
             return "name"
     return "absent"
+
+
+def own_paper(doc):
+    """The paper its authors converted into this claimset (a native claimset with `paper.published_as`, or, before
+    that field, a `manuscript` artefact with its DOI or other address in `uri`): (address or None, description), or
+    None."""
+    pub = (doc.get("paper") or {}).get("published_as")
+    if isinstance(pub, dict) and pub.get("id"):
+        doi_ = doi({"paper": {"published_as": pub}})
+        href = f"https://doi.org/{doi_}" if doi_ else (pub["id"] if str(pub["id"]).startswith("https://") else None)
+        named = next((str(a.get("description")) for a in doc.get("artefacts") or []
+                      if isinstance(a, dict) and a.get("kind") == "manuscript" and a.get("description")), None)
+        return href, named or (f"doi:{doi_}" if doi_ else str(pub["id"]))
+    for a in doc.get("artefacts") or []:
+        if isinstance(a, dict) and a.get("kind") == "manuscript":
+            uri = a.get("uri") if isinstance(a.get("uri"), str) else ""
+            href = uri if uri.startswith(("https://", "http://")) else (
+                f"https://doi.org/{uri[4:]}" if uri.startswith("doi:") else None)
+            return href, str(a.get("description") or uri or "")
+    return None
