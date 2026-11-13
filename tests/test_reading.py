@@ -129,6 +129,14 @@ class TestSearch:
         hits = search.search_claims(ctx["conn"], BASE, "yearly cycles")["results"]
         assert [(r["claim"], r["version"], r["status"]) for r in hits] == [("C1", 2, "corrected")]
         assert hits[0]["status_notice"]["statement"] == "Clearer wording."
+        flags = dict(((v, c), cur) for v, c, cur in ctx["conn"].execute(
+            "SELECT version, claim_id, is_current FROM claims WHERE concept_id = %s", (concept,)).fetchall())
+        assert flags[(1, "C1")] is False and flags[(2, "C1")] is True     # migration 0016: only v2 is searched
+
+    def test_a_statement_match_ranks_above_a_match_through_the_paper(self, env):
+        ctx, _, _ = published(env)
+        wide = [r["claim"] for r in search.search_claims(ctx["conn"], BASE, "seasonality")["results"]]
+        assert wide[-1] == "C3"                                             # C3 only through the paper's title
 
     def test_reindex_rebuilds_the_search(self, env):
         ctx, _, _ = published(env)
@@ -209,3 +217,11 @@ def test_claim_page_sections_come_from_the_packages_blocks():
              "sections": [("brief", "In brief", 0), ("principal", "Principal claims", 1), ("evidence", "Evidence", 2)]}
     assert site._claim_sections(parts) == ("<h2>The claim</h2>x\n<h2>Evidence</h2>e",
                                            [("principal", "The claim", 0), ("evidence", "Evidence", 2)])
+
+
+def test_a_claim_result_carries_its_own_warnings_not_its_papers():
+    ws = [{"rule": "W22", "where": "claims:C2.statement"}, {"rule": "W11", "where": "claims:C2.checks[0]"},
+          {"rule": "W25", "where": "claims:C20"}, {"rule": "W1", "where": "contributors:P2.orcid"},
+          {"rule": "W13", "where": "claims:C2"}]
+    assert [w["rule"] for w in search.claim_warnings(ws, "C2")] == ["W22", "W11", "W13"]
+    assert search.claim_warnings(None, "C2") == [] and search.claim_warnings(ws, "C9") == []

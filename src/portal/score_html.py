@@ -14,7 +14,7 @@ from . import text
 RUBRIC_URL = "https://github.com/entrylib/rubric/blob/main/RUBRIC.md"
 #: The score's name on the site: the rubric's reliability score, named for what it measures (design §7.6). The files
 #: and the API keep `reliability`.
-NAME = "Support"
+NAME = sc.NAME
 #: What a band means in words (rubric §4.1), and what the score does not say, shown beside it.
 BANDS = {"high": "Well supported", "medium": "Partly supported", "low": "Weakly supported"}
 CAPTION = "Checks the record, not the science."

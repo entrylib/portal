@@ -90,16 +90,24 @@ def search_claims(conn, base_url, q, limit=10, offset=0, **filters):
         where.append("%s = ANY(p.guarantors)")
         args.append(_guarantor(filters["guarantor"]))
     extra = "".join(f" AND {w}" for w in where)
-    rows = conn.execute(
-        "WITH query AS (SELECT websearch_to_tsquery('english', %s) AS tsq)"
-        " SELECT c.concept_id, c.version, c.claim_id, c.statement, c.type, c.role, c.novelty, c.planning,"
-        " c.support_kinds, c.is_assumption, p.title, p.licence, v.status, v.file, v.warnings,"
-        " ts_rank_cd(c.search, query.tsq) AS rank"
-        " FROM claims c JOIN papers p ON p.concept_id = c.concept_id AND p.current_version = c.version"
-        " JOIN versions v ON v.concept_id = c.concept_id AND v.version = c.version, query"
-        f" WHERE c.search @@ query.tsq{extra}"
-        " ORDER BY rank DESC, c.concept_id, c.claim_id LIMIT %s OFFSET %s",
-        args + [limit, offset]).fetchall()
+    papers = " JOIN papers p ON p.concept_id = c.concept_id" if "p." in extra else ""
+    # Rank only the matching current claims (their own index, migration 0016), by the statement's short vector
+    # (`tsv`; `search` adds the definitions and the paper, ten times longer), keep the page, then fetch its rows.
+    # Enough memory keeps the index's bitmap exact for words that match many claims.
+    with conn.transaction():
+        conn.execute("SET LOCAL work_mem = '32MB'")
+        rows = conn.execute(
+            "WITH query AS (SELECT websearch_to_tsquery('english', %s) AS tsq),"
+            " top AS (SELECT c.concept_id, c.version, c.claim_id, ts_rank_cd(c.tsv, query.tsq) AS rank"
+            f" FROM claims c{papers}, query WHERE c.is_current AND c.search @@ query.tsq{extra}"
+            " ORDER BY rank DESC, c.concept_id, c.claim_id LIMIT %s OFFSET %s)"
+            " SELECT c.concept_id, c.version, c.claim_id, c.statement, c.type, c.role, c.novelty, c.planning,"
+            " c.support_kinds, c.is_assumption, p.title, p.licence, v.status, v.file, v.warnings, top.rank"
+            " FROM top JOIN claims c USING (concept_id, version, claim_id)"
+            " JOIN papers p ON p.concept_id = c.concept_id"
+            " JOIN versions v ON v.concept_id = c.concept_id AND v.version = c.version"
+            " ORDER BY top.rank DESC, c.concept_id, c.claim_id",
+            args + [limit, offset]).fetchall()
     results = []
     for (concept, version, cid, statement, typ, role, novelty, planning, support, assumption, title, licence, status,
          file, warnings, rank) in rows:
@@ -109,8 +117,18 @@ def search_claims(conn, base_url, q, limit=10, offset=0, **filters):
              "paper_title": title, "licence": licence, "rank": round(float(rank), 6),
              "bundle": f"{base_url}/p/{key}/{cid}.txt", "bundle_json": f"{base_url}/p/{key}/{cid}.json"}
         r.update(_version_fields(concept, version, status, file, warnings, base_url))
+        r["warnings"] = claim_warnings(warnings, cid)          # its own, not its paper's (repeated for each claim)
+        r["paper_warnings"] = len(warnings or [])
         results.append(r)
     return {"query": q, "limit": limit, "offset": offset, "results": results}
+
+
+def claim_warnings(warnings, cid):
+    """The validator warnings about one claim: those whose place is the claim or a part of it (`claims:C2`,
+    `claims:C2.statement`, `claims:C2.checks[0]`, not `claims:C20`)."""
+    here = f"claims:{cid}"
+    return [w for w in warnings or [] if isinstance(w, dict) and isinstance(w.get("where"), str)
+            and (w["where"] == here or w["where"].startswith((here + ".", here + "[")))]
 
 
 def search_papers(conn, base_url, q, limit=10, offset=0, licence=None, guarantor=None):
@@ -147,6 +165,8 @@ def search_papers(conn, base_url, q, limit=10, offset=0, licence=None, guarantor
     for concept, version, status, file, warnings, rank in rows:
         card = paper_card(file, base_url)
         card.update(_version_fields(concept, version, status, file, warnings, base_url))
+        del card["warnings"]                                # dozens per paper: a count, and validate(url) lists them
+        card["paper_warnings"] = len(warnings or [])
         if rank is not None:
             card["rank"] = round(float(rank), 6)
         results.append(card)

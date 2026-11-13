@@ -152,6 +152,8 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
                   sorted({s.get("kind") for s in c.get("support") or [] if isinstance(s, dict) and s.get("kind")}),
                   plain(c.get("statement")), claim_text(c, defs), paper_c)
                  for c in doc.get("claims") or [] if isinstance(c, dict)])
+        conn.execute("UPDATE claims SET is_current = (version = (SELECT current_version FROM papers"
+                     " WHERE concept_id = %s)) WHERE concept_id = %s", (concept, concept))   # search: 0016
         conn.execute("UPDATE papers SET source_doi = %s WHERE concept_id = %s AND current_version = %s",
                      (source.doi(doc), concept, n))
         conn.execute("UPDATE papers SET licence = %s, guarantors = %s, title_key = %s,"
