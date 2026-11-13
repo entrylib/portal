@@ -58,7 +58,7 @@ def test_fixed_pages_and_assets_at_start(env):
     for name in ("lab", "about", "agents", "privacy"):
         page = (out / f"{name}.html").read_text()
         assert page.startswith("<!doctype html>") and "{base}" not in page, name
-        assert ("<script" in page) == (name == "agents"), name                 # For agents: its copy buttons
+        assert ("<script" in page) == (name in ("agents", "lab")), name       # their copy buttons
     assert "This website was created by Claude Opus 5.5." in (out / "about.html").read_text()
     assert f"{BASE}/mcp" in (out / "agents.html").read_text()
     assert (out / "site.css").exists() and ".cs-toc" in (out / "claimset.css").read_text()

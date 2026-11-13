@@ -2,7 +2,8 @@
 
 Only for our own text, the specifications shipped with the claimset package; submitted content is never converted.
 It still escapes everything and keeps only http(s), relative and fragment links. It knows what the specifications use:
-headings, paragraphs, nested lists, tables, fenced code, block quotes, rules, inline code, bold, italic and links.
+headings, paragraphs, nested lists, tables, fenced code, block quotes, rules, inline code, bold, italic, links
+and autolinks (<https://…>).
 Numbered headings ("### 2.6 Specification versions") get their number as anchor (`#2.6`), and "§2.6" in the text links
 to it.
 
@@ -60,7 +61,12 @@ def _inline_markup(text, anchors):
         links.append(f'<a href="{esc(href)}">{label}</a>' if href else label)
         return f"\x00{len(links) - 1}\x00"
 
+    def keep_autolink(m):
+        links.append(f'<a href="{esc(m.group(1))}">{esc(m.group(1))}</a>')
+        return f"\x00{len(links) - 1}\x00"
+
     text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", keep_link, text)
+    text = re.sub(r"<(https?://[^\s<>]+)>", keep_autolink, text)     # an autolink, <https://…>
     s = esc(text)
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<em>\1</em>", s)

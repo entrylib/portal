@@ -77,3 +77,22 @@ run commands in your project; it needs Python 3.10 or later and git, and nothing
 </ol>
 <p><a href="/spec/lab-record">Read the lab record specification</a> · <a href="https://github.com/entrylib/claimset">The tool on
 GitHub</a></p>
+
+<h2 id="plan">Plan a study with any assistant</h2>
+<p>Before the research starts, any assistant can help you plan it, a chat assistant included: what to measure, which
+test, which design fits the study, and why. It works from EntryLib's <a href="/study-planning/">good practice for
+planning a study</a>: it proposes a default with its reason and the paper it rests on, asks you about the rest, and ends
+with the agreed plan and where each choice came from.</p>
+<div class="connect">
+<pre id="plan-prompt">{plan_request}</pre>
+</div>
+<p class="copy-row"><button type="button" class="button-quiet" data-copy="plan-prompt" data-copied="Copied" hidden>Copy
+the message</button></p>
+<p>Paste it into a conversation with your assistant, then describe your study. It tells the assistant where to read
+the guides: EntryLib's connector, the web or a terminal.</p>
+<p class="small">Your assistant can use none of these? <a href="/study-planning/message.txt"
+download="entrylib-study-planning-message.txt">Download the full message</a>, which carries every guide (about 10,000
+tokens), and attach the file.</p>
+<p>A plan agreed in a conversation is a reasoned design with its sources, not a record: nothing in it shows when it was
+made, or that it came before the data. To make that checkable, do the research with an agent that can run commands and
+claimset-lab (<a href="#start">above</a>); the agreed plan becomes the first plan of its record.</p>

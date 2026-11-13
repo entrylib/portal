@@ -24,7 +24,7 @@ from pathlib import Path
 
 from claimset.claim import claim_bundle
 
-from . import areas, ids, indexnow, limits, score_html, skills, source, specs
+from . import areas, ids, indexnow, limits, planning, score_html, skills, source, specs
 from . import page as pageview
 from . import scores as score_data
 from .history import claims_changed
@@ -1173,7 +1173,8 @@ def fixed_page(name, base_url):
     body = (_static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
             .replace("{new_per_week}", str(limits.NEW_PER_WEEK))
             .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)).replace("{how_to_read}", HOW_TO_READ)
-            .replace("{convert_request}", esc(skills.shown(base_url))))
+            .replace("{convert_request}", esc(skills.shown(base_url)))
+            .replace("{plan_request}", esc(planning.short(base_url))))
     return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,
                  script="/page.js" if "data-copy" in body else None)       # its copy buttons
 
@@ -1532,7 +1533,7 @@ SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/how-to-jud
 def sitemap(docs, base_url):
     """/sitemap.xml: the site's pages, the current page of every claimset and the pages of its principal claims, with
     the date they last changed."""
-    pages = SITEMAP_PAGES + skills.paths(skills.catalogue()) + areas.paths(docs)
+    pages = SITEMAP_PAGES + skills.paths(skills.catalogue()) + planning.paths(planning.catalogue()) + areas.paths(docs)
     urls = [f"<url><loc>{esc(base_url + path)}</loc></url>" for path in pages]
     people = sorted({c["orcid"] for d in docs for c in _people(d, "guarantor") if isinstance(c.get("orcid"), str)})
     urls += [f"<url><loc>{esc(base_url)}/people/{esc(o)}</loc></url>" for o in people]   # guarantors' pages
@@ -1556,7 +1557,8 @@ def security_txt(base_url, today=None):
 
 def write_fixed(published_dir, base_url):
     """The pages and files that do not depend on what is published: fixed pages, stylesheets, fonts, images, the
-    specifications and the skills (with the message of /convert)."""
+    specifications, the skills (with the message of /convert) and the study-planning guides (with the message of
+    /lab)."""
     published_dir = Path(published_dir)
     for name in PAGES:
         _write(published_dir / f"{name}.html", fixed_page(name, base_url))
@@ -1588,3 +1590,8 @@ def write_fixed(published_dir, base_url):
     changed = [n for n, e in cat.items() if before.get(f"{n}.md") != e["text"]]
     if changed:                                              # a new claimset's skills: tell search engines (IndexNow)
         indexnow.notify([f"{base_url}/skills/{n}" for n in changed] + [f"{base_url}/sitemap.xml"], base_url)
+    before = {f.name: f.read_text(encoding="utf-8") for f in (published_dir / "study-planning").glob("*.md")}
+    guides = planning.write(published_dir, shell, _write, base_url)["guides"]
+    changed = [n for n, e in guides.items() if before.get(f"{n}.md") != e["text"]]
+    if changed:                                              # a new claimset's guides: tell search engines too
+        indexnow.notify([f"{base_url}/study-planning/{n}" for n in changed] + [f"{base_url}/sitemap.xml"], base_url)
