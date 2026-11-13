@@ -108,6 +108,11 @@ class TestSummary(unittest.TestCase):
 
 
 class TestSmallFixes(unittest.TestCase):
+    def test_a_highlighted_definition_is_tagged(self):
+        brief = html.render_parts(NATIVE)["blocks"]["highlights"]          # highlights C2 and the definition D2
+        self.assertIn('<li class="cs-brief-term"><span class="kind-tag">Definition</span>', brief)
+        self.assertEqual(brief.count("kind-tag"), 1)                        # only the definition
+
     def test_a_tooltip_shows_maths_as_characters(self):
         tip = html._first_sentence("The error $\\epsilon_t \\sim N(0, \\sigma^2)$ of [[D2:the model]]. More.")
         self.assertEqual(tip, "The error ϵt∼N(0,σ2) of the model.")
