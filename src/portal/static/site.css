@@ -238,6 +238,13 @@ details.notice[open] summary { margin-bottom: 4px; }
 /* a highlighted definition's tag sits in the badges' column, as wide, so every highlight's text starts in one line */
 .cs-brief .score-badge, .cs-brief .kind-tag { box-sizing: border-box; width: 6.6em; margin-right: 0; text-align: center; }
 .cs-brief .kind-tag { font-size: 13px; }
+.score-badge .short, .kind-tag .short { display: none; }
+/* on a phone the words shrink to their initials ("S 67", "D"); the badge's aria-label and the tag's title keep them */
+@media (max-width: 640px) {
+  .score-badge .long, .kind-tag .long { display: none; }
+  .score-badge .short, .kind-tag .short { display: inline; }
+  .cs-brief .score-badge, .cs-brief .kind-tag { width: 3.9em; }
+}
 .dots { display: inline-flex; gap: 3px; margin-right: 8px; vertical-align: 1px; }
 /* long identifiers (DOIs, URLs) wrap instead of widening the page on a phone */
 .cs-context dt, .cs-context dd, .cs-refs li, .cs-artefacts li, .cs-links { overflow-wrap: anywhere; }

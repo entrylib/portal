@@ -46,6 +46,7 @@ CSS = """\
 .cs-brief li > span:last-child { min-width: 0; }       /* the statement, not its formulae, sets the width */
 .cs-summary { margin: 0; font-size: 18px; }
 .cs-brief .light { margin-top: 9px; }
+.kind-tag .short { display: none; }
 .kind-tag { flex: none; align-self: flex-start; margin-top: 4px; font-size: 13px; line-height: 1.5;
   padding: 0 6px; border-radius: 10px; border: 1px solid var(--cs-rule); color: var(--cs-muted); }
 .cs-note, .cs-tail { font-size: 15px; color: var(--cs-muted); }
