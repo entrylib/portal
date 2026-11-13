@@ -329,7 +329,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
 
         A valid submission is held for 48 hours. The response gives one consent link per guarantor: pass each to
         its guarantor, who signs in with ORCID and confirms. The links are shown only in this response; without one,
-        the guarantor confirms at /confirm, signing in with ORCID. Once every guarantor has confirmed, the claimset
+        the guarantor confirms at /submissions, signing in with ORCID. Once every guarantor has confirmed, the claimset
         is published.
 
         A new version of a published claimset sets `paper.id` to its identifier. A new claimset with the same title
