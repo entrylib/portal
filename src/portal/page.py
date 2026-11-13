@@ -917,7 +917,8 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
     def brief_item(oid):
         x = P.by_id[oid]
         if x in P.defs:                                     # a term the paper introduces (highlights, §3.1)
-            return (f'<li class="cs-brief-term"><span class="kind-tag">Definition</span>'
+            return (f'<li class="cs-brief-term"><span class="kind-tag" title="Definition">'
+                    '<span class="long">Definition</span><span class="short">D</span></span>'
                     f'<span><strong>{esc(x.get("term", ""))}</strong>: '
                     f'{P.text(x.get("definition", ""))} <a class="cs-id" href="#{esc(oid)}">{esc(oid)}</a></span></li>')
         return (f'<li>{P.mark(x, "brief")[0]}<span>{P.text(x.get("statement", ""))} '

@@ -104,7 +104,7 @@ def test_the_paper_page_says_what_it_is(env):
     assert 'getElementById("intro-strip")' in (Path(site.__file__).parent / "static" / "page.js").read_text()
     top = page.split('<p class="entry-top">')[1].split("</p>")[0]
     assert re.fullmatch(r"Version 1 · \d{1,2} [A-Z][a-z]+ \d{4}( · .+)?", top), top          # words, not codes
-    assert '<span class="badge-word">Support</span> ' in page
+    assert '<span class="badge-word"><span class="long">Support</span><span class="short">S</span></span> ' in page
 
 
 def test_the_byline_tells_people_from_tools():

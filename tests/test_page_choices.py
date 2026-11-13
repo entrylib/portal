@@ -110,7 +110,8 @@ class TestSummary(unittest.TestCase):
 class TestSmallFixes(unittest.TestCase):
     def test_a_highlighted_definition_is_tagged(self):
         brief = html.render_parts(NATIVE)["blocks"]["highlights"]          # highlights C2 and the definition D2
-        self.assertIn('<li class="cs-brief-term"><span class="kind-tag">Definition</span>', brief)
+        self.assertIn('<li class="cs-brief-term"><span class="kind-tag" title="Definition"><span class="long">Definition'
+                      '</span><span class="short">D</span>', brief)
         self.assertEqual(brief.count("kind-tag"), 1)                        # only the definition
 
     def test_a_tooltip_shows_maths_as_characters(self):
