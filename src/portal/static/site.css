@@ -387,7 +387,10 @@ dialog.popup::backdrop { background: rgb(0 0 0 / .72); }
 dialog.popup .popup-close { position: absolute; z-index: 2; top: 8px; right: 8px; width: 44px; height: 44px; border: 0;
   border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; font: 26px/44px sans-serif; cursor: pointer; }
 @media (max-width: 640px) {
-  dialog.popup { max-width: 100vw; max-height: 100vh; width: 100vw; height: 100vh; border-radius: 0; }
+  /* the whole visible screen, anchored at its top: 100vh is the screen without the browser's toolbar, so a pop-up
+     that tall slid its top, and its close button, under the toolbar (Firefox) */
+  dialog.popup, dialog.peek { inset: 0; margin: 0; max-width: 100%; width: 100%; height: 100vh; height: 100dvh;
+    max-height: 100vh; max-height: 100dvh; border-radius: 0; }
 }
 .cs-figure > a { cursor: zoom-in; }
 dialog.zoom figure { margin: 0; display: flex; flex-direction: column; }
@@ -440,7 +443,7 @@ dialog.zoom figcaption { padding: 10px 56px 12px 16px; font-size: 15px; }
 .cs-body > .cs-section.fold.open { margin-top: 24px; }
 dialog.peek { width: min(60rem, 96vw); }
 dialog.peek .popup-body { max-width: none; max-height: 90vh; overflow-y: auto; padding: 0 24px 16px; }
-@media (max-width: 640px) { dialog.peek .popup-body { max-height: 100vh; height: 100%; box-sizing: border-box; padding: 0 16px 16px; } }
+@media (max-width: 640px) { dialog.peek .popup-body { max-height: 100%; height: 100%; box-sizing: border-box; padding: 0 16px 16px; } }
 .peek-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; min-height: 60px;
   padding-right: 52px; background: var(--ground); border-bottom: 1px solid var(--rule-light); }
 .peek-title { margin: 0; font-weight: 600; }
@@ -482,7 +485,7 @@ math[display="block"] { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 
 dialog.help { width: min(720px, 96vw); }
 dialog.help .popup-body { max-height: 90vh; overflow-y: auto; padding: 20px 64px 20px 28px; box-sizing: border-box; }
-@media (max-width: 640px) { dialog.help .popup-body { max-height: 100vh; height: 100%; padding: 16px 56px 16px 16px; } }
+@media (max-width: 640px) { dialog.help .popup-body { max-height: 100%; height: 100%; padding: 16px 56px 16px 16px; } }
 .popup.help .popup-body h2 { margin-top: 0; }
 .popup.help .popup-body ol { padding-left: 1.3em; }
 .popup.help .popup-body li { margin: 0 0 8px; }
