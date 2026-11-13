@@ -209,3 +209,11 @@ def test_claim_page_sections_come_from_the_packages_blocks():
              "sections": [("brief", "In brief", 0), ("principal", "Principal claims", 1), ("evidence", "Evidence", 2)]}
     assert site._claim_sections(parts) == ("<h2>The claim</h2>x\n<h2>Evidence</h2>e",
                                            [("principal", "The claim", 0), ("evidence", "Evidence", 2)])
+
+
+def test_a_claim_result_carries_its_own_warnings_not_its_papers():
+    ws = [{"rule": "W22", "where": "claims:C2.statement"}, {"rule": "W11", "where": "claims:C2.checks[0]"},
+          {"rule": "W25", "where": "claims:C20"}, {"rule": "W1", "where": "contributors:P2.orcid"},
+          {"rule": "W13", "where": "claims:C2"}]
+    assert [w["rule"] for w in search.claim_warnings(ws, "C2")] == ["W22", "W11", "W13"]
+    assert search.claim_warnings(None, "C2") == [] and search.claim_warnings(ws, "C9") == []

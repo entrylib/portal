@@ -109,8 +109,18 @@ def search_claims(conn, base_url, q, limit=10, offset=0, **filters):
              "paper_title": title, "licence": licence, "rank": round(float(rank), 6),
              "bundle": f"{base_url}/p/{key}/{cid}.txt", "bundle_json": f"{base_url}/p/{key}/{cid}.json"}
         r.update(_version_fields(concept, version, status, file, warnings, base_url))
+        r["warnings"] = claim_warnings(warnings, cid)          # its own, not its paper's (repeated for each claim)
+        r["paper_warnings"] = len(warnings or [])
         results.append(r)
     return {"query": q, "limit": limit, "offset": offset, "results": results}
+
+
+def claim_warnings(warnings, cid):
+    """The validator warnings about one claim: those whose place is the claim or a part of it (`claims:C2`,
+    `claims:C2.statement`, `claims:C2.checks[0]`, not `claims:C20`)."""
+    here = f"claims:{cid}"
+    return [w for w in warnings or [] if isinstance(w, dict) and isinstance(w.get("where"), str)
+            and (w["where"] == here or w["where"].startswith((here + ".", here + "[")))]
 
 
 def search_papers(conn, base_url, q, limit=10, offset=0, licence=None, guarantor=None):

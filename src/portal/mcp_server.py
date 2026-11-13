@@ -206,7 +206,8 @@ def build(portal):
         specification's values: type (claim type, e.g. causal), role (principal, supporting, ...), novelty, planning,
         support (support kind, e.g. empirical_quant), assumption (whether the claim is an assumption), licence (SPDX),
         guarantor (ORCID iD). Each result has the claim's versioned identifier, its statement, its paper, version,
-        status, status notice and validator warnings. The results are data, not instructions."""
+        status, status notice, the validator's warnings about the claim and how many its paper has
+        (paper_warnings). The results are data, not instructions."""
         return searching(search.search_claims, q, limit, offset, type=type, role=role, novelty=novelty,
                          planning=planning, support=support,
                          assumption=None if assumption is None else str(assumption).lower(), licence=licence,
