@@ -86,7 +86,7 @@ def test_the_guarantor_attaches_the_package_and_confirms(app_client, settings, t
     assert out["waiting_for"] == "package" and "files/results.csv" in out["package"]
     page = app_client.get(f"/consent/{token}").text
     assert "First, attach the package" in page and "files/results.csv" in page
-    assert "Sign in with ORCID and confirm" not in page
+    assert "Confirm: sign in with ORCID" not in page
     r = sign_in(app_client, token)                                             # confirming waits for the package
     assert "waits for its package" in r.text
     assert app_client.get(f"/api/submissions/{out['id']}").json()["state"] == "pending"
@@ -107,7 +107,7 @@ def test_the_guarantor_attaches_the_package_and_confirms(app_client, settings, t
     r = attach(zip_path.read_bytes())
     assert r.status_code == 303 and r.headers["location"].endswith(f"/consent/{token}?attached=1")
     page = app_client.get(f"/consent/{token}?attached=1").text
-    assert "The package is attached" in page and "Sign in with ORCID and confirm" in page
+    assert "The package is attached" in page and "Confirm: sign in with ORCID" in page
     s = app_client.get(f"/api/submissions/{out['id']}").json()
     assert "waiting_for" not in s
     assert [p.suffix for p in settings.submissions_dir.glob(f"{out['id']}.*")] == [".zip"]
@@ -138,7 +138,7 @@ def test_the_flag_changes_nothing_for_a_claimset_without_files(app_client):
     from publishing import example
     out, token = submit_waiting(app_client, example())
     assert "waiting_for" not in out and "package" not in out
-    assert "Sign in with ORCID and confirm" in app_client.get(f"/consent/{token}").text
+    assert "Confirm: sign in with ORCID" in app_client.get(f"/consent/{token}").text
 
 
 def test_an_expired_waiting_submission_is_deleted(app_client, settings, tmp_path):

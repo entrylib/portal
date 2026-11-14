@@ -34,6 +34,7 @@ from . import (
     pages,
     ratelimit,
     read,
+    scores,
     search,
     site,
     submissions,
@@ -402,6 +403,25 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             who, name = await run_in_threadpool(orcid.exchange, code)
         except OrcidError as exc:
             return HTMLResponse(pages.message("Sign-in failed", str(exc)), status_code=502)
+        response = await signed_in(state, who, name)
+        if isinstance(response, str):
+            response = HTMLResponse(response)
+
+        def open_session():
+            with pool.connection() as conn:
+                return consent.open_session(conn, who, name)
+        token = await run_in_threadpool(open_session)       # Your submissions opens without a new sign-in
+        _set_session(response, token)
+        return response
+
+    SESSION_COOKIE = "entrylib_session"
+
+    def _set_session(response, token):
+        response.set_cookie(SESSION_COOKIE, token, max_age=int(consent.SESSION_LENGTH.total_seconds()), path="/",
+                            secure=settings.base_url.startswith("https://"), httponly=True, samesite="lax")
+
+    async def signed_in(state, who, name):
+        """The page after an ORCID sign-in, by what started it."""
         if notices.is_notice_state(state):                  # a sign-in from the removal form
             return await removal_signed_in(state, who, name)
         kind = consent.listing_kind(state)
@@ -464,9 +484,25 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return RedirectResponse("/submissions/start", status_code=301)
 
     @app.get("/submissions", response_class=HTMLResponse, include_in_schema=False)
-    def submissions_page():
-        """Your submissions: sign in with ORCID to see what you submitted and what you guarantee."""
-        return _page(site.submissions_page(orcid.configured))
+    def submissions_page(request: Request):
+        """Your submissions: what you submitted and what you guarantee. Signed in (a live session, after any ORCID
+        sign-in here), the list opens at once; otherwise sign in with ORCID."""
+        with pool.connection() as conn:
+            who = consent.session(conn, request.cookies.get(SESSION_COOKIE))
+            if who is None:
+                return _page(site.submissions_page(orcid.configured))
+            items = consent.listing_for(conn, who[0], settings.submissions_dir)
+            past = consent.history(conn, who[0])
+        return _page(site.submissions_list(items, past, who[0], who[1], session=True))
+
+    @app.post("/signout", include_in_schema=False)
+    def signout(request: Request):
+        """End the sign-in session: Your submissions asks for ORCID again."""
+        with pool.connection() as conn:
+            consent.close_session(conn, request.cookies.get(SESSION_COOKIE))
+        response = RedirectResponse("/submissions", status_code=303)
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return response
 
     @app.get("/submissions/start", include_in_schema=False)
     def submissions_start():
@@ -623,12 +659,16 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         """The page a guarantor opens from their consent link."""
         with pool.connection() as conn:
             ctx = consent.page_context(conn, token, settings.submissions_dir)
+            preview_scores = scores.compute(conn, ctx["doc"]) if ctx and ctx.get("doc") else None
         if ctx is None:
             return HTMLResponse(pages.message("Unknown link", "This consent link is not valid. Links expire with "
                                               "their submission, after 48 hours."), status_code=404)
         status_url = f"{settings.base_url}/api/submissions/{ctx['submission']}"
-        return pages.consent(ctx, f"{settings.base_url}/consent/{token}/start", status_url,
-                             attach_url=f"/consent/{token}/package", attached=attached)
+        html_ = pages.consent(ctx, f"{settings.base_url}/consent/{token}/start", status_url,
+                              attach_url=f"/consent/{token}/package", attached=attached, scores=preview_scores,
+                              base_url=settings.base_url)
+        # the preview is a paper page: its own script (page.js: pop-ups, contents) runs, as on a published page
+        return HTMLResponse(html_, headers={"Content-Security-Policy": removal_csp + "; script-src 'self'"})
 
     async def _form_file(request):
         """The file of a form's `package` field, saved to a temporary file; None if absent. Raises UploadTooLarge."""

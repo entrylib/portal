@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import re
 import urllib.parse
 
 import psycopg
@@ -52,7 +53,38 @@ def test_consent_page_shows_the_claims(app_client):
     doc = example()
     assert doc["paper"]["title"] in r.text and GUARANTOR in r.text
     first = next(c["statement"] for c in doc["claims"] if c["id"] == doc["paper"]["contributions"][0])
-    assert first in r.text and "Sign in with ORCID and confirm" in r.text
+    text = re.sub(r"<[^>]+>", "", r.text)                                    # the page shows terms by their words
+    assert re.sub(r"\[\[D\d+:([^\]]*)\]\]", r"\1", first) in text and "Confirm: sign in with ORCID" in r.text
+
+
+def test_the_consent_page_previews_the_paper(app_client):
+    """Design §4.2: the claimset's page as it will be published, marked a preview, the Confirm button in a bar at
+    the top, with no identifier or links of its own yet."""
+    _, token = submit(app_client)
+    page = app_client.get(f"/consent/{token}").text
+    bar = page.index('class="preview-bar"')
+    assert bar < page.index('class="cs-page entry preview"') and bar < page.index("Confirm: sign in with ORCID")
+    assert "Preview, not published yet" in page[bar:bar + 300]
+    assert 'id="principal"' in page and 'class="panel"' in page              # the paper page's sections and panel
+    assert "0000.000000" not in page                                          # the placeholder ID is never shown
+    assert "By confirming, you state" in page and "responsible researcher" in page
+
+
+def test_your_submissions_opens_after_a_sign_in(app_client):
+    """Design §4.2: after an ORCID sign-in, Your submissions opens without signing in again, until signing out."""
+    assert "Sign in with ORCID" in app_client.get("/submissions").text
+    _, token = submit(app_client)
+    r = app_client.get("/submissions/start")
+    state = urllib.parse.parse_qs(urllib.parse.urlparse(r.headers["location"]).query)["state"][0]
+    r = app_client.get("/consent/callback", params={"state": state, "code": GUARANTOR})
+    cookie = r.headers["set-cookie"]
+    assert cookie.startswith("entrylib_session=") and "HttpOnly" in cookie and "SameSite=lax" in cookie
+    app_client.cookies.set("entrylib_session", cookie.split(";")[0].split("=", 1)[1])  # the test client is http
+    page = app_client.get("/submissions").text
+    assert "Signed in as" in page and "Waiting for you" in page and 'action="/signout"' in page
+    assert app_client.get("/submissions").text.count('name="ticket"') >= 1      # new tickets on each visit
+    app_client.post("/signout")
+    assert "Signed in as" not in app_client.get("/submissions").text
 
 
 def test_submitted_text_is_escaped(app_client):
