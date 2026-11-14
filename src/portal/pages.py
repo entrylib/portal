@@ -47,9 +47,10 @@ def _source_box(ctx):
             f'{escape(src.get("authorship") or "")}.</p>{more}')
 
 
-def consent(ctx, start_url, status_url, attach_url=None, attached=False):
-    """The page a guarantor opens from their consent link. A submission waiting for its package (design §4.4) asks
-    for it first: the Confirm button comes once it is attached."""
+def consent(ctx, start_url, status_url, attach_url=None, attached=False, scores=None, base_url=""):
+    """The page a guarantor opens from their consent link: while it is pending, a preview of the claimset's page as it
+    will be published (design §4.2), with the Confirm button in a bar that stays at the top. A submission waiting for
+    its package (design §4.4) asks for it first: the Confirm button comes once it is attached."""
     state = ctx["state"]
     if state != "pending":
         texts = {"confirmed": "You have confirmed this paper; it is being published.",
@@ -60,6 +61,8 @@ def consent(ctx, start_url, status_url, attach_url=None, attached=False):
                  "expired": "This submission expired: it was not confirmed within 48 hours. The agent can submit "
                             "it again."}
         return message("Confirm a submission", texts.get(state, state), status_url)
+    if ctx.get("doc"):
+        return _preview(ctx, start_url, attach_url, attached, scores, base_url)
     principal = "".join(f"<li>{escape(s)}</li>" for s in ctx["principal"])
     correction = ""
     if ctx["kind"] == "correction":
@@ -88,6 +91,38 @@ is removed only when it must be (<a href="/removal">retraction and removal</a>).
 expect this, ignore it: nothing is published without your confirmation.</p>
 """
     return page("Confirm a submission", body)
+
+
+def _preview(ctx, start_url, attach_url, attached, scores, base_url):
+    """The pending consent page: the bar, what confirming means, and the paper as it will be published."""
+    from . import site
+    expires = ctx["expires"].strftime("%d %B %Y, %H:%M UTC")
+    if ctx.get("waiting_package"):
+        action = '<a class="button" href="#attach">First, attach the package</a>'
+    else:
+        action = f'<a class="button" href="{escape(start_url)}">Confirm: sign in with ORCID</a>'
+    bar = (f'<p class="preview-bar-text"><strong>Preview, not published yet.</strong> <span class="preview-more">'
+           f'This is how the paper will look once published. Nothing is published until you confirm, by '
+           f'{escape(expires)}.</span></p>{action}')
+    correction = ""
+    if ctx["kind"] == "correction":
+        correction = (f"<p><strong>A new version of {escape(ctx['target'])}.</strong> Reason given: "
+                      f"{escape(ctx.get('correction_reason') or '')}</p>")
+    package = _package_box(ctx, attach_url, attached)
+    statement = (
+        f"<p>An AI agent has submitted this paper to EntryLib naming you, <strong>{escape(ctx['name'] or '')}"
+        f"</strong> (ORCID <code>{escape(ctx['orcid'])}</code>), as its responsible researcher (its guarantor). "
+        f"Read it as readers will see it, below.</p>{correction}{_source_box(ctx)}"
+        f"<p>By confirming, you state that you are the main author of this work and the person to contact about it, "
+        f"that you answer for its research (whether the claims are true and the work was done properly), and that it "
+        f"may be published under the licence {escape(ctx['licence'])}. Once published, a paper stays: it can be "
+        f'corrected or retracted, and is removed only when it must be (<a href="/removal">retraction and '
+        f"removal</a>).</p>"
+        + (f'<div id="attach">{package}</div>' if package else "")
+        + f'<p class="muted">Only {escape(ctx["orcid"])} can confirm, by {escape(expires)}; after that the '
+        f"submission is deleted. If you did not expect this, ignore it: nothing is published without your "
+        f"confirmation.</p>")
+    return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores)
 
 
 def _confirm_button(ctx, start_url):

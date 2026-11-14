@@ -646,13 +646,15 @@ def _date(x):
 
 def _claim(P, c, principal=False):
     head = [P.claim_id(c), esc(c.get("type"))]
-    if NOVELTY_WORDS.get(c.get("novelty")):
+    before, after = P.mark(c, "claim")
+    # The novelty once: the site's marker gives it after the meta line ("novelty: …, by the authors", with the
+    # close-match check); without one (no scores), the meta line names it.
+    if NOVELTY_WORDS.get(c.get("novelty")) and "novelty" not in (after or ""):
         head.append(NOVELTY_WORDS[c["novelty"]])
     if c.get("planning") == "confirmatory":
         head.append("planned test")
     elif c.get("planning") == "planned_estimate":
         head.append("planned estimate")
-    before, after = P.mark(c, "claim")
     lines = [f'<p class="cs-claim-meta">{before}' + " · ".join(h for h in head if h) + f"{after}</p>",
              f'<p class="cs-statement">{P.text(c.get("statement", ""))}</p>']
     links = []

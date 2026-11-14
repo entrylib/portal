@@ -2,6 +2,7 @@
 score.json; the close-match check against earlier claimsets."""
 
 import json
+import re
 
 import pytest
 from publishing import BASE, example, write
@@ -205,3 +206,20 @@ def test_synthesis_is_named():
     assert scores.label({"label": "synthesis"}) == "summarises earlier work, by the authors"
     assert page.NOVELTY_WORDS["synthesis"] == "summarises earlier work"
     assert read.NOVELTY["synthesis"] == "Summarises"
+
+
+def test_novelty_is_named_once(tmp_path):
+    """A claim's meta line names its novelty once: by the score's marker when the claim is scored, otherwise in the
+    meta line itself."""
+    from portal import site
+    doc = example()
+    for c in doc["claims"]:
+        if c.get("novelty") == "no_prior_found":
+            c["novelty"] = "extension"
+    doc["paper"].update(id="entrylib:2026.000001", version=1, date="2026-11-14", status="active")
+    scored = site.claimset_page(doc, base_url=BASE, listing=[{"version": 1}], scores=scores.compute(None, doc))
+    for line in re.findall(r'<p class="cs-claim-meta">.*?</p>', scored, re.S):
+        assert line.count("extends earlier work") <= 1, line
+    assert "novelty: extends earlier work, by the authors" in scored
+    plain = site.claimset_page(doc, base_url=BASE, listing=[{"version": 1}], scores=None)
+    assert "extends earlier work" in plain and "novelty:" not in plain

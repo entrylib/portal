@@ -15,6 +15,9 @@ buttons, and, besides, everything else they submitted and guarantee.
     complete_ticket(conn, ticket, orcid) -> Outcome, as complete()
     cancel_ticket(conn, ticket, submissions_dir) -> Outcome: cancelled, or why not
     history(conn, orcid)            -> the rest of what `orcid` submitted, and the claimsets they guarantee
+    open_session(conn, orcid, name) -> a sign-in session's token: Your submissions opens without signing in again
+    session(conn, token)            -> (orcid, name) of a live session, or None;  close_session(conn, token)
+    listing_for(conn, orcid, dir)   -> the pending submissions naming `orcid`, as listing(), for a live session
     attach(conn, path, dir, token=|ticket=) -> Outcome: the package of a submission waiting for it (design §4.4)
 
 A submission is confirmed when the person who signs in with ORCID is its guarantor, the submission is still
@@ -32,6 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from claimset.render import render
+from claimset.validate import with_verifiability
 
 from . import limits
 from .publish import load_submission
@@ -81,7 +85,8 @@ def _context_by_hash(conn, hash_, submissions_dir):
         ctx.update(title=paper.get("title", ""), licence=paper.get("licence", ""),
                    principal=[claims[c].get("statement", "") for c in paper.get("contributions") or [] if c in claims],
                    n_claims=len(claims), reading_view=render(doc), subfield=_subfield_line(doc),
-                   correction_reason=paper.get("correction_reason"), package_files=packaged_files(doc))
+                   correction_reason=paper.get("correction_reason"), package_files=packaged_files(doc),
+                   doc=with_verifiability(doc))              # as it will be published, for the preview
     return ctx
 
 
@@ -177,6 +182,12 @@ def listing(conn, state, orcid, submissions_dir, now=None):
     if conn.execute("UPDATE confirm_signins SET used = %s WHERE state = %s AND used IS NULL AND started > %s"
                     " RETURNING state", (now, state, now - SIGNIN_WINDOW)).fetchone() is None:
         return None
+    return listing_for(conn, orcid, submissions_dir, now)
+
+
+def listing_for(conn, orcid, submissions_dir, now=None):
+    """listing() for an iD already signed in (a live session): new tickets each time."""
+    now = now or dt.datetime.now(dt.UTC)
     rows = conn.execute("SELECT g.submission_id FROM submission_guarantors g JOIN submissions s ON s.id ="
                         " g.submission_id WHERE g.orcid = %s AND g.confirmed IS NULL AND s.state = 'pending'"
                         " AND s.expires > %s ORDER BY s.received DESC", (orcid, now)).fetchall()
@@ -315,10 +326,39 @@ def attach(conn, upload, submissions_dir, *, token=None, ticket=None, now=None):
 
 
 def forget_old(conn, now=None):
-    """Delete /confirm sign-ins and tickets older than a day: they are long expired."""
-    cutoff = (now or dt.datetime.now(dt.UTC)) - dt.timedelta(days=1)
+    """Delete /confirm sign-ins and tickets older than a day, and sign-in sessions once they end."""
+    now = now or dt.datetime.now(dt.UTC)
+    cutoff = now - dt.timedelta(days=1)
     conn.execute("DELETE FROM confirm_signins WHERE started < %s", (cutoff,))
     conn.execute("DELETE FROM confirm_tickets WHERE expires < %s", (cutoff,))
+    conn.execute("DELETE FROM signin_sessions WHERE expires < %s", (now,))
+
+
+#: How long a sign-in lasts for Your submissions: a working day.
+SESSION_LENGTH = dt.timedelta(hours=8)
+
+
+def open_session(conn, orcid, name=None, now=None):
+    """A session for the iD that just signed in with ORCID: the token for its cookie (only its hash is kept)."""
+    now = now or dt.datetime.now(dt.UTC)
+    token = secrets.token_urlsafe(32)
+    conn.execute("INSERT INTO signin_sessions (token_hash, orcid, name, started, expires) VALUES (%s, %s, %s, %s, %s)",
+                 (token_hash(token), orcid, name, now, now + SESSION_LENGTH))
+    return token
+
+
+def session(conn, token, now=None):
+    """(orcid, name) of the live session with this token, or None."""
+    if not token:
+        return None
+    row = conn.execute("SELECT orcid, name FROM signin_sessions WHERE token_hash = %s AND expires > %s",
+                       (token_hash(token), now or dt.datetime.now(dt.UTC))).fetchone()
+    return (row[0], row[1]) if row else None
+
+
+def close_session(conn, token):
+    if token:
+        conn.execute("DELETE FROM signin_sessions WHERE token_hash = %s", (token_hash(token),))
 
 
 def _subfield_line(doc):

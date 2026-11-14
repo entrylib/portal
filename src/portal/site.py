@@ -795,6 +795,35 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                  script="/page.js")
 
 
+def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a submission"):
+    """The consent page (design §4.2): the claimset's page as it will be published, from the same parts as a published
+    one (its header, sections, panel and Score), marked as a preview. `bar` is HTML: the Confirm button, or what has
+    to come first, kept at the top while the guarantor reads; `statement` is HTML: what confirming means. A preview has
+    no identifier, version, citation or files of its own yet: it shows none, and links to no claim page."""
+    d = json.loads(json.dumps(doc))
+    p = d.setdefault("paper", {})
+    p.setdefault("id", PREVIEW_ID)                       # the renderer names claims by it; a preview links nowhere
+    parts = render(d, None, None, scores, ())
+    body, sections = page_sections(parts, d)
+    nav = contents(sections, '<li><a href="#score">Score</a></li>' if scores else "", d)
+    top = ["Preview: not published yet"] + ([esc(subfield_name(d))] if subfield_name(d) else [])
+    panel = (f'<aside class="panel" aria-label="About this paper">'
+             f'{score_html.panel_rows(scores, parts.get("lights"))}{_interests_row(d)}'
+             '<div class="panel-row"><h2>Cite</h2><p class="small">The identifier and the citation are given when '
+             "it is published.</p></div></aside>")
+    main = (f'<div class="preview-bar" role="region" aria-label="Confirm this submission">{bar}</div>'
+            f'<div class="cs-page entry preview"><div class="cs-header entry-header">'
+            f'<div class="notice preview-note">{statement}</div>'
+            f'<p class="entry-top">{" · ".join(top)}</p>{parts["header"]}{_origin_line(d, parts["origin"], None)}'
+            f'</div>{panel}{nav}<article class="cs-body">{body}{score_html.section(scores)}</article></div>')
+    return shell(title, main, active="submissions", head='<meta name="robots" content="noindex">',
+                 script="/page.js")
+
+
+#: The identifier a preview renders under, before it has one: it is never shown or linked.
+PREVIEW_ID = "entrylib:0000.000000"
+
+
 # --- the page of a claim (design §7.1, §7.8) --------------------------------------------------------------------------
 
 CLAIM_ID = re.compile(r"C[0-9]+")
@@ -1360,15 +1389,19 @@ def _submission_row(x):
             f"{esc(state)}{why}</li>")
 
 
-def submissions_list(items, past, orcid, name=None):
+def submissions_list(items, past, orcid, name=None, session=False):
     """/submissions after sign-in (design §4.2): what waits for this guarantor, what waits for others or is being
-    published, what closed recently, and every claimset they guarantee."""
+    published, what closed recently, and every claimset they guarantee. With a session, the page says how to sign
+    out, and its buttons are renewed by reloading it."""
     who = _who_signed_in(orcid, name)
     past = past or {}
-    parts = [f"<p>Signed in as {who}. Only you see this page.</p>",
+    signout = ('<form method="post" action="/signout" class="inline"><button type="submit" class="button-quiet">'
+               "Sign out</button></form>")
+    again = "reload this page" if session else "sign in again"
+    parts = [f'<p>Signed in as {who}. Only you see this page. {signout}</p>',
              "<h2>Waiting for you</h2>",
-             (f"<p>{esc(CONSENT)}</p>" + _pending(items) + '<p class="muted">These buttons work for 30 minutes; then '
-              "sign in again.</p>") if items else '<p class="muted">Nothing waits for your confirmation.</p>']
+             (f"<p>{esc(CONSENT)}</p>" + _pending(items) + f'<p class="muted">These buttons work for 30 minutes; '
+              f"then {again}.</p>") if items else '<p class="muted">Nothing waits for your confirmation.</p>']
     if past.get("others"):
         parts.append("<h2>In progress</h2><ul>" + "".join(_submission_row(x) for x in past["others"]) + "</ul>")
     if past.get("closed"):
