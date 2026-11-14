@@ -75,7 +75,8 @@ SUPPORT_LABELS = {"empirical_quant": "Data", "empirical_qual": "Qualitative data
 SCOPE_WORDS = {"population": "population", "setting": "setting", "geography": "where", "language": "language",
                "period": "period", "data_type": "data", "conditions": "conditions", "excludes": "not for"}
 NOVELTY_WORDS = {"replication": "replicates earlier work", "extension": "extends earlier work",
-                 "refutation": "refutes earlier work"}
+                 "refutation": "refutes earlier work",
+                 "synthesis": "summarises earlier work"}             # claimset v0.43
 VERIFICATION_WORDS = {"machine_checked": "checked by a proof assistant", "agent_checked": "checked by an agent",
                       "peer_checked": "checked by a person", "disputed": "disputed", "unchecked": "not checked"}
 VERDICT_WORDS = {"computed": "computed from the recorded results", "judged": "judged by the writer"}

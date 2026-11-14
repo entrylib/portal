@@ -46,7 +46,7 @@ if rubric is not None and not all(hasattr(rubric, n) for n in NEEDED):
 NOTE = ("Scores are computed by rules from the claimset file (EntryLib rubric {v}): they check the record, not the "
         "science, and may change as the rubric and reviews develop.")
 LABELS = {"no_prior_found": "new", "extension": "extends earlier work", "replication": "replicates earlier work",
-          "refutation": "refutes earlier work"}
+          "refutation": "refutes earlier work", "synthesis": "summarises earlier work"}   # claimset v0.43
 CHECK = {"none": "no close match on EntryLib", "acknowledged": "close matches on EntryLib, acknowledged",
          "unacknowledged": "in question: close match on EntryLib not acknowledged"}
 

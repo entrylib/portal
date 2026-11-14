@@ -16,7 +16,8 @@ from . import scores as score_data
 PAGE = 50
 TYPES = ["descriptive", "associational", "causal", "mechanistic", "predictive", "interpretive", "formal",
          "methodological"]
-NOVELTY = {"no_prior_found": "New", "extension": "Extends", "replication": "Replicates", "refutation": "Refutes"}
+NOVELTY = {"no_prior_found": "New", "extension": "Extends", "replication": "Replicates", "refutation": "Refutes",
+           "synthesis": "Summarises"}                                   # claimset v0.43
 PLANNING = {"confirmatory": "Planned test", "planned_estimate": "Planned estimate",
             "exploratory": "Exploratory"}
 BANDS = {b: f"{w} ({r})" for (b, w), r in zip(score_html.BANDS.items(), ("80+", "60–79", "under 60"), strict=True)}
