@@ -197,3 +197,11 @@ def test_cited_claims_published_here_go_to_the_rubric(tmp_path, monkeypatch):
     scores.use_published(tmp_path)
     scores.compute(None, doc)
     assert seen["cited"] == {target: 92}
+
+
+def test_synthesis_is_named():
+    """Claimset v0.43: a claim that states what the works it cites establish 'summarises earlier work'."""
+    from portal import page, read
+    assert scores.label({"label": "synthesis"}) == "summarises earlier work, by the authors"
+    assert page.NOVELTY_WORDS["synthesis"] == "summarises earlier work"
+    assert read.NOVELTY["synthesis"] == "Summarises"
