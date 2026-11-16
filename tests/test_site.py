@@ -352,7 +352,7 @@ def test_publication_times(env):
 
 
 def test_reading_aids(env):
-    """Design §7.4: back to the top, the contents, buttons, Start here and what reliability means."""
+    """Design §7.4: back to the top, the contents, buttons, Start here and what the Support score means."""
     ctx, concept = published(env)
     out = ctx["published_dir"]
     page = (out / "p" / f"{KEY}.html").read_text()
@@ -371,8 +371,8 @@ def test_reading_aids(env):
     assert 'aria-label="Person"' in site.person({"type": "human", "name": "A. B"}, "author")
     home = (out / "index.html").read_text()
     assert 'class="start-here"' in home and "<strong>Support</strong> score from 0 to 100" in home
-    assert "{reliability}" not in home and "{rubric}" not in home
-    assert f'title="{site.esc(site.RELIABILITY)}"' in home
+    assert "{rubric}" not in home
+    assert f'title="{site.esc(site.SUPPORT_NOTE)}"' in home
     site.write_fixed(out, BASE)
     css = (out / "site.css").read_text()
     assert '.button, button[type="submit"]:not(.button-quiet) {' in css      # one style for every action button

@@ -62,7 +62,8 @@ def test_skip_link_and_no_copy_of_the_whole_paper(env):
 def test_read_is_newest_first_and_search_counts():
     q = read.Query.parse({})
     assert q.sort == "newest" and "sort=" not in q.url()
-    assert read.Query.parse({"sort": "reliability"}).url().endswith("sort=reliability")
+    assert read.Query.parse({"sort": "support"}).url().endswith("sort=support")
+    assert read.Query.parse({"sort": "reliability"}).sort == "support"       # the name before 16 November 2026
     found = site.search_page("x", "claims", {"results": [{"paper": "entrylib:2026.000001", "claim": "C1",
                                                          "statement": "$a$", "version": 1}]})
     assert "1 claim</p>" in found and "<math" in found

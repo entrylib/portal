@@ -155,7 +155,7 @@ def compute(conn, doc):
 
 
 def paper_score(doc):
-    """The paper's reliability for a list card, or None without the rubric or when it fails."""
+    """The paper's Support score for a list card, or None without the rubric or when it fails."""
     if rubric is None:
         return None
     try:
@@ -186,7 +186,7 @@ def label(n):
     return words + (f" · {CHECK[n['check']]}" if n.get("checked") and n.get("check") == "unacknowledged" else "")
 
 
-#: What the site calls the reliability score (design §7.6); score_html shows it, and the texts for models use it.
+#: The score's name, in the rubric and on the site (design §7.6); score_html shows it, and the texts for models use it.
 NAME = "Support"
 
 
@@ -221,7 +221,7 @@ def text(scores):
 
 
 def issues_text(scores, concept, n, base_url):
-    """Every issue that lowers a reliability score, as plain text for the authors' agent to work through in the next
+    """Every issue that lowers a Support score, as plain text for the authors' agent to work through in the next
     version (/p/<key>@v<n>.issues.txt)."""
     if not scores:
         return ""
