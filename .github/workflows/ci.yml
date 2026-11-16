@@ -1,9 +1,16 @@
 name: CI
 
+# The checks run only when the code changes: Python, the application's own files under src/ (templates, styles, SQL
+# migrations, which the tests load), the image and its deployment. A change to text alone (docs/, README.md,
+# CLAUDE.md) runs none. The daily run and a manual run always run everything.
 on:
   push:
     branches: [main]
+    paths: ["**.py", "pyproject.toml", "src/**", "classifier/**", "Dockerfile", ".dockerignore", "compose.yaml",
+            "deploy/**", ".github/workflows/ci.yml"]
   pull_request:
+    paths: ["**.py", "pyproject.toml", "src/**", "classifier/**", "Dockerfile", ".dockerignore", "compose.yaml",
+            "deploy/**", ".github/workflows/ci.yml"]
   # Daily, against the newest claimset (which is not pinned), so that a claimset change the portal cannot work
   # with shows up the same day.
   schedule:
