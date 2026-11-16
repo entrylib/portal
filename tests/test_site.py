@@ -243,7 +243,8 @@ def test_specification_pages(env):
     assert (out / "spec" / "claimset.md").read_text().startswith("# Claimset")
     assert (out / "spec" / "lab-record.html").exists() and (out / "spec" / "revision.html").exists()
     assert (out / "spec" / "extensions" / "qualitative.html").exists()
-    assert "Extensions" in (out / "spec" / "extensions.html").read_text()
+    ext = (out / "spec" / "extensions.html").read_text()
+    assert ext.count("<h1") == 1 and "<h1>Extensions</h1>" in ext      # the README's own title is not a second one
     assert 'href="/spec/claimset"' in (out / "spec" / "index.html").read_text()
 
 

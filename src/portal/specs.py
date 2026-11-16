@@ -111,7 +111,11 @@ def index(shell, cat, root=None):
 def extensions_page(shell, cat, root=None):
     root = Path(root) if root else spec_dir()
     readme = root / "extensions" / "README.md"
-    body, _ = markdown.convert(readme.read_text(encoding="utf-8")) if readme.exists() else ("", [])
+    text = readme.read_text(encoding="utf-8") if readme.exists() else ""
+    text = re.sub(r"\A# [^\n]*\n+", "", text)                 # the README's own title: the page has one
+    body, _ = markdown.convert(text) if text else ("", [])
+    # the README links each specification by its file, as GitHub needs; here its page
+    body = re.sub(r'href="([a-z][a-z0-9-]*)-v\d+\.\d+\.md"', r'href="/spec/extensions/\1"', body)
     rows = "".join(f'<li><a href="/spec/{a}">{markdown.esc(cat[a]["label"])}</a> {cat[a]["current"]}</li>'
                    for a in sorted(cat) if a.startswith("extensions/"))
     main = (f'<div class="wrap prose"><p class="entry-top"><a href="/spec/">Specifications</a></p>'
