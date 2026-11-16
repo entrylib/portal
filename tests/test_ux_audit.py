@@ -340,9 +340,13 @@ def test_lab_and_convert_say_what_a_newcomer_needs():
     pages = Path(site.__file__).parent / "static" / "pages"
     lab, convert = (pages / "lab.html").read_text(), (pages / "convert.html").read_text()
     assert "What you need" in lab and "a remote you can push to" in lab and "desk mode" in lab
-    assert "What your agent will ask you" in lab and "See a finished example" in lab
+    assert "What your agent will ask you" in lab
+    assert 'href="/p/2026.000007">quantitative study</a>' in lab and 'href="/p/2026.000004">qualitative one</a>' in lab
+    submit = (pages.parent / "submit.html").read_text()
+    for page in (lab, convert, submit):                     # possible without an agent, and not recommended
+        assert "we do not recommend it" in page
     assert "What you need" in convert and "perhaps already published" not in convert
     assert "A chat assistant has a size limit" in convert
     for name in ("lab.html", "agents.html"):
-        text = (pages / name).read_text()
-        assert "claimset init" in text and "claimset skill install" not in text
+        page = (pages / name).read_text()
+        assert "claimset init" in page and "claimset skill install" not in page
