@@ -12,8 +12,7 @@ from . import scores as sc
 from . import text
 
 RUBRIC_URL = "https://github.com/entrylib/rubric/blob/main/RUBRIC.md"
-#: The score's name on the site: the rubric's reliability score, named for what it measures (design §7.6). The files
-#: and the API keep `reliability`.
+#: The score's name on the site and in the rubric (design §7.6).
 NAME = sc.NAME
 #: What a band means in words (rubric §4.1), and what the score does not say, shown beside it.
 BANDS = {"high": "Well supported", "medium": "Partly supported", "low": "Weakly supported"}
@@ -25,8 +24,8 @@ def esc(x):
     return html.escape("" if x is None else str(x), quote=True)
 
 
-#: The site's names of the rubric's groups where they differ from the rubric's. Its group "support" is the strength
-#: of what a claim rests on; on the site "Support" is the score's own name, so the part is "Evidence".
+#: The names of the rubric's groups where an older rubric's label differs. Its group "support" is the strength of
+#: what a claim rests on; "Support" is the score's own name, so the part is "Evidence" (the rubric's label from 0.6.1).
 GROUP_LABELS = {"support": "Evidence"}
 
 
@@ -128,7 +127,7 @@ def score_block(score, band, popup):
 
 
 def panel_rows(scores, lights=None):
-    """The panel's first rows: reliability and novelty, then the claims by band (without scores: by support
+    """The panel's first rows: Support and novelty, then the claims by band (without scores: by support
     light, from the page view)."""
     if not scores or not scores.get("paper"):
         names = {"green": "checkable", "amber": "not checkable", "red": "unsupported"}

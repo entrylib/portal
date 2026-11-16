@@ -105,7 +105,7 @@ def test_close_match_with_an_earlier_claimset(env):
     assert first_scores["novelty"][principal]["check"] == "none"     # only earlier claimsets count
 
 
-def test_lists_show_reliability(env):
+def test_lists_show_support(env):
     ctx, tmp = env
     publish(write(tmp, example()), **ctx)
     score = json.loads((ctx["published_dir"] / "p" / f"{KEY}.score.json").read_text())["paper"]

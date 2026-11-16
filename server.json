@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.entrylib/entrylib",
   "title": "EntryLib",
-  "description": "Search and cite research claims with their evidence and reliability scores; publish claimsets.",
+  "description": "Search and cite research claims with their evidence and Support scores; publish claimsets.",
   "version": "0.1.0",
   "websiteUrl": "https://entrylib.org/agents",
   "repository": {

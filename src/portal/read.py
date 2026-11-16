@@ -22,7 +22,9 @@ PLANNING = {"confirmatory": "Planned test", "planned_estimate": "Planned estimat
             "exploratory": "Exploratory"}
 BANDS = {b: f"{w} ({r})" for (b, w), r in zip(score_html.BANDS.items(), ("80+", "60–79", "under 60"), strict=True)}
 #: Newest first by default: sorted by score, the library reads as a league table (UX audit, 11 November 2026).
-SORTS = {"newest": "Newest", "reliability": f"{score_html.NAME}, highest first"}
+SORTS = {"newest": "Newest", "support": f"{score_html.NAME}, highest first"}
+#: The sort by score was `reliability` until 16 November 2026: links made then still work.
+OLD_SORTS = {"reliability": "support"}
 
 
 def taxonomy():
@@ -73,7 +75,8 @@ class Query:
         q.band = params.get("band") if params.get("band") in BANDS else ""
         q.novelty = params.get("novelty") if params.get("novelty") in NOVELTY else ""
         q.planning = params.get("planning") if params.get("planning") in PLANNING else ""
-        q.sort = params.get("sort") if params.get("sort") in SORTS else "newest"
+        sort = OLD_SORTS.get(params.get("sort"), params.get("sort"))
+        q.sort = sort if sort in SORTS else "newest"
         try:
             q.offset = max(0, int(params.get("offset") or 0))
         except ValueError:

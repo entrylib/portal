@@ -911,7 +911,7 @@ def _claim_sections(parts):
 
 def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None):
     """The page of one principal claim of the current version, at /p/<key>/<cid>: the claimset's title and the claim's
-    ID as its title and heading, then the claim, its reliability and why, how to cite it, and what it rests on (the
+    ID as its title and heading, then the claim, its Support and why, how to cite it, and what it rests on (the
     claim bundle, rendered by the claimset package). The statement itself is the page's description."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
@@ -926,14 +926,14 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     top = [f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
            esc(p.get("date"))]
     if item:
-        reliability = (f'<div class="panel-row score-row"><h2>{score_html.NAME}</h2>'
+        score_row = (f'<div class="panel-row score-row"><h2>{score_html.NAME}</h2>'
                        + score_html.score_block(item["score"], item["band"], f"score-{esc(cid)}")
                        + score_html.dot_list(scores, cid) + "</div>")
     else:
-        reliability = (f'<div class="panel-row"><h2>{score_html.NAME}</h2><p class="score">–</p>'
+        score_row = (f'<div class="panel-row"><h2>{score_html.NAME}</h2><p class="score">–</p>'
                        f'<p class="small">{score_html.CAPTION} <a href="/about#quality">How scores are given</a>'
                        '</p></div>')
-    panel = (f'<aside class="panel" aria-label="About this claim">{reliability}'
+    panel = (f'<aside class="panel" aria-label="About this claim">{score_row}'
              + _cite_row(f'{p["id"]}@v{n}#{cid}', citation_text(doc, base_url, cid)) +
              f'<div class="panel-row"><h2>The paper</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
              f'{esc(title)}</a></p></div>'
@@ -1121,12 +1121,12 @@ def card(doc, corrected=None):
             f'<h3><a href="/p/{key}">{esc(p.get("title"))}</a></h3>'
             + (f'<p class="card-who">{who}</p>' if who else "") + first
             + f'<p class="card-counts">{" · ".join(counts)}</p>')
-    paper = score_data.paper_score(doc)                                             # reliability (design §7.6)
+    paper = score_data.paper_score(doc)                                             # Support (design §7.6)
     if not paper:
         return f'<article class="card"><div class="card-body">{body}</div></article>'
     word = score_html.BANDS[paper["band"]]
     return (f'<article class="card card-scored"><a class="card-score band-{paper["band"]}" href="/p/{key}#score" '
-            f'aria-label="{score_html.NAME} {paper["score"]}, {word.lower()}" title="{esc(RELIABILITY)}">'
+            f'aria-label="{score_html.NAME} {paper["score"]}, {word.lower()}" title="{esc(SUPPORT_NOTE)}">'
             '<span class="card-score-num">'
             f'{paper["score"]}</span><span class="card-score-band">{word}</span></a>'
             f'<div class="card-body">{body}</div></article>')
@@ -1142,8 +1142,8 @@ def _search_form(q="", view="claimsets", big=False):
             '<button type="submit">Search</button></form>')
 
 
-#: What reliability means, for people meeting it for the first time (design §7.4): the home page and each card.
-RELIABILITY = (f"{score_html.NAME} (0–100) says how well a claim is backed by what the paper itself shows: points "
+#: What the Support score means, for people meeting it for the first time (design §7.4): the home page and each card.
+SUPPORT_NOTE = (f"{score_html.NAME} (0–100) says how well a claim is backed by what the paper itself shows: points "
                "are lost for unchecked evidence, untested assumptions, missing scope and similar gaps, by a public "
                "rubric. It checks the record, not the science: it does not say whether the claim is true, and it is "
                "not peer review.")
@@ -1154,8 +1154,6 @@ def home(docs, base_url=None, corrected=None):
     cards = _cards(docs[:RECENT], corrected) or '<p class="muted">Nothing is published yet.</p>'
     intro = _static("pages/home.html").read_text(encoding="utf-8")
     intro = intro.replace("{search}", _search_form(big=True)).replace("{rubric}", score_html.RUBRIC_URL)
-    intro = intro.replace("{reliability}", esc(RELIABILITY).replace(f"{score_html.NAME} (0–100)",
-                                                                    f"<strong>{score_html.NAME} (0–100)</strong>", 1))
     intro = intro.replace("{score_name}", score_html.NAME)
     main = (f'<div class="wrap home">{intro}'
             f'<section class="recent"><div class="section-head"><h2>Recently published</h2>'
