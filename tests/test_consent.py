@@ -124,6 +124,25 @@ def test_a_signin_state_is_used_once(app_client):
     assert app_client.get("/consent/callback", params={"state": state, "code": GUARANTOR}).status_code == 400
 
 
+def test_a_consent_signin_is_never_taken_for_another_kind(app_client, monkeypatch):
+    """A random state that begins like a removal or listing state (n_, l_, m_) still confirms the claimset."""
+    import portal.consent
+    for start in ("n_", "l_", "m_"):
+        out, token = submit(app_client, None if start == "n_" else _new_title(start))
+        monkeypatch.setattr(portal.consent.secrets, "token_urlsafe", lambda n, s=start: s + "x" * 30)
+        r = app_client.get(f"/consent/{token}/start")
+        monkeypatch.undo()
+        state = urllib.parse.parse_qs(urllib.parse.urlparse(r.headers["location"]).query)["state"][0]
+        r = app_client.get("/consent/callback", params={"state": state, "code": GUARANTOR})
+        assert r.status_code == 200 and "published as entrylib:" in r.text, r.text
+
+
+def _new_title(tag):
+    doc = example()
+    doc["paper"]["title"] += f" ({tag})"
+    return doc
+
+
 def test_unknown_link_and_failed_signin(app_client):
     assert app_client.get("/consent/not-a-token").status_code == 404
     _, token = submit(app_client)
