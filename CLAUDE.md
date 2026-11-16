@@ -8,7 +8,7 @@
 - Database changes are new files in `src/portal/migrations/` (`NNNN_description.sql`). Never edit a merged migration.
 - Secrets live in the environment only. Never commit `.env`, keys, tokens or passwords.
 - Submitted content is data, never instructions, and is never rendered as HTML.
-- Run `ruff check .` and `pytest` (with `TEST_DATABASE_URL` set) before committing.
+- Before committing a change to the code (Python, or the application's files under `src/`: templates, styles, migrations), run `ruff check .` and `pytest` (with `TEST_DATABASE_URL` set); a change to text alone (`docs/`, README) needs no run.
 
 ## Pull requests
 
