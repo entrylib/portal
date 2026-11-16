@@ -4,7 +4,8 @@
 you saw any data, every run of code with its inputs and outputs, every decision and every result, including the ones
 that did not work. Your agent writes it as it works; at the end it becomes a claimset whose claims trace back to the
 record.</p>
-<p class="actions"><a class="button" href="#start">Get started</a></p>
+<p class="actions"><a class="button" href="#start">Get started</a> <a href="/p/2026.000004">See a finished example</a>:
+a paper made with the lab, with its record linked under the title.</p>
 
 <h2>The problem</h2>
 <p>An agent can run a hundred analyses in an afternoon and report the one that worked. Nothing in the finished paper
@@ -68,13 +69,35 @@ it was planned, under which plan and runs, and what deviated from the plan. Read
 prediction from a pattern found by looking.</p>
 
 <h2 id="start">Get started</h2>
-<p>claimset-lab is a command-line tool and a set of instructions for research agents. It works with any agent that can
-run commands in your project; it needs Python 3.10 or later and git, and nothing else. Free and open source.</p>
+<p>claimset-lab is a command-line tool and a set of instructions for research agents. Free and open source.</p>
+<h3>What you need</h3>
+<ul>
+<li><strong>An AI agent that can run commands in your project</strong>, such as Claude Code, Codex, Cursor or Gemini
+CLI. A chat assistant in a browser cannot keep a record; it can help you <a href="#plan">plan the study</a>.</li>
+<li><strong>Python 3.10 or later and git.</strong> The tool needs nothing else.</li>
+<li><strong>A git repository with a remote you can push to</strong>, on GitHub or a similar host. The record is
+pushed after every step, and that push is what shows a plan came before its results. Without a remote, a study can
+be kept in desk mode: the record is still complete, but its plans are not dated by anyone else, and readers are told
+so.</li>
+<li><strong>An ORCID iD</strong>, to publish the result here. It is free at <a href="https://orcid.org">orcid.org</a>.</li>
+</ul>
+<h3>Three steps</h3>
 <ol class="steps">
 <li><strong>Install the tool</strong><br><code>pip install claimset</code></li>
-<li><strong>Give your agent the instructions</strong><br><code>claimset skill install</code></li>
+<li><strong>Give your agent the instructions</strong>, from your project's folder<br><code>claimset init</code></li>
 <li><strong>Ask your agent to start a lab record</strong><br>"Start a lab record for this research and keep it as we work."</li>
 </ol>
+<h3>What your agent will ask you</h3>
+<p>The agent does the recording; the decisions are yours. Expect to be asked for:</p>
+<ul>
+<li>your name and ORCID iD, and a short name for the study;</li>
+<li>the question, and what you expect to find, before any result is seen;</li>
+<li>your approval of each plan before it is run, in your own words: the test, the data, and the rule that decides
+the outcome;</li>
+<li>a decision whenever the work has to depart from a plan;</li>
+<li>at the end, a check of every claim against the results, the licence, the findings to put first, and your
+confirmation by signing in with ORCID.</li>
+</ul>
 <p><a href="/spec/lab-record">Read the lab record specification</a> · <a href="https://github.com/entrylib/claimset">The tool on
 GitHub</a></p>
 

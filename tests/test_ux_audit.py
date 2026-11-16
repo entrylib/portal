@@ -332,3 +332,17 @@ def test_supervisors_and_contributors_are_named():
     assert any(x.startswith("Supervised by: ") and "Sue Pervisor" in x for x in lines)
     assert any(x.startswith("Contributors: ") and "Con Tributor" in x for x in lines)
     assert not any(x.startswith("Authors of the original paper") for x in lines)
+
+
+def test_lab_and_convert_say_what_a_newcomer_needs():
+    """Onboarding (2026-11-16): the prerequisites are on the page, not found by failing, and the site and the
+    package's README give one start command."""
+    pages = Path(site.__file__).parent / "static" / "pages"
+    lab, convert = (pages / "lab.html").read_text(), (pages / "convert.html").read_text()
+    assert "What you need" in lab and "a remote you can push to" in lab and "desk mode" in lab
+    assert "What your agent will ask you" in lab and "See a finished example" in lab
+    assert "What you need" in convert and "perhaps already published" not in convert
+    assert "A chat assistant has a size limit" in convert
+    for name in ("lab.html", "agents.html"):
+        text = (pages / name).read_text()
+        assert "claimset init" in text and "claimset skill install" not in text

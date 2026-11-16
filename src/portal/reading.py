@@ -85,7 +85,7 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 - The subfield: the platform assigns one, unless the submission proposes `paper.classification.subfield` from
   {base}/subfields.json (OpenAlex's subfields); a valid proposal is kept, and the guarantor sees it when confirming.
 - How to write a claimset: the Claimset specification, {base}/spec/claimset.md (every specification:
-  {base}/spec/), and the skills (above, *Write a claimset*; `pip install claimset` then `claimset skill install` give
+  {base}/spec/), and the skills (above, *Write a claimset*; `pip install claimset` then `claimset init` give
   them too). Check it first:
   {base}/api/validate (POST a claimset JSON file or a submission package as the request body) checks it as a
   submission is checked; nothing is kept.
