@@ -56,6 +56,7 @@ CSS = """\
 .cs-claim-meta { font-size: 15px; color: var(--cs-muted); }
 .cs-statement { font-size: 18px; margin: 4px 0 6px !important; }
 .cs-links { font-size: 15px; margin-top: 4px !important; }
+.cs-correction { font-size: 15px; margin: 4px 0 !important; padding-left: 8px; border-left: 3px solid var(--cs-amber); }
 .k { color: var(--cs-muted); }
 .cs-id { color: var(--cs-muted); font-size: 15px; }
 .light { display: inline-block; flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
