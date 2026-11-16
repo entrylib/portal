@@ -21,6 +21,8 @@ def from_paper(doi=DOI, guarantor=None):
     if guarantor:
         g = next(c for c in doc["contributors"] if "guarantor" in (c.get("positions") or []))
         g.update(guarantor)
+    # the paper's authors first, agents last (claimset spec §3.11, Order)
+    doc["contributors"].sort(key=lambda c: c.get("type") == "agent")
     return doc
 
 
@@ -133,3 +135,65 @@ def test_the_guarantor_sees_the_paper_when_confirming(client, record):
     page = client.get(link[link.index("/consent/"):]).text
     assert f'Converted by its authors from <a href="https://doi.org/{DOI}">Forecasting &lt;things&gt;</a>' in page
     assert "Authorship: confirmed" in page and "Co Author: 0000-0002-1825-0097" in page
+
+
+def person(name, orcid=None, positions=("coauthor", "contributor")):
+    p = {"id": "P9", "type": "human", "name": name, "positions": list(positions)}
+    if orcid:
+        p["orcid"] = orcid
+    return p
+
+
+GRUNDY = {"name": "Thomas Grundy", "family": "Grundy", "orcid": None}
+KILLICK = {"name": "Rebecca Killick", "family": "Killick", "orcid": "0000-0003-0583-3960"}
+SVETUNKOV = {"name": "Ivan Svetunkov", "family": "Svetunkov", "orcid": "0000-0001-7826-0281"}
+BYLINE = {"title": "T", "registry": "Crossref", "authors": [GRUNDY, KILLICK, SVETUNKOV]}
+AGENT = {"id": "P8", "type": "agent", "name": "Claude Code", "positions": ["author"]}
+
+
+def listed(*people):
+    return {"contributors": [dict(p, id=f"P{i + 1}") for i, p in enumerate(people)]}
+
+
+def test_the_authors_follow_the_byline():
+    g, k = person("T. Grundy"), person("Rebecca Killick", "0000-0003-0583-3960")
+    s = person("Ivan Svetunkov", "0000-0001-7826-0281", ("guarantor", "contributor"))
+    ok = source.author_order(BYLINE, listed(g, k, s, AGENT))
+    assert ok["follows"] and ok["unmatched"] == []
+    first = source.author_order(BYLINE, listed(s, g, k, AGENT))          # the guarantor moved to the front
+    assert not first["follows"]
+    assert first["expected"] == ["Thomas Grundy", "Rebecca Killick", "Ivan Svetunkov"]
+    assert first["given"] == ["Ivan Svetunkov", "T. Grundy", "Rebecca Killick"]
+    assert not source.author_order(BYLINE, listed(AGENT, g, k, s))["follows"]     # an agent before the authors
+    assert not source.author_order(BYLINE, listed(g, person("Ann Other"), k, s))["follows"]
+
+
+def test_an_author_not_found_is_left_out_and_reported():
+    g, s = person("Thomas Grundy"), person("Ivan Svetunkov", "0000-0001-7826-0281")
+    got = source.author_order(BYLINE, listed(g, s, AGENT))
+    assert got["follows"] and got["unmatched"] == ["Rebecca Killick"]
+    assert source.author_order(BYLINE, listed(AGENT)) is None
+    assert source.author_order({"authors": []}, listed(g, s)) is None
+    # two contributors that could be one author: not matched, so not compared
+    twins = {"authors": [{"name": "A. Smith", "family": "Smith", "orcid": None}, SVETUNKOV]}
+    got = source.author_order(twins, listed(person("Ann Smith"), person("Bob Smith"), s))
+    assert got["unmatched"] == ["A. Smith"]
+
+
+def test_a_submission_out_of_byline_order_is_refused(client, record):
+    doc = from_paper()
+    g = the_guarantor(doc)
+    co = {"id": f"P{len(doc['contributors']) + 1}", "type": "human", "name": "Rebecca Killick",
+          "orcid": "0000-0003-0583-3960", "positions": ["coauthor", "contributor"]}
+    record.value = {"title": "T", "registry": "Crossref", "authors": [
+        {"name": "Rebecca Killick", "family": "Killick", "orcid": "0000-0003-0583-3960"},
+        {"name": g["name"], "family": g["name"].split()[-1], "orcid": g["orcid"]}]}
+    people = [c for c in doc["contributors"] if c is not g]
+    doc["contributors"] = [g, co] + people
+    r = client.post("/api/submissions", content=json.dumps(doc).encode(), headers=JSON)
+    assert r.status_code == 422, r.text
+    assert "byline" in r.json()["error"] and "Rebecca Killick" in r.json()["error"]
+    doc["contributors"] = [co, g] + people
+    r = client.post("/api/submissions", content=json.dumps(doc).encode(), headers=JSON)
+    assert r.status_code == 201, r.text
+    assert r.json()["source"]["author_order"] == "follows the byline"

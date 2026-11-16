@@ -134,3 +134,9 @@ def test_guide_reads_the_copy_the_installed_claimset_carries():
         pytest.skip("the installed claimset carries no study-planning")
     text = skills.guide("study-planning/prediction", "mean-forecasts")
     assert "## mean-forecasts" in text and "## References" in text
+
+
+def test_the_requests_ask_for_the_byline_order():
+    cat = {skills.FROM_PAPER: {"text": "x"}, skills.SUBMIT: {"text": "y"}}
+    for text in (skills.short("https://entrylib.org", cat), skills.request("https://entrylib.org", cat)):
+        assert "order of its byline" in text and "the agent, last" in text

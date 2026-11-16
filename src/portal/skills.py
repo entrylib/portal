@@ -109,10 +109,17 @@ def request(base_url, cat):
         "- Ask me the skill's questions before you build anything.\n"
         "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
         "worse.\n"
+        + AUTHOR_ORDER +
         "- Draft a plain-language summary of at most 150 words for me to approve.\n"
         "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
         f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "
         "and submit only when I say so.\n")
+
+
+#: The paper's authors in the order of its byline (claimset spec §3.11, Order): EntryLib refuses a submission whose
+#: contributors list them otherwise.
+AUTHOR_ORDER = ("- List the paper's authors exactly in the order of its byline, as its DOI's record gives them (me "
+                "included, wherever I am in it), then anyone else, and yourself, the agent, last.\n")
 
 
 def message(base_url, cat, example=None):
@@ -149,6 +156,7 @@ def short(base_url, cat):
         "- Ask me the skill's questions before you build anything.\n"
         "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
         "worse.\n"
+        + AUTHOR_ORDER +
         "- Draft a plain-language summary of at most 150 words for me to approve.\n"
         "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
         f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "

@@ -5,6 +5,7 @@
     lookup(doi)                 -> {"title", "authors": [{"name", "family", "orcid"}]} from Crossref or DataCite,
                                    None if neither knows the DOI; raises Unavailable when they cannot be reached
     authorship(record, people)  -> how the guarantor appears among the paper's authors
+    author_order(record, doc)   -> whether the claimset lists the paper's authors in the order of its byline
 
 The DOI is read from `paper.published_as` when a claimset has it, and else from a `manuscript` artefact's `uri`.
 Lookups follow crossref.py (its address, User-Agent and PORTAL_CROSSREF=0). Only these two fixed hosts are asked,
@@ -129,6 +130,47 @@ def authorship(record, people):
         if any(f in words or all(w in words for w in f.split()) for f in families):
             return "name"
     return "absent"
+
+
+def _matches(author, person):
+    """Whether a contributor is this author of the paper: the same ORCID iD, or, when either has none, the author's
+    family name among the words of the contributor's name (accents and punctuation folded)."""
+    if author.get("orcid") and person.get("orcid"):
+        return author["orcid"] == person["orcid"]
+    names = str(author.get("name") or "").split()
+    family = _fold(author.get("family") or (names[-1] if names else "")).split()
+    words = set(_fold(person.get("name")).split())
+    return bool(family) and all(w in words for w in family)
+
+
+def author_order(record, doc):
+    """Whether the claimset lists the paper's authors first, in the order of its byline (claimset spec §3.11, Order):
+    {"follows": bool, "expected": [names], "given": [names], "unmatched": [names]}, or None when the registry lists
+    no authors or none of them is a contributor. An author is matched to the one contributor who is them (_matches);
+    an author matched to none, or to more than one, is `unmatched` and left out of the comparison. `given` is the
+    contributors as listed, up to the last matched author; it follows the byline when it is exactly the matched
+    authors in the byline's order, with no one, agent or other person, before or between them."""
+    authors = [a for a in record.get("authors") or [] if isinstance(a, dict)]
+    people = [c for c in doc.get("contributors") or [] if isinstance(c, dict)]
+    humans = [c for c in people if c.get("type") != "agent"]
+    matched, unmatched = [], []
+    for a in authors:
+        hits = [c for c in humans if _matches(a, c)]
+        if len(hits) == 1 and all(hits[0] is not m for _, m in matched):
+            matched.append((a, hits[0]))
+        else:
+            unmatched.append(a.get("name") or a.get("family") or "")
+    if not matched:
+        return None
+    last = max(people.index(m) for _, m in matched)
+    given = people[:last + 1]
+    follows = len(given) == len(matched) and all(g is m for g, (_, m) in zip(given, matched, strict=True))
+    return {"follows": follows, "expected": [a.get("name") or _name(m) for a, m in matched],
+            "given": [_name(c) for c in given], "unmatched": unmatched}
+
+
+def _name(c):
+    return str(c.get("name") or c.get("label") or c.get("id") or "")
 
 
 def own_paper(doc):

@@ -131,7 +131,8 @@ def source_checks(conn, doc, people, kind, target):
     """A claimset its authors prepared from their published paper (design §4.5): the paper is claimed once, and by
     one of its authors. Returns (its DOI or None, what was checked, for the report). Raises SubmissionError when
     another claimset already restates the paper, or when the paper's registry lists ORCID iDs and the guarantor is
-    neither among them nor named. When Crossref and DataCite cannot be reached, the authorship check is skipped and
+    neither among them nor named, or when the contributors list the paper's authors in an order other than its
+    byline's (claimset spec §3.11). When Crossref and DataCite cannot be reached, the authorship check is skipped and
     the report says so."""
     doi = source.doi(doc)
     if not doi:
@@ -160,11 +161,21 @@ def source_checks(conn, doc, people, kind, target):
                               f"doi:{doi} as {record['registry']} lists them ({names}). Only a paper's authors "
                               "publish it as a claimset; if you are one, add your ORCID iD to the paper's record, "
                               "or write to mail@entrylib.org", status=403)
+    order = source.author_order(record, doc)
+    if order and not order["follows"]:
+        raise SubmissionError(f"the contributors list the authors of doi:{doi} in a different order from the paper's "
+                              f"byline as {record['registry']} gives it ({', '.join(order['expected'])}); they are "
+                              f"listed as {', '.join(order['given'])}. List the paper's authors first, in the "
+                              "byline's order, then anyone else, agents last (claimset spec §3.11)", status=422)
     words = {"orcid": "confirmed: the guarantor's ORCID iD is on the paper",
              "name": "the guarantor's name is on the paper (no ORCID iD to compare)",
              "absent": "not confirmed: the guarantor is not named on the paper",
              "unknown": "not checked: the registry lists no authors"}
     out = {"doi": doi, "title": record.get("title"), "registry": record["registry"], "authorship": words[found]}
+    if order:
+        out["author_order"] = ("follows the byline" if not order["unmatched"] else
+                               "follows the byline for the authors found among the contributors; not found: "
+                               + ", ".join(order["unmatched"]))
     missing = [a for a in record["authors"] if a.get("orcid") and a["orcid"] not in _orcids(doc)]
     if missing:
         out["coauthor_orcids"] = [f"{a['name']}: {a['orcid']}" for a in missing]
