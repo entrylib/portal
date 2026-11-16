@@ -95,7 +95,8 @@ def start(conn, token):
     row = _guarantor(conn, token)
     if row is None or row[4] != "pending":
         return None
-    state = secrets.token_urlsafe(24)
+    state = "c_" + secrets.token_urlsafe(24)     # a prefix of its own: an unprefixed random state could begin
+    # with n_, l_ or m_ (1 in 1365) and the shared ORCID callback would take it for another kind of sign-in
     conn.execute("INSERT INTO consent_signins (state, token_hash) VALUES (%s, %s)", (state, token_hash(token)))
     return state
 
