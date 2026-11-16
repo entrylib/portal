@@ -342,6 +342,7 @@ def test_lab_and_convert_say_what_a_newcomer_needs():
     lab, convert = (pages / "lab.html").read_text(), (pages / "convert.html").read_text()
     assert "What you need" in lab and "a remote you can push to" in lab and "desk mode" in lab
     assert "What your agent will ask you" in lab
+    assert "Data you collect yourself" in lab                # not only computational work
     assert 'href="/p/2026.000007">quantitative study</a>' in lab and 'href="/p/2026.000004">qualitative one</a>' in lab
     submit = (pages.parent / "submit.html").read_text()
     for page in (lab, convert, submit):                     # possible without an agent, and not recommended
