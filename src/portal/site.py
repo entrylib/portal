@@ -26,6 +26,7 @@ from claimset.claim import claim_bundle
 
 from . import areas, ids, indexnow, limits, planning, score_html, skills, source, specs
 from . import page as pageview
+from . import paper as paperview
 from . import scores as score_data
 from .history import claims_changed
 from .text import html as plain_html
@@ -78,6 +79,9 @@ PAGES = {
 HOW_TO_READ = """<ol>
 <li><strong>Summary</strong>, when the authors wrote one, gives the paper in a few sentences of plain language.
 <strong>Highlights</strong> then lists its main claims.</li>
+<li>A paper opens as a <strong>paper</strong>: its claims in reading order, each with its proof or its evidence
+under it. <strong>Record</strong>, at the top, lists everything the paper holds (definitions, claims, evidence, files),
+for checking it.</li>
 <li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
 the record, not the science. Click the score to see what lowered it.</li>
 <li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
@@ -803,8 +807,10 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                    + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>', doc)
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
+    switch = view_switch(key, "record") if not current or current == n else ""
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
-            f'{INTRO_STRIP}<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
+            f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}'
+            f'{_notice(p, published_at(listing, n))}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{body}'
@@ -819,6 +825,127 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                           scores=scores)
     return shell(p.get("title", ""), main, active="read", description=description, head=head, canonical=canonical,
                  script="/page.js")
+
+
+def view_switch(key, view):
+    """The two views of a paper's current version (design §7.4, *Paper view*): the paper, to read the argument, and
+    the record, to check it. `view`: the one this page is."""
+    def one(name, href, what):
+        here = ' aria-current="page"' if view == name.lower() else ""
+        return f'<a href="{href}"{here} title="{what}">{name}</a>'
+    return ('<nav class="view-switch" aria-label="Views of this paper">'
+            + one("Paper", f"/p/{key}", "The claims in reading order, each with its proof or evidence")
+            + one("Record", f"/p/{key}/record",
+                  "Every object of the claimset: definitions, claims, evidence, artefacts")
+            + "</nav>")
+
+
+#: The artefacts that are the authors' own document of the paper, in the order they are looked for, and what the paper
+#: view calls each.
+DOCUMENT_KINDS = (("manuscript", "The paper as its authors wrote it"), ("proof", "The proofs as one document"))
+
+
+def own_document(doc):
+    """The authors' own document of the paper, for a reader who wants it in one piece (design §7.4, *Paper view*):
+    the first artefact of kind `manuscript`, or else `proof`, that is a PDF at an http(s) address (a file of the
+    claimset's package is at one once published). (what it is called, its address), or None."""
+    artefacts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
+    for kind, label in DOCUMENT_KINDS:
+        for a in artefacts:
+            uri = a.get("uri")
+            if a.get("kind") != kind or not pageview._href(uri):
+                continue
+            if uri.lower().split("?")[0].split("#")[0].endswith(".pdf"):
+                return label, uri
+    return None
+
+
+#: The sections of the record page that the paper view keeps as they are, after its own.
+PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
+
+
+def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None, scores=None):
+    """The paper view of a claimset's current version, the page at /p/<key> (design §7.4, *Paper view*): the header
+    and panel of the record page, its Summary and Highlights, then the terms the claims name and the claims in
+    reading order, each with what supports it (`paper.render`), then the record page's Assumptions, Limitations, Open
+    questions, References, Score, Not claimed and Versions. What a program is given at this address (the published
+    file, the reading view, the BibTeX entry: design §7.1) does not depend on which view people see. A link to
+    something only the record holds (evidence, an artefact) leads to the record."""
+    p = doc["paper"]
+    key, n = ids.url_key(p["id"]), p.get("version")
+    record = f"/p/{key}/record"
+    parts = render(doc, file_url, ref_text, scores, claim_pages(doc))
+    pages = claim_pages(doc)
+    view = paperview.render(doc, record, file_url=file_url, ref_text=ref_text, number=number, scores=scores,
+                            claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None)
+    blocks = dict(parts.get("blocks") or {})
+    titles = {sid: (title, c) for sid, title, c in parts.get("sections") or []}
+    summary = _summary(doc)
+    if "brief" in blocks and 'class="cs-summary"' in blocks["brief"]:
+        del blocks["brief"]
+    if summary and "summary" not in blocks:
+        blocks["summary"] = (f'<section class="cs-section" id="summary"><h2>Summary</h2>'
+                             f'<p class="cs-summary">{plain_html(summary)}</p></section>')
+    body, shown = [], []
+
+    def keep(sid):
+        if sid in blocks:
+            old, c = titles.get(sid, (PAGE_SECTIONS.get(sid, sid), 0))
+            title = PAGE_SECTIONS.get(sid, old)
+            body.append(_retitle(blocks[sid], old, title))
+            shown.append((sid, title, c, ""))
+    for sid in ("summary", "highlights", "brief"):
+        keep(sid)
+    names = {c["id"]: " ".join(c["name"].split()) for c in doc.get("claims") or []
+             if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)}
+    for sid, title, c, block in view["sections"]:
+        body.append(block)
+        inner = ""
+        if sid == "claims" and names:                    # the claims by name, in the contents
+            cids = re.findall(r'<article class="pv-claim" id="(C[0-9]+)"', block)
+            inner = ('<ol class="pv-toc">' + "".join(
+                f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> {esc(names.get(cid, ""))}</a></li>'
+                for cid in cids) + "</ol>")
+        shown.append((sid, title, c, inner))
+    for sid in PAPER_KEEPS:
+        keep(sid)
+    unclaimed, n_unclaimed = not_claimed(doc)
+    more = (('<li><a href="#score">Score</a></li>' if scores else "")
+            + (f'<li><a href="#not-claimed">Not claimed</a> <span class="count">{n_unclaimed}</span></li>'
+               if n_unclaimed else "")
+            + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>')
+    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>'
+                               + (f' <span class="count">{esc(c)}</span>' if c else "") + inner + "</li>"
+                               for sid, t, c, inner in shown) + more + "</ol></nav>")
+    issues = f"/p/{key}@v{n}.issues.txt"
+    top = [_status(p)] if (p.get("status") or "active") != "active" else []
+    top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
+    if subfield_name(doc):
+        top.append(esc(subfield_name(doc)))
+    own = own_document(doc)
+    document = (f'<p class="pv-document"><a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> '
+                f'<span class="small">PDF</span></p>') if own else ""
+    main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
+            f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
+            f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
+            f'{document}{ask_ai(doc, base_url)}</div>{_panel(doc, parts, base_url, key, scores)}{nav}'
+            f'<article class="cs-body">{"".join(body)}'
+            f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
+            f'{unclaimed}{_versions(listing, key, n)}{view["extra"]}</article></div>')
+    # what only the record holds: a link to it within the page leads to the record
+    here = set(re.findall(r'\bid="([^"]+)"', main))
+    main = re.sub(r'href="#([^"]+)"',
+                  lambda m: m.group(0) if m.group(1) in here or m.group(1) == "top"
+                  else f'href="{record}#{m.group(1)}"', main)
+    head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
+            f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">'
+            f'<link rel="alternate" type="application/x-bibtex" href="/p/{key}@v{n}.bib">')
+    canonical = f"{base_url}/p/{key}"
+    head += claimset_meta(doc, base_url, canonical, first_date=(listing[0].get("date") if listing else None),
+                          scores=scores)
+    return shell(p.get("title", ""), main, active="read", description=_lead_text(doc), head=head,
+                 canonical=canonical, script="/page.js")
 
 
 def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a submission"):
@@ -1556,7 +1683,10 @@ def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=N
         _write(p / f"{key}@v{n}.bib", bibtex(doc, base_url))
         _write(p / f"{key}@v{n}.ris", ris(doc, base_url))
         if n == current:
-            _write(p / f"{key}.html", page)
+            # people get the paper view at the claimset's address, and the record beside it (design §7.4)
+            _write(p / f"{key}.html", paper_page(doc, base_url=base_url, listing=listing, lab=labs.get(n),
+                                                 file_url=file_url, ref_text=ref_text, scores=(scores or {}).get(n)))
+            _write(p / key / "record.html", page)
             _write(p / f"{key}.bib", bibtex(doc, base_url))
             _write(p / f"{key}.ris", ris(doc, base_url))
             write_claim_pages(p / key, doc, base_url=base_url, scores=(scores or {}).get(n), file_url=file_url,

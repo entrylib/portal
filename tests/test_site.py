@@ -21,8 +21,10 @@ def published(env, doc=None):
 def test_claimset_page(env):
     ctx, concept = published(env)
     out = ctx["published_dir"]
-    page = (out / "p" / f"{KEY}.html").read_text()
-    assert page == (out / "p" / f"{KEY}@v1.html").read_text()
+    page = (out / "p" / f"{KEY}.html").read_text()                     # people get the paper view (design §7.4),
+    record = (out / "p" / KEY / "record.html").read_text()             # and the record beside it,
+    assert record == (out / "p" / f"{KEY}@v1.html").read_text()        # which is what a version's page is
+    assert 'data-view="paper"' in page and 'data-view="paper"' not in record
     assert page.count("<script src=") == 1 and page.count("<script") == 2          # the script, and JSON-LD data
     assert 'src="/page.js?v=' in page and 'class="cs-page entry"' in page
     assert 'href="/site.css?v=' in page and 'href="/claimset.css?v=' in page

@@ -65,8 +65,14 @@ STRETCHY_ACCENTS = {"widehat", "widetilde", "overline", "overrightarrow", "under
 SPACES = {",": "0.1667em", ":": "0.2222em", ">": "0.2222em", ";": "0.2778em", " ": "0.25em", "quad": "1em",
           "qquad": "2em", "enspace": "0.5em", "thinspace": "0.1667em", "medspace": "0.2222em",
           "thickspace": "0.2778em", "!": "-0.1667em", "negthinspace": "-0.1667em"}
-IGNORED = {"displaystyle", "textstyle", "scriptstyle", "limits", "nolimits", "big", "Big", "bigg", "Bigg", "bigl",
-           "bigr", "Bigl", "Bigr", "biggl", "biggr", "Biggl", "Biggr", "nonumber", "notag", "label", "tag"}
+IGNORED = {"displaystyle", "textstyle", "scriptstyle", "limits", "nolimits", "nonumber", "notag", "label", "tag"}
+#: A delimiter of a size the author chose (\big( … \Big]): the heights TeX gives them.
+SIZED = {**dict.fromkeys(("big", "bigl", "bigr", "bigm"), "1.2em"),
+         **dict.fromkeys(("Big", "Bigl", "Bigr", "Bigm"), "1.8em"),
+         **dict.fromkeys(("bigg", "biggl", "biggr", "biggm"), "2.4em"),
+         **dict.fromkeys(("Bigg", "Biggl", "Biggr", "Biggm"), "3em")}
+#: After a function's name, what its argument does not start with: before these there is no thin space.
+NO_GAP = set("()[]{}^_,;.:|=+-&/<>'!")
 FENCES = {"(": "(", ")": ")", "[": "[", "]": "]", "|": "|", ".": "", "\\{": "{", "\\}": "}", "\\lbrace": "{",
           "\\rbrace": "}", "\\langle": "⟨", "\\rangle": "⟩", "\\lvert": "|", "\\rvert": "|", "\\|": "‖",
           "\\lVert": "‖", "\\rVert": "‖", "\\vert": "|", "\\Vert": "‖", "\\lfloor": "⌊", "\\rfloor": "⌋",
@@ -169,6 +175,28 @@ class _Parser:
                     return "".join(out)
             out.append(t)
 
+    def argument(self):
+        """One argument of a command that takes two (\\frac12, \\binom n2): a {group}, or one token as TeX reads
+        it, which of a number written without braces is its first digit."""
+        t = self.peek()
+        if t is not None and t.isdigit() and len(t) > 1:
+            self.toks[self.pos] = t[1:]
+            return f"<mn>{esc(t[0])}</mn>"
+        return self.group()
+
+    def gap(self):
+        """The thin space between a function's name and its argument (ln y, tanh x); none before a bracket, a
+        script or an operator."""
+        t = self.peek()
+        if t is None or t in NO_GAP:
+            return ""
+        if t[0] == "\\":
+            name = t[1:]
+            if name in SIZED or name in SPACES or name in ("left", "right", "middle", "\\") or t in FENCES \
+                    or (name in OPERATORS and name not in LETTERLIKE):
+                return ""
+        return '<mspace width="0.1667em"></mspace>'
+
     def group(self):
         """One argument: a {group} or a single atom."""
         if self.peek() == "{":
@@ -261,6 +289,12 @@ class _Parser:
             if name in ("label", "tag"):
                 self.raw_group()
             return None
+        if name in SIZED:
+            ch = FENCES.get(self.peek() or "")
+            if not ch:
+                return None                                   # no delimiter follows: the size says nothing
+            self.pos += 1
+            return mo(ch, fence="true", stretchy="true", symmetric="true", minsize=SIZED[name], maxsize=SIZED[name])
         if name in SPACES:
             return f'<mspace width="{SPACES[name]}"></mspace>'
         if name in GREEK:
@@ -276,7 +310,7 @@ class _Parser:
             fn = mi(name) if len(name) > 1 else mi(name, normal=True)
             if self.peek() in ("^", "_"):
                 fn = self.scripts(fn, big=name in LIMITS)
-            return row([fn, mo("\u2061")])
+            return row([fn, mo("\u2061"), self.gap()])
         if name in LETTERLIKE:
             return mi(OPERATORS[name], normal=True)
         if name in OPERATORS:
@@ -285,9 +319,9 @@ class _Parser:
                 return mo(ch, stretchy="false")
             return mo(ch)
         if name in ("frac", "dfrac", "tfrac", "cfrac"):
-            return f"<mfrac>{self.group()}{self.group()}</mfrac>"
+            return f"<mfrac>{self.argument()}{self.argument()}</mfrac>"
         if name in ("binom", "dbinom", "tbinom"):
-            a, b = self.group(), self.group()
+            a, b = self.argument(), self.argument()
             return row([mo("("), f'<mfrac linethickness="0">{a}{b}</mfrac>', mo(")")])
         if name == "sqrt":
             index = self.optional()
@@ -310,8 +344,13 @@ class _Parser:
             return self.styled(FONT_COMMANDS[name])
         if name in TEXT_COMMANDS:
             text = self.raw_group()
-            if name in ("operatorname", "mathrm"):
-                return row([mi(text, normal=True), mo("\u2061")]) if name == "operatorname" else mi(text, normal=True)
+            if name == "operatorname":
+                fn = mi(text, normal=True)
+                if self.peek() in ("^", "_"):                 # sech^2(x): the power belongs to the name
+                    fn = self.scripts(fn)
+                return row([fn, mo("\u2061"), self.gap()])
+            if name == "mathrm":
+                return mi(text, normal=True)
             if name == "mathit":
                 return mi(text)
             return f"<mtext>{esc(text)}</mtext>"
