@@ -867,6 +867,11 @@ def _evidence(P, e, source_link):
     if e.get("estimate") is not None:
         out.append(f'<p>{esc(e.get("estimand", ""))} = {esc(_num(e["estimate"]))} '
                    f'{esc(_uncertainty(e.get("uncertainty")))} {esc(_interval(e.get("interval")))}</p>')
+    # figures before the numbers: a reader sees the pattern first, then the values behind it (design §7.6)
+    figures = P.figures_of(e)
+    if figures:
+        many = " cs-figures-many" if len(figures) > 3 else ""
+        out.append(f'<div class="cs-figures{many}">' + "".join(P.figure(a) for a in figures) + "</div>")
     results = []
     for r in e.get("results") or []:
         if isinstance(r, dict):
@@ -895,9 +900,6 @@ def _evidence(P, e, source_link):
         if isinstance(x, dict):
             out.append(f'<p class="cs-links"><span class="k">Record:</span> {esc(x.get("kind"))}'
                        f'{" in " + P.ids([x["artefact"]]) if x.get("artefact") else ""} · {P.text(x.get("description", ""))}</p>')
-    figures = P.figures_of(e)
-    if figures:
-        out.append('<div class="cs-figures">' + "".join(P.figure(a) for a in figures) + "</div>")
     return f'<div class="cs-item cs-evidence" id="{esc(e["id"])}">' + "".join(out) + "</div>"
 
 
