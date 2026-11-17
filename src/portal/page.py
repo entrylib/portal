@@ -126,6 +126,36 @@ def _link(uri, text=None):
     return f'<a href="{esc(uri)}">{text}</a>' if _href(uri) else text
 
 
+GLOBAL_ID = re.compile(r"entrylib:(\d{4}\.\d{6,})(@v\d+)?(?:#([A-Z]+\d+(?:\.\d+)*))?")
+
+
+def _global_link(m):
+    """A claimset's identifier on EntryLib (entrylib:2026.000008, …@v2, …@v2#C4) as a link to its page on this site:
+    the paper, its version, and the claim in it."""
+    key, version, obj = m.group(1), m.group(2) or "", m.group(3)
+    return f'<a class="global-id" href="/p/{key}{version}{"#" + obj if obj else ""}">{esc(m.group(0))}</a>'
+
+
+def linked(s):
+    """Text escaped, with EntryLib identifiers linked."""
+    out, last = [], 0
+    for m in GLOBAL_ID.finditer(s):
+        out.append(esc(s[last:m.start()]))
+        out.append(_global_link(m))
+        last = m.end()
+    out.append(esc(s[last:]))
+    return "".join(out)
+
+
+def _target(t, id_type):
+    """A cited work or claim named by identifier: a DOI or an EntryLib identifier as a link, anything else as text."""
+    if id_type == "doi":
+        return _doi(t)
+    if id_type == "claimset" and isinstance(t, str) and GLOBAL_ID.fullmatch(t):
+        return _global_link(GLOBAL_ID.fullmatch(t))
+    return esc(t)
+
+
 def _link_name(uri, limit=40):
     """What a link to an artefact is called: its file's name, or else its site (`model.R`, `zenodo.org`)."""
     path = re.sub(r"[?#].*$", "", str(uri)).rstrip("/")
@@ -351,7 +381,7 @@ class _Paper:
     def _terms(self, s):
         out, last = [], 0
         for m in TERM.finditer(s):
-            out.append(esc(s[last:m.start()]))
+            out.append(linked(s[last:m.start()]))
             tid, shown = m.group(1), m.group(2)
             d = self.by_id.get(tid)
             if d is not None and d in self.defs:
@@ -360,7 +390,7 @@ class _Paper:
             else:
                 out.append(esc(shown))
             last = m.end()
-        out.append(esc(s[last:]))
+        out.append(linked(s[last:]))
         return "".join(out)
 
     # ---------- images ----------
@@ -648,7 +678,7 @@ def _support(P, c):
         if s.get("reference"):
             ptr.append(P.ref(s["reference"], s.get("locator")))
         elif s.get("target"):
-            ptr.append(_doi(s["target"]) if s.get("id_type") == "doi" else esc(s["target"]))
+            ptr.append(_target(s["target"], s.get("id_type")))
         if s.get("artefacts"):
             ptr.append("artefacts " + P.ids(s["artefacts"]))
         if s.get("self"):
@@ -714,7 +744,7 @@ def _claim(P, c, principal=False):
             continue
         target = (P.ref(rel["reference"], rel.get("locator")) if rel.get("reference")
                   else P.ids([rel.get("target")]) if rel.get("id_type") == "local"
-                  else _doi(rel.get("target")) if rel.get("id_type") == "doi" else esc(rel.get("target")))
+                  else _target(rel.get("target"), rel.get("id_type")))
         rels.append(f'<span class="k">{esc(str(rel.get("type", "")).replace("_", " ").capitalize())}:</span> {target}')
     links += rels
     if c.get("warrant"):
@@ -1016,7 +1046,7 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
                     "extends", "addresses", "contradicts", "replicates", "fails_to_replicate", "supersedes",
                     "refines", "qualifies", "supports", "explains", "disputes_evidence"):
                 target = (P.ref(rel["reference"], rel.get("locator")) if rel.get("reference")
-                          else _doi(rel.get("target")) if rel.get("id_type") == "doi" else esc(rel.get("target")))
+                          else _target(rel.get("target"), rel.get("id_type")))
                 own = ' <span class="cs-tail">· own earlier work</span>' if rel.get("self") else ""
                 context.append(f'<dt>{esc(str(rel["type"]).replace("_", " ").capitalize())} {target}{own}'
                                f' <span class="cs-tail">· from <a href="#{esc(c["id"])}">{esc(c["id"])}</a></span></dt>'
@@ -1052,7 +1082,7 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
 
     def reference(b):
         t = b.get("target")
-        shown = _doi(t) if b.get("id_type") == "doi" else (_link(t) if b.get("id_type") == "url" else esc(t))
+        shown = _link(t) if b.get("id_type") == "url" else _target(t, b.get("id_type"))
         if b["id"] in P.written:                              # written out by the site, then its identifier
             shown = f"{esc(P.written[b['id']])} {shown}"
         used = P.users(b["id"])
