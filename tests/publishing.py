@@ -12,7 +12,10 @@ TODAY = dt.date(2026, 11, 4)
 
 def example(name="submission-native.json"):
     from importlib import resources
-    return json.loads((resources.files("claimset") / "data" / "examples" / name).read_text(encoding="utf-8"))
+    doc = json.loads((resources.files("claimset") / "data" / "examples" / name).read_text(encoding="utf-8"))
+    if "status" not in doc["paper"]:    # a submission proposes its subfield; claimset < 0.44.5's examples had none
+        doc["paper"].setdefault("classification", {}).setdefault("subfield", "openalex:subfields/1803")
+    return doc
 
 
 def fake_classifier(doc):

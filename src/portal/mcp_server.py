@@ -315,7 +315,9 @@ def build(portal):
         upload_id (a package sent to an upload_url address); package_url (an https URL of a package or claimset file).
         `valid` says whether it would be accepted; `errors` and `warnings` give each problem's rule number, place and
         message, to fix and check again. A claimset whose artefacts name files by a relative path is an error without
-        them (rule 70), unless it is submitted with package_with_consent."""
+        them (rule 70), unless it is submitted with package_with_consent. A submission proposes the paper's subfield
+        (paper.classification.subfield, one of /subfields.json): `subfield` gives its name, to tell your human
+        before submitting; one that proposes none is an error."""
         path = _source(ctx, claimset, files, package_url, "validate", upload_id)
         try:
             return submissions.check(path).as_json()

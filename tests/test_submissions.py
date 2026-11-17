@@ -125,6 +125,34 @@ def test_screened_submission_is_refused(client):
     assert r.status_code == 422 and {e["rule"] for e in r.json()["errors"]} & {"SI2", "safe-ingest"}
 
 
+def test_a_submission_proposes_its_subfield(client, tmp_path):
+    """The guarantor sees the subfield by name and approves it: no classifier chooses it unseen (design §7.4)."""
+    doc = example()
+    doc["paper"]["classification"]["subfield"] = "openalex:subfields/2613"
+    path = tmp_path / "ok.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    report = submissions.check(path).as_json()
+    assert report["valid"] and report["subfield"]["id"] == "openalex:subfields/2613"
+    assert report["subfield"]["name"] == "Statistics and Probability" and "guarantor" in report["subfield"]["note"]
+    for given, said in ((None, "proposes no subfield"), ("", "proposes no subfield"),
+                        ("openalex:subfields/9999", "is not the ID of an OpenAlex subfield"),
+                        ("Statistics", "is not the ID of an OpenAlex subfield")):
+        bad = example()
+        if given is None:
+            del bad["paper"]["classification"]["subfield"]
+        else:
+            bad["paper"]["classification"]["subfield"] = given
+        r = client.post("/api/submissions", content=body(bad), headers=JSON)
+        errors = r.json()["errors"]
+        assert r.status_code == 422 and [e["rule"] for e in errors] == ["subfield"], (given, errors)
+        assert said in errors[0]["message"] and "/subfields.json" in errors[0]["message"]
+        path.write_text(json.dumps(bad), encoding="utf-8")
+        assert "subfield" not in submissions.check(path).as_json()
+    doc = example()                                                  # with a listed subfield it is accepted
+    r = client.post("/api/submissions", content=body(doc), headers=JSON)
+    assert r.status_code in (200, 201, 202), r.text
+
+
 def test_screening_catches_what_the_validator_lets_through(client):
     doc = example()
     doc["claims"][0]["statement"] = "Monthly retail sales series exhibit annual seasonality.\u202e"

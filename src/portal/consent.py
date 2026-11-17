@@ -368,6 +368,7 @@ def _subfield_line(doc):
     from .site import subfield_name
     sub = proposed_subfield(doc)
     if sub:
-        return f"{subfield_name({'paper': {'classification': {'subfield': sub}}})} (proposed by the submission)"
+        return (f"{subfield_name({'paper': {'classification': {'subfield': sub}}})} (proposed by the submission; "
+                f"by confirming you approve it. To change it, submit again with another subfield)")
     return ("assigned at publication by EntryLib's classifier; to choose it, propose paper.classification.subfield "
             "(an OpenAlex subfield) and submit again")

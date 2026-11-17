@@ -24,7 +24,7 @@ from claimset.validate import is_relative_uri, standalone_problems, validate_pat
 
 from . import limits, source
 from .indexer import title_key
-from .publish import load_submission
+from .publish import load_submission, proposed_subfield
 from .screening import SCREENING_VERSION, screen
 
 CONSENT_WINDOW = dt.timedelta(hours=48)
@@ -58,8 +58,36 @@ class Check:
         return not self.errors
 
     def as_json(self):
-        return {"valid": self.ok, "errors": self.errors, "warnings": self.warnings,
-                "verifiability": self.computed, "screening": SCREENING_VERSION}
+        out = {"valid": self.ok, "errors": self.errors, "warnings": self.warnings,
+               "verifiability": self.computed, "screening": SCREENING_VERSION}
+        sub = proposed_subfield(self.doc) if self.doc else None
+        if sub:                 # by name, for the agent to say to the guarantor before submitting (design §7.4)
+            from .site import subfield_name
+            out["subfield"] = {"id": sub, "name": subfield_name({"paper": {"classification": {"subfield": sub}}}),
+                               "note": SUBFIELD_NOTE}
+        return out
+
+
+#: Said with the subfield a submission proposes, and on the consent page.
+SUBFIELD_NOTE = ("The field the paper is listed under. Tell the guarantor its name before submitting; they see it "
+                 "again on the consent page and approve it by confirming.")
+
+
+def subfield_problems(doc):
+    """A submission proposes the paper's subfield (claimset spec §3.1; design §7.4, *Subfield*): the guarantor sees
+    it by name and approves it by confirming, and no classifier chooses it unseen. One that proposes none, or
+    something that is not an OpenAlex subfield, is refused."""
+    if proposed_subfield(doc):
+        return []
+    cls = (doc.get("paper") or {}).get("classification")
+    given = cls.get("subfield") if isinstance(cls, dict) else None
+    what = (f"{given!r} is not the ID of an OpenAlex subfield" if given not in (None, "")
+            else "the submission proposes no subfield")
+    return [{"rule": "subfield", "where": "paper.classification.subfield",
+             "message": f"{what}. Choose the field the paper is listed under from the list at /subfields.json of "
+                        f"this site (`claimset subfields <words>` prints it too), tell the guarantor its name, and "
+                        f"give its ID, such as \"openalex:subfields/2613\" (Statistics and Probability). The "
+                        f"guarantor sees it on the consent page and approves it by confirming"}]
 
 
 def _items(rows):
@@ -95,6 +123,7 @@ def check(path, alone=True):
         with tempfile.TemporaryDirectory() as tmp:
             doc, _ = load_submission(path, tmp)
         errors += screen(doc)
+        errors += subfield_problems(doc)
     return Check(errors, warnings, dict(rep.computed or {}), doc)
 
 

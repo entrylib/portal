@@ -236,11 +236,49 @@ def write_static(conn, registry, folder, published_dir, base_url):
     dois = [b.get("target") for d in docs.values() for b in d.get("references") or []
             if isinstance(b, dict) and b.get("id_type") == "doi"]
     written = crossref.texts(conn, dois)                 # asks Crossref about DOIs not seen before
+    cited = claimset_texts(conn, [b.get("target") for d in docs.values() for b in d.get("references") or []
+                                  if isinstance(b, dict) and b.get("id_type") == "claimset"])
     legacy = move_legacy_files(conn, docs, key, published_dir, base_url)
     site.write_claimset(published_dir, base_url, key, docs, listing, labs,
-                        ref_text=lambda b: written.get(crossref.normalise(b.get("target"))), legacy=legacy,
+                        ref_text=lambda b: (cited.get(b.get("target")) if b.get("id_type") == "claimset"
+                                            else written.get(crossref.normalise(b.get("target")))), legacy=legacy,
                         scores=scored)
     write_index(conn, published_dir, base_url)
+
+
+def claimset_texts(conn, targets):
+    """{target: written reference} for the claimsets published here that a paper cites (`entrylib:2026.000008`,
+    `…@v2`, `…@v2#C33`): its guarantor as the author, the year of the cited version (the current one when none is
+    named) and its title, "Svetunkov, I. (2026). Title. EntryLib.", so that the page labels it "Svetunkov (2026)"
+    as it labels any reference. A claimset not published here is left out."""
+    out = {}
+    for t in {t for t in targets if isinstance(t, str)}:
+        m = site.pageview.GLOBAL_ID.fullmatch(t)
+        if not m:
+            continue
+        concept, version = f"entrylib:{m.group(1)}", int(m.group(2)[2:]) if m.group(2) else None
+        row = conn.execute(
+            "SELECT file->'paper'->>'title', file->'paper'->>'date', file->'contributors' FROM versions"
+            " WHERE concept_id = %s AND (%s::int IS NULL OR version = %s) ORDER BY version DESC LIMIT 1",
+            (concept, version, version)).fetchone()
+        if not row or not row[0]:
+            continue
+        title, date, people = row
+        names = [c.get("name") for c in people or [] if isinstance(c, dict) and c.get("type") != "agent"
+                 and "guarantor" in (c.get("positions") or []) and isinstance(c.get("name"), str) and c["name"].split()]
+        if not names or not re.fullmatch(r"\d{4}-.*", str(date)):
+            continue
+        who = [_surname_first(n) for n in names]
+        out[t] = (f"{who[0] if len(who) == 1 else ', '.join(who[:-1]) + ', & ' + who[-1]} ({date[:4]}). "
+                  f"{title.rstrip('.')}. EntryLib.")
+    return out
+
+
+def _surname_first(name):
+    """"Svetunkov, I." from "Ivan Svetunkov": the last word as the surname, the others as initials."""
+    words = name.split()
+    initials = " ".join(f"{w[0]}." for w in words[:-1])
+    return f"{words[-1]}, {initials}".rstrip(", ")
 
 
 def apply_notices(conn, registry, folder, published_dir, base_url):
