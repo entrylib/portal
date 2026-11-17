@@ -7,7 +7,7 @@ a claim, the other claims of the paper that bear on it, with the observations th
 holds of a claim besides (its plan, its checks, its score) is one click away, and everything else is on the record
 page, which the view links to.
 
-    render(doc, record, file_url=None, ref_text=None, number=None, scores=None)
+    render(doc, record, file_url=None, ref_text=None, number=None, scores=None, claim_url=None)
         -> {"sections": [(id, title, count, html)], "extra": html}
 
 Nothing here decides what a field means: the view reads the fields the claimset format defines (`name`, `summary`,
@@ -71,8 +71,8 @@ def _day(ts):
 
 
 class _View:
-    def __init__(self, doc, record, P, scores):
-        self.doc, self.record, self.P = doc, record, P
+    def __init__(self, doc, record, P, scores, claim_url=None):
+        self.doc, self.record, self.P, self.claim_url = doc, record, P, claim_url
         self.claims = {c["id"]: c for c in P.claims}
         self.evidence = {e["id"]: e for e in P.evidence}
         self.defs = {d["id"]: d for d in P.defs}
@@ -447,6 +447,9 @@ class _View:
         if isinstance(sc, dict) and sc.get("score") is not None:
             rows.append(("Support score", f"{esc(sc['score'])} of 100. The score checks the record, not the science."))
         rows.append(("Record", f'<a href="{esc(self.record)}#{esc(cid)}">This claim on the record page</a>'))
+        own = self.claim_url(cid) if callable(self.claim_url) else None
+        if isinstance(own, str) and own:
+            rows.append(("To cite it", f'<a class="cs-claim-page" href="{esc(own)}">The page of this claim</a>'))
         dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
         shown = " · ".join(line) if line else "What the record holds of this claim"
         return (f'<details class="pv-record"><summary><span class="pv-record-line">{shown}</span>'
@@ -494,15 +497,16 @@ class _View:
                 f'<dd>{self.text(d.get("definition", ""))}</dd></div>')
 
 
-def render(doc, record, file_url=None, ref_text=None, number=None, scores=None):
+def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, claim_url=None):
     """The sections of the paper view that are its own, [(id, title, count, html)]: *Terms*, the definitions the
     claims name, and *Claims*, in reading order; and `extra`, what the page holds besides (the sets of figures the
     viewer steps through, the rows a pop-up shows). `record`: the address of the record page of the same version;
-    `number`: how numbers are written, as the record page writes them (`render_parts`)."""
+    `number`: how numbers are written, as the record page writes them (`render_parts`); `claim_url(id)`: the address
+    of a claim's own page, or None."""
     token = DIGITS.set(number if callable(number) else None)
     try:
         P = pageview._Paper(doc, file_url=file_url, ref_text=ref_text)
-        V = _View(doc, record, P, scores)
+        V = _View(doc, record, P, scores, claim_url)
         claims = "".join(V.claim(V.claims[cid]) for cid in V.shown)
         terms = V.terms()
         rest = len(P.defs) - len(terms)

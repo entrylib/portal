@@ -78,7 +78,7 @@ def proofs():
 
 
 def view(doc):
-    out = paper.render(doc, "/p/2026.000099", file_url=lambda a: "/f/" + a["uri"])
+    out = paper.render(doc, "/p/2026.000099/record", file_url=lambda a: "/f/" + a["uri"])
     return {sid: block for sid, _t, _n, block in out["sections"]}, out
 
 
@@ -136,7 +136,7 @@ def test_evidence_under_a_computed_claim():
     assert '<span class="pv-how">evidence</span>' in c4
     assert 'data-gallery="gal-E4"' in c4 and "/f/files/first.png" in c4 and "third.png" not in c4   # the cited row's
     assert 'id="E4.T1"' in c4                                           # the table it cites
-    assert '<a href="/p/2026.000099#E4">E4 in the record</a>' in c4
+    assert '<a href="/p/2026.000099/record#E4">E4 in the record</a>' in c4
     assert 'id="gal-E4"' in out["extra"] and out["extra"].count('id="gal-E4"') == 1
 
 
@@ -144,7 +144,7 @@ def test_terms_are_those_the_claims_name_with_their_symbols():
     sections, _ = view(proofs())
     terms = sections["terms"]
     assert '<div class="pv-term" id="D1"><dt>the term <span class="pv-symbol">' in terms and "<math" in terms
-    assert 'id="D2"' not in terms and '1 more definition' in terms and '/p/2026.000099#definitions' in terms
+    assert 'id="D2"' not in terms and '1 more definition' in terms and '/p/2026.000099/record#definitions' in terms
 
 
 def test_a_file_without_the_new_fields():
@@ -174,13 +174,27 @@ def test_the_pages_and_the_switch_between_them():
     listing = [{"version": 1, "date": "2026-11-17"}]
     page = site.paper_page(doc, base_url=BASE, listing=listing)
     assert '<link rel="canonical" href="https://entrylib.test/p/2026.000099">' in page
-    assert '<a href="/p/2026.000099/paper" aria-current="page"' in page and '<a href="/p/2026.000099" title=' in page
-    for sid in ('id="summary"', 'id="terms"', 'id="claims"', 'id="limitations"', 'class="cs-body pv-body"'):
+    assert '<a href="/p/2026.000099" aria-current="page"' in page and '<a href="/p/2026.000099/record" title=' in page
+    for kind in ("application/json", "text/plain", "application/x-bibtex"):     # what a program is pointed to
+        assert f'<link rel="alternate" type="{kind}" href="/p/2026.000099@v1.' in page, kind
+    anchors, held = set(re.findall(r'href="#([^"]+)"', page)), set(re.findall(r'\bid="([^"]+)"', page))
+    assert anchors - held <= {"content"}, anchors - held      # nothing links to what the page does not hold
+    assert 'href="/p/2026.000099/record#E3"' in page                # what only the record holds is linked there
+    for sid in ('id="summary"', 'id="terms"', 'id="claims"', 'id="limitations"', 'id="versions"',
+                'class="cs-page entry" data-view="paper"', 'class="cs-claim-page" href="/p/2026.000099/C3"'):
         assert sid in page, sid
     assert ('<ol class="pv-toc"><li><a href="#C1"><span class="pv-toc-id">C1</span> The term depends on the ratio'
             in page)
+    # what a program is given at the claimset's address does not depend on the view (design §7.1): the server's
+    # rules look at the address, and the page still tells an assistant where the reading view is
+    assert f"{BASE}/p/2026.000099@v1.read" in page and "/p/2026.000099@v1.txt" in page
+    caddy = (Path(site.__file__).parents[2] / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    assert "rewrite @assistant {path}.read.html" in caddy and "rewrite @wants_text {path}.txt" in caddy
+    assert "rewrite @wants_json {path}.json" in caddy and "/record" not in caddy
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
-    assert '<a href="/p/2026.000099" aria-current="page"' in record and 'href="/p/2026.000099/paper"' in record
+    assert '<a href="/p/2026.000099/record" aria-current="page"' in record
+    assert '<a href="/p/2026.000099" title' in record
+    assert '<link rel="canonical" href="https://entrylib.test/p/2026.000099">' in record
     old = site.claimset_page(doc, base_url=BASE, listing=listing + [{"version": 2}], current=2)
     assert "view-switch" not in old                                     # the paper view is of the current version
 
@@ -204,8 +218,11 @@ def test_the_authors_own_document_is_linked():
 def test_written_with_the_claimset(tmp_path):
     doc = proofs()
     site.write_claimset(tmp_path, BASE, "2026.000099", {1: doc}, [{"version": 1, "date": "2026-11-17"}], {})
-    written = (tmp_path / "p" / "2026.000099" / "paper.html").read_text(encoding="utf-8")
-    assert 'class="pv-claim" id="C3"' in written
+    p = tmp_path / "p"
+    assert 'class="pv-claim" id="C3"' in (p / "2026.000099.html").read_text(encoding="utf-8")   # people: the paper
+    record = (p / "2026.000099" / "record.html").read_text(encoding="utf-8")
+    assert 'class="pv-claim"' not in record and 'id="evidence"' in record and 'data-view="paper"' not in record
+    assert record == (p / "2026.000099@v1.html").read_text(encoding="utf-8")    # a version's page is its record
 
 
 def test_the_example_of_the_format():

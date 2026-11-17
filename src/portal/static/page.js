@@ -175,7 +175,7 @@ window.entrylibPopup = function (className, label) {
 // proof.
 (function () {
   "use strict";
-  if (!document.querySelector(".pv-body")) return;
+  if (!document.querySelector('.cs-page[data-view="paper"]')) return;
   var rows = window.HTMLDialogElement ? window.entrylibPopup("rows", "Table rows") : null;
   document.addEventListener("click", function (e) {
     if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -190,6 +190,16 @@ window.entrylibPopup = function (className, label) {
     }
     if (rows && rows.dialog.open && e.target.closest("a[href^='#']")) rows.dialog.close();
   }, true);
+  // A link from elsewhere to something only the record holds (/p/<id>#E13, #score): the record shows it.
+  var record = document.querySelector('.view-switch a[href$="/record"]');
+  function toRecord() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    if (record && id && !document.getElementById(id)) {
+      location.replace(record.getAttribute("href") + "#" + encodeURIComponent(id));
+    }
+  }
+  toRecord();
+  window.addEventListener("hashchange", toRecord);
   var all = document.querySelector(".pv-open-all");
   if (all) {
     all.hidden = false;
