@@ -262,9 +262,13 @@ def test_a_real_page_starts_with_its_summary_or_its_highlights(env):
 
 
 def test_a_page_without_a_summary_starts_with_its_highlights(env):
-    _, page = page_of(env, example())
-    assert page.split('<article class="cs-body">')[1].startswith('<section class="cs-section" id="')
-    assert 'id="summary"' not in page and "<h2>Highlights</h2>" in page
+    out, page = page_of(env, example())
+    record = (out / "p" / KEY / "record.html").read_text()
+    assert record.split('<article class="cs-body">')[1].startswith('<section class="cs-section" id="')
+    assert 'id="summary"' not in record and "<h2>Highlights</h2>" in record
+    # the paper view has no Highlights (design §7.4): it starts with the claims, the highlighted ones marked
+    assert page.split('<article class="cs-body">')[1].startswith('<section class="cs-section pv-section" id="claims">')
+    assert "<h2>Highlights</h2>" not in page and 'id="summary"' not in page
 
 
 def test_novelty_opens_its_explanation(env):

@@ -77,11 +77,11 @@ PAGES = {
 
 #: How a claimset's page works, shown in the pop-up of its first line and on About (design §7.4): written once.
 HOW_TO_READ = """<ol>
-<li><strong>Summary</strong>, when the authors wrote one, gives the paper in a few sentences of plain language.
-<strong>Highlights</strong> then lists its main claims.</li>
+<li><strong>Summary</strong>, when the authors wrote one, gives the paper in a few sentences of plain language.</li>
 <li>A paper opens as a <strong>paper</strong>: its claims in reading order, each with its proof or its evidence
-under it. <strong>Record</strong>, at the top, lists everything the paper holds (definitions, claims, evidence, files),
-for checking it.</li>
+under it. The claims the authors chose as the paper's main ones are marked <strong>key claim</strong>, and stand in
+bold in the contents. <strong>Record</strong>, at the top, lists everything the paper holds (definitions, claims,
+evidence, files), for checking it; its <strong>Highlights</strong> lists the key claims together.</li>
 <li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
 the record, not the science. Click the score to see what lowered it.</li>
 <li>Click a claim's code, such as C3, or any other code (E for evidence, A for an assumption, D for a definition) to
@@ -866,11 +866,12 @@ PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
 
 def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None, scores=None):
     """The paper view of a claimset's current version, the page at /p/<key> (design §7.4, *Paper view*): the header
-    and panel of the record page, its Summary and Highlights, then the terms the claims name and the claims in
-    reading order, each with what supports it (`paper.render`), then the record page's Assumptions, Limitations, Open
-    questions, References, Score, Not claimed and Versions. What a program is given at this address (the published
-    file, the reading view, the BibTeX entry: design §7.1) does not depend on which view people see. A link to
-    something only the record holds (evidence, an artefact) leads to the record."""
+    and panel of the record page, its Summary, then the claims in reading order, each after the terms it is the
+    first to use and with what supports it (`paper.render`; the authors' highlights are marked there, not listed),
+    then the record page's Assumptions, Limitations, Open questions, References, Score, Not claimed and Versions.
+    What a program is given at this address (the published file, the reading view, the BibTeX entry: design §7.1)
+    does not depend on which view people see. A link to something only the record holds (evidence, an artefact)
+    leads to the record."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     record = f"/p/{key}/record"
@@ -894,8 +895,9 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
             title = PAGE_SECTIONS.get(sid, old)
             body.append(_retitle(blocks[sid], old, title))
             shown.append((sid, title, c, ""))
-    for sid in ("summary", "highlights", "brief"):
-        keep(sid)
+    keep("summary")              # no Highlights: the paper view marks the highlighted claims where they stand
+    keys = {h for h in p.get("highlights") or [] if isinstance(h, str)}
+    said = ' <span class="visually-hidden">(key claim)</span>'    # bold in the contents; said to a screen reader
     names = {c["id"]: " ".join(c["name"].split()) for c in doc.get("claims") or []
              if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)}
     for sid, title, c, block in view["sections"]:
@@ -904,7 +906,10 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
         if sid == "claims" and names:                    # the claims by name, in the contents
             cids = re.findall(r'<article class="pv-claim" id="(C[0-9]+)"', block)
             inner = ('<ol class="pv-toc">' + "".join(
-                f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> {esc(names.get(cid, ""))}</a></li>'
+                f'<li{" class=" + chr(34) + "pv-toc-key" + chr(34) if cid in keys else ""}><a href="#{cid}">'
+                f'<span class="pv-toc-id">{cid}</span> <span>{esc(names.get(cid, ""))}'
+                f'{said if cid in keys else ""}'
+                f'</span></a></li>'
                 for cid in cids) + "</ol>")
         shown.append((sid, title, c, inner))
     for sid in PAPER_KEEPS:
