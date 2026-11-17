@@ -38,6 +38,11 @@
     if (id === current || !links[id]) return;
     if (current && links[current]) links[current].removeAttribute("aria-current");
     links[id].setAttribute("aria-current", "location");
+    // Contents taller than the screen scroll on their own: keep the section being read in view in them.
+    if (nav.scrollHeight > nav.clientHeight && links[id].offsetParent) {
+      var at = links[id].getBoundingClientRect(), box = nav.getBoundingClientRect();
+      if (at.top < box.top || at.bottom > box.bottom) nav.scrollTop += at.top - box.top - box.height / 2;
+    }
     label.textContent = links[id].textContent;
     current = id;
   }
