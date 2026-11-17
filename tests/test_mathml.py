@@ -1,6 +1,7 @@
 """portal/mathml.py (moved from claimset.mathml): inline LaTeX as MathML, without a script."""
 
 import unittest
+from pathlib import Path
 
 from portal.mathml import to_mathml
 
@@ -93,7 +94,9 @@ class TestMathML(unittest.TestCase):
         self.assertIn('<annotation encoding="application/x-tex">\\text{&lt;b&gt;x&lt;/b&gt;} &lt; y</annotation>', out)
 
     def test_display(self):
-        self.assertTrue(to_mathml("x", display=True).startswith('<math display="block">'))
+        shown = to_mathml("x", display=True)                 # on its own line: in a box that can scroll
+        self.assertTrue(shown.startswith('<span class="cs-eq"><math display="block">') and shown.endswith("</math></span>"))
+        self.assertTrue(to_mathml("x").startswith("<math><semantics>"))        # in a sentence: no box
 
 
 
@@ -102,7 +105,14 @@ class TestLongFormulae(unittest.TestCase):
     def test_a_long_formula_scrolls_instead_of_widening_the_page(self):
         from portal import page
         css = page.stylesheet()
-        self.assertIn('math[display="block"] { margin: 10px 0; max-width: 100%; overflow-x: auto;', css)
+        # the box of a formula on its own line scrolls; the formula in it keeps its width (the script may shrink it)
+        self.assertIn(".cs-eq { display: block; margin: 10px 0; max-width: 100%; overflow-x: auto;", css)
+        self.assertIn('.cs-eq > math[display="block"] { margin: 0; padding: 0; width: max-content; min-width: 100%; '
+                      "max-width: none; overflow: visible; }", css)
+        self.assertIn("overflow-wrap: break-word; }", css)            # a long path or identifier breaks
+        js = (Path(page.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
+        self.assertIn('document.querySelectorAll(".cs-eq")', js)
+        self.assertIn("var SMALLEST = 0.8;", js)                       # never smaller than this to make it fit
         self.assertIn("@media (max-width: 640px) { math { max-width: 100%; overflow-x: auto;", css)
         self.assertIn(".cs-brief li > span:last-child { min-width: 0; }", css)
 

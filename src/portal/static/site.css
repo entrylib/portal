@@ -465,9 +465,10 @@ dialog.peek .cs-item, dialog.peek .cs-def { border: 0; }
 .cs-label { color: var(--muted); }
 
 /* Long formulae (design §7.4): the page never scrolls sideways, however wide a claimset's formulae are. A formula
-   wider than the screen scrolls on its own: on its own line always, in a sentence on narrow screens only (there it
-   may clip a little of an italic letter's overhang). Under Highlights, a statement takes the line's width, not its formula's. */
-math[display="block"] { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+   on its own line stands in a box of the line's width (`.cs-eq`, claimset.css): the page script makes one that is
+   a little too wide smaller, and a wider one scrolls in its box. In a sentence, a formula scrolls on narrow screens
+   only (there it may clip a little of an italic letter's overhang). Under Highlights, a statement takes the line's
+   width, not its formula's. */
 @media (max-width: 640px) { math { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 0 0.1em; } }
 .cs-brief li > span:last-child { min-width: 0; }
 
@@ -550,9 +551,8 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-term { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .pv-term dt { font-weight: 600; }
 .pv-term dd { margin: 0; min-width: 0; }
-.pv-symbol { display: block; font-weight: 400; color: var(--muted); }
+.pv-symbol { margin-left: 0.6em; font-weight: 400; color: var(--muted); }
 .pv-term:target { background: var(--cs-target, var(--panel)); }
-@media (min-width: 720px) { .pv-term { grid-template-columns: 10rem minmax(0, 1fr); gap: 0 20px; } }
 .pv-claim { display: flex; flex-direction: column; gap: 12px; padding: 24px 0 6px; border-top: 1px solid var(--rule-light); }
 .pv-section > .pv-claim:first-of-type { border-top: 0; padding-top: 6px; }
 .pv-claim:target > h3 { background: var(--cs-target, var(--panel)); }

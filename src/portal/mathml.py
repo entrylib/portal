@@ -451,5 +451,8 @@ def to_mathml(tex, display=False):
     except (TexError, RecursionError, IndexError):
         return None
     block = ' display="block"' if display else ""
-    return (f"<math{block}><semantics>{row(body) or '<mrow></mrow>'}"
+    math = (f"<math{block}><semantics>{row(body) or '<mrow></mrow>'}"
             f'<annotation encoding="application/x-tex">{esc(tex)}</annotation></semantics></math>')
+    # A formula on its own line stands in a box of the line's width (`cs-eq`): one wider than the line is made a
+    # little smaller to fit, or scrolls inside the box, and never runs over what stands beside the text.
+    return f'<span class="cs-eq">{math}</span>' if display else math

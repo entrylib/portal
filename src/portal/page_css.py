@@ -36,7 +36,8 @@ CSS = """\
 .cs-toc ol { margin: 0; padding: 0; list-style: none; line-height: 2; }
 .cs-toc a { text-decoration: none; }
 .count { color: var(--cs-muted); font-weight: 400; }
-.cs-body { flex: 999 1 560px; min-width: 0; max-width: 50rem; }
+/* A word longer than the line (a path, an identifier, a DOI) breaks instead of widening the page. */
+.cs-body { flex: 999 1 560px; min-width: 0; max-width: 50rem; overflow-wrap: break-word; }
 .cs-section { border-top: 1px solid var(--cs-rule); padding-top: 22px; margin-top: 40px; }
 .cs-section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 .cs-section h2 { margin: 0 0 10px; font-size: 26px; font-weight: 600; }
@@ -89,7 +90,11 @@ CSS = """\
   .cs-layout { gap: 24px; }
 }
 math { font-family: var(--cs-math-font); font-size: 1.05em; }
-math[display="block"] { margin: 10px 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+/* A formula on its own line: its box has the line's width and scrolls when the formula is wider (the page script first
+   makes a formula that is a little too wide smaller, so that it fits). */
+.cs-eq { display: block; margin: 10px 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+.cs-eq > math[display="block"] { margin: 0; padding: 0; width: max-content; min-width: 100%; max-width: none; overflow: visible; }
+.cs-eq:focus-visible { outline: 2px solid var(--cs-link, currentColor); outline-offset: 2px; }
 /* A formula wider than a phone's screen scrolls on its own instead of widening the page. On a narrow screen only:
    an inline formula that scrolls may clip a little of an italic letter's overhang. */
 @media (max-width: 640px) { math { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 0 0.1em; } }

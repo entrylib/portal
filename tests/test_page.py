@@ -169,7 +169,8 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertIn("<math><semantics>", P.text("at $T$ of 100"))                       # short: in the line
         out = P.text("where $$\\epsilon_t \\sim N(0, \\sigma^2)$$, and so on")        # its comma goes with it
         self.assertIn("<mo>,</mo></mrow><annotation", out)
-        self.assertTrue(out.endswith("</math> and so on"))
+        self.assertTrue(out.endswith("</math></span> and so on"))      # in its box (below)
+        self.assertIn('<span class="cs-eq"><math display="block">', out)
         self.assertNotIn("<math>", P.text("`$x$` is code"))           # maths is not read inside code
 
     def test_a_site_writes_out_doi_references(self):
