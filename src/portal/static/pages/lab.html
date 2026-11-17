@@ -27,6 +27,10 @@ test gets one attempt, so it cannot be rerun until it comes out right. Negative 
 ones.</p></div>
 <div><h3>Hard to rewrite</h3><p>The record is append-only and hash-chained, kept on its own git branch and pushed after
 every step. Corrections are new entries that point at what they replace; nothing is edited in place.</p></div>
+<div><h3>Agreed before recorded</h3><p>Your agent proposes the question, what you expect and how each expectation will be
+tested in a draft. You discuss it and change it until you agree. The tool checks the draft by every rule but keeps it
+out of the record: only the version you agree to is recorded, so the record and the paper show the research, not
+the drafting.</p></div>
 <div><h3>People decide</h3><p>Every actor is registered: agents with their model, people with their ORCID iD. A
 supervisor's approval of a plan is recorded in their own words, with when they gave it; an agent never approves its own
 plan.</p></div>
@@ -37,10 +41,11 @@ log. Their verdicts, confirmed or disputed, travel with the claims they checked.
 <h2>How it works</h2>
 <p>Your agent runs the commands as it works; you approve plans and answer its questions.</p>
 <ol class="steps">
-<li><strong>Frame</strong>: questions, hypotheses with what they are about, the terms the research uses, the assumptions it
-makes.</li>
-<li><strong>Plan</strong>: design, analysis and decision rule, fixed before the data is seen, and approved by the
-supervisor when there is one.</li>
+<li><strong>Agree</strong>: your agent drafts the questions, the hypotheses with what they are about, the terms the
+research uses and the plan of each test (design, analysis and decision rule). You read the draft, ask for changes, and
+agree.</li>
+<li><strong>Record the plan</strong>: the agreed draft is written to the record with your approval in your own words,
+fixed before the data is seen.</li>
 <li><strong>Run and record</strong>: exploratory and confirmatory runs, deviations from the plan, decisions, and the
 verdict the plan's rule gives.</li>
 <li><strong>Export and publish</strong>: the record becomes a claimset: hypotheses become claims, plans and runs their
@@ -50,10 +55,13 @@ evidence. Submit it to EntryLib with the record attached.</li>
 <div class="table-wrap"><table class="commands">
 <thead><tr><th scope="col">Your agent runs</th><th scope="col">The record gets</th></tr></thead>
 <tbody>
-<tr><td><code>claimset lab hypothesis "M helps most at horizons 7–12." --from-exploration --prompted-by RN1</code></td>
-<td>H2, marked as suggested by RN1</td></tr>
-<tr><td><code>claimset lab plan --kind confirmatory --hypotheses H2 --supported "p &lt; alpha and d &gt; 0" …</code></td>
-<td>PL1, pushed before any run</td></tr>
+<tr><td><code>claimset lab hypothesis "M helps most at horizons 7–12." --from-exploration --prompted-by RN1 --draft h2</code></td>
+<td>Nothing yet: H2 is drafted, marked as suggested by RN1</td></tr>
+<tr><td><code>claimset lab plan --kind confirmatory --hypotheses H2 --supported "p &lt; alpha and d &gt; 0" … --draft h2</code></td>
+<td>Nothing yet: PL1 is drafted</td></tr>
+<tr><td><code>claimset lab draft show h2</code></td><td>Nothing: the draft, shown to you; changed until you agree</td></tr>
+<tr><td><code>claimset lab draft record h2 --on-behalf-of AC2 --words "Agreed." …</code></td>
+<td>H2, PL1 and your approval, pushed before any run</td></tr>
 <tr><td><code>claimset lab run --plan PL1 -- python3 confirm.py --holdout</code></td><td>RN2, with results RS2–RS3</td></tr>
 <tr><td><code>claimset lab verdict PL1</code></td><td>p = 0.004, d = 0.031: supported</td></tr>
 </tbody></table></div>
@@ -72,6 +80,10 @@ before the counting.</p>
 <p>A paper from the lab is labelled <span class="origin">Made with the lab</span> and links to its record. Each claim says whether
 it was planned, under which plan and runs, and what deviated from the plan. Readers and models can tell a tested
 prediction from a pattern found by looking.</p>
+<p>A planned test is reported however it came out, and a test run again under a new plan is reported again. Proofs are
+the exception: a proved result appears once, in its final wording. If a checker found a flaw and the statement was
+corrected and checked again, or a result was merged into another, the earlier versions are listed with the paper's
+counts of what was tried, each with the claim it went into.</p>
 
 <h2 id="start">Get started</h2>
 <p>claimset-lab is a command-line tool and a set of instructions for research agents. Free and open source.</p>
@@ -99,8 +111,9 @@ so.</li>
 <ul>
 <li>your name and ORCID iD, and a short name for the study;</li>
 <li>the question, and what you expect to find, before any result is seen;</li>
-<li>your approval of each plan before it is run, in your own words: the test, the data, and the rule that decides
-the outcome;</li>
+<li>to read the draft of what will be tested, one topic at a time, and say what to change: the test, the data, and the
+rule that decides the outcome;</li>
+<li>your approval of the agreed draft, in your own words, before any of its plans is run;</li>
 <li>a decision whenever the work has to depart from a plan;</li>
 <li>at the end, a check of every claim against the results, the licence, the findings to put first, and your
 confirmation by signing in with ORCID.</li>
