@@ -76,7 +76,8 @@ CSS = """\
 .cs-table td.num { text-align: right; }
 .cs-results, .cs-steps { margin: 8px 0; padding-left: 22px; }
 .cs-figures { display: flex; flex-wrap: wrap; gap: 16px; margin: 10px 0; }
-.cs-figure { margin: 0; flex: 1 1 260px; max-width: 100%; }
+.cs-figure { margin: 0; flex: 1 1 100%; max-width: 100%; }
+.cs-figures-many .cs-figure { flex: 1 1 calc(50% - 8px); }
 .cs-figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--cs-rule); background: #fff; }
 .cs-figure figcaption { font-size: 15px; margin-top: 6px; }
 .cs-refs, .cs-artefacts { margin: 0; padding: 0; list-style: none; }

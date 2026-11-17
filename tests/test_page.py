@@ -200,6 +200,21 @@ class TestImages(unittest.TestCase):
         ev = body[body.index('id="evidence"'):body.index('id="limitations"')]
         self.assertIn('<img src="figures/errors.png" alt="Errors by horizon" loading="lazy">', ev)
 
+    def test_figures_come_before_the_numbers(self):
+        """Design §7.6: an evidence object shows its figures before its results and tables, full width; with more than
+        three, two to a row."""
+        doc = self.doc("figures/errors.png")
+        e = doc["evidence"][0]
+        e["tables"] = [{"id": "T1", "description": "Errors", "row_labels": ["method"], "columns": ["MAE"],
+                        "rows": [{"id": "r1", "label": ["M"], "values": [1.5]}]}]
+        body = H.render_parts(doc)["body"]
+        ev = body[body.index(f'id="{e["id"]}"'):]
+        self.assertLess(ev.index("<img"), ev.index("<table"))
+        self.assertIn('<div class="cs-figures">', ev)
+        for i in range(10, 14):
+            doc["artefacts"].append(dict(doc["artefacts"][-1], id=f"A{i}"))
+        self.assertIn('<div class="cs-figures cs-figures-many">', H.render_parts(doc)["body"])
+
     def test_the_site_gives_the_address(self):
         body = H.render_parts(self.doc("figures/errors.png"), file_url=lambda a: f"/files/{a['id']}.png")["body"]
         self.assertIn('<img src="/files/A9.png"', body)
