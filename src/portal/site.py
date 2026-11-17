@@ -756,6 +756,29 @@ INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a resear
                'page</a></p></template>')
 
 
+def not_claimed(doc):
+    """The section *Not claimed* (design §7.6): the paper's planned proofs that give no claim of their own (claimset
+    §3.1.1, `exploration.not_claimed`), one line per reason, each naming where its result went. ("", 0) when none."""
+    items = (doc.get("paper") or {}).get("exploration") or {}
+    items = [x for x in items.get("not_claimed") or [] if isinstance(x, dict)] if isinstance(items, dict) else []
+    if not items:
+        return "", 0
+
+    def one(x):
+        out = f" ({esc(str(x['outcome']).replace('_', ' '))})" if x.get("outcome") not in (None, "supported") else ""
+        into = (f' → <a href="#{esc(x["into"])}">{esc(x["into"])}</a>' if x.get("into") else "")
+        return (f'<span title="{esc(x.get("why") or "")}">{esc(x.get("lab_event"))}</span>{out}{into}')
+    lines = []
+    for because, label in (("reworded", "Reworded, then proved again"), ("revised", "Merged"),
+                           ("abandoned", "Dropped")):
+        group = [one(x) for x in items if x.get("because") == because]
+        if group:
+            lines.append(f"<li><strong>{label}:</strong> {', '.join(group)}</li>")
+    return ('<section class="cs-section" id="not-claimed"><h2>Not claimed</h2><p class="small">Planned proofs that '
+            'give no claim of their own; the lab record has each with its reason.</p><ul>'
+            + "".join(lines) + "</ul></section>", len(items))
+
+
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
     """The page of one version of a claimset. `listing`: its versions (versions.json entries); `lab`: {copy,
     summary} when the registry holds its lab record; `current`: the claimset's current version number; `scores`: its
@@ -773,7 +796,10 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
         newer = (f'<p class="notice notice-warn">This is version {esc(n)}. '
                  f'<a href="/p/{key}">The current version is {esc(current)}</a>.</p>')
     body, sections = page_sections(parts, doc)
+    unclaimed, n_unclaimed = not_claimed(doc)
     nav = contents(sections, ('<li><a href="#score">Score</a></li>' if scores else "")
+                   + (f'<li><a href="#not-claimed">Not claimed</a> <span class="count">{n_unclaimed}</span></li>'
+                      if n_unclaimed else "")
                    + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>', doc)
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
@@ -783,7 +809,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{body}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
-            f'{_versions(listing, key, n)}</article></div>')
+            f'{unclaimed}{_versions(listing, key, n)}</article></div>')
     description = _lead_text(doc)
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
             f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">'
@@ -805,7 +831,10 @@ def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a
     p.setdefault("id", PREVIEW_ID)                       # the renderer names claims by it; a preview links nowhere
     parts = render(d, None, None, scores, ())
     body, sections = page_sections(parts, d)
-    nav = contents(sections, '<li><a href="#score">Score</a></li>' if scores else "", d)
+    unclaimed, n_unclaimed = not_claimed(d)
+    nav = contents(sections, ('<li><a href="#score">Score</a></li>' if scores else "")
+                   + (f'<li><a href="#not-claimed">Not claimed</a> <span class="count">{n_unclaimed}</span></li>'
+                      if n_unclaimed else ""), d)
     top = ["Preview: not published yet"] + ([esc(subfield_name(d))] if subfield_name(d) else [])
     panel = (f'<aside class="panel" aria-label="About this paper">'
              f'{score_html.panel_rows(scores, parts.get("lights"))}{_interests_row(d)}'
@@ -815,7 +844,7 @@ def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a
             f'<div class="cs-page entry preview"><div class="cs-header entry-header">'
             f'<div class="notice preview-note">{statement}</div>'
             f'<p class="entry-top">{" · ".join(top)}</p>{parts["header"]}{_origin_line(d, parts["origin"], None)}'
-            f'</div>{panel}{nav}<article class="cs-body">{body}{score_html.section(scores)}</article></div>')
+            f'</div>{panel}{nav}<article class="cs-body">{body}{score_html.section(scores)}{unclaimed}</article></div>')
     return shell(title, main, active="submissions", head='<meta name="robots" content="noindex">',
                  script="/page.js")
 
