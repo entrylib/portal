@@ -21,6 +21,7 @@ import re
 from claimset.render import DIGITS
 
 from . import page as pageview
+from . import score_html
 from .page import esc
 
 #: A formula, a term mark or code: claim IDs inside them are left alone.
@@ -71,6 +72,10 @@ def _day(ts):
         return esc(str(ts))
 
 
+#: The mark of a claim or a term the authors chose as one of the paper's highlights (spec §3.1).
+KEY_CLAIM, KEY_TERM = "key claim", "key term"
+
+
 class _View:
     def __init__(self, doc, record, P, scores, claim_url=None):
         self.doc, self.record, self.P, self.claim_url = doc, record, P, claim_url
@@ -81,10 +86,13 @@ class _View:
         self.refs = {b["id"]: b for b in P.refs}
         self.warrants = {w["id"]: w for w in P.warrants}
         self.people = {c["id"]: c for c in _dicts(doc.get("contributors")) if isinstance(c.get("id"), str)}
+        self.all_scores = scores
         self.scores = (scores or {}).get("claims") if isinstance(scores, dict) else None
         self.shown = [cid for cid in self.order() if not P.is_assumption(self.claims[cid])]
         self.assumed = [c["id"] for c in P.claims if P.is_assumption(c)]
         self.galleries, self.panels, self.tables_shown = {}, [], set()
+        # what the authors chose as the paper's highlights (spec §3.1): marked where it stands, not listed apart
+        self.key = set(_strs((doc.get("paper") or {}).get("highlights")))
         self.introduced = []                                # the definitions shown so far, each before its first use
         # what bears on a claim from the paper's other claims: {target: [(claim, relation)]}
         self.incoming = {}
@@ -452,7 +460,9 @@ class _View:
             rows.append(("Limitations", ", ".join(f'<a href="#{esc(x)}">{esc(x)}</a>' for x in lims)))
         sc = self.scores.get(cid) if isinstance(self.scores, dict) else None
         if isinstance(sc, dict) and sc.get("score") is not None:
-            rows.append(("Support score", f"{esc(sc['score'])} of 100. The score checks the record, not the science."))
+            # the number opens the claim's breakdown (the Score section's, as a pop-up)
+            rows.append(("Support score", f"{score_html.badge(self.all_scores, cid, small=True)} of 100. "
+                                          f"The score checks the record, not the science."))
         rows.append(("Record", f'<a href="{esc(self.record)}#{esc(cid)}">This claim on the record page</a>'))
         own = self.claim_url(cid) if callable(self.claim_url) else None
         if isinstance(own, str) and own:
@@ -468,9 +478,12 @@ class _View:
         kinds = {sp.get("kind") for sp in _dicts(c.get("support"))}
         how = next((word for kind, word in SUPPORT_WORDS if kind in kinds), "")
         name = self.name(cid)
+        tags = [f'<span class="pv-how pv-key">{KEY_CLAIM}</span>'] if cid in self.key else []
+        tags += [f'<span class="pv-how">{esc(how)}</span>'] if how else []
         head = (f'<h3><span class="pv-claim-id">Claim {esc(cid)}{"." if name else ""}</span> '
                 f'{("<span class=" + chr(34) + "pv-name" + chr(34) + ">" + esc(name) + "</span> ") if name else ""}'
-                f'{("<span class=" + chr(34) + "pv-how" + chr(34) + ">" + esc(how) + "</span>") if how else ""}</h3>')
+                f'{("<span class=" + chr(34) + "pv-tags" + chr(34) + ">" + "".join(tags) + "</span>") if tags else ""}'
+                f'</h3>')
         summary = c.get("summary")
         plain = (f'<p class="pv-summary">{self.text(summary)}</p>'
                  if isinstance(summary, str) and summary.strip() else "")
@@ -513,6 +526,7 @@ class _View:
         d = self.defs[did]
         sym = d.get("symbol")
         symbol = f' <span class="pv-symbol">{self.text(sym)}</span>' if isinstance(sym, str) and sym.strip() else ""
+        symbol += f' <span class="pv-how pv-key">{KEY_TERM}</span>' if did in self.key else ""
         return (f'<div class="pv-term" id="{esc(did)}"><dt>{esc(pageview._s(d.get("term")))}{symbol}</dt>'
                 f'<dd>{self.text(d.get("definition", ""))}</dd></div>')
 

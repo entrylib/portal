@@ -5,6 +5,7 @@ import contextlib  # noqa: F401
 import copy
 import io  # noqa: F401
 import json
+import re
 import tempfile  # noqa: F401
 import unittest
 from importlib import resources
@@ -169,7 +170,8 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertIn("<math><semantics>", P.text("at $T$ of 100"))                       # short: in the line
         out = P.text("where $$\\epsilon_t \\sim N(0, \\sigma^2)$$, and so on")        # its comma goes with it
         self.assertIn("<mo>,</mo></mrow><annotation", out)
-        self.assertTrue(out.endswith("</math> and so on"))
+        self.assertTrue(out.endswith("</math></span> and so on"))      # in its box (below)
+        self.assertIn('<span class="cs-eq"><math display="block">', out)
         self.assertNotIn("<math>", P.text("`$x$` is code"))           # maths is not read inside code
 
     def test_a_site_writes_out_doi_references(self):
@@ -186,6 +188,39 @@ class TestTermsReferencesMaths(unittest.TestCase):
                                     "B3": "doi:10.1/unknown"})
         self.assertIn("Old dog, new tricks. IJPR.", parts["body"])
         self.assertIn('href="https://doi.org/10.1/a"', parts["body"])
+
+
+    def test_references_are_listed_by_author_and_a_cited_claimset_by_its_guarantor(self):
+        doc = {"paper": {}, "claims": [claim("C1", support=None)],
+               "references": [{"id": "B1", "id_type": "reference", "target": "Zhang, W. (2020). Last. Journal."},
+                              {"id": "B2", "id_type": "claimset", "target": "entrylib:2026.000008@v2#C33"},
+                              {"id": "B3", "id_type": "claimset", "target": "entrylib:2026.000009@v1#C5"},
+                              {"id": "B4", "id_type": "claimset", "target": "entrylib:2026.000008@v2#C6"},
+                              {"id": "B5", "id_type": "doi", "target": "10.1/unknown"},
+                              {"id": "B6", "id_type": "reference", "target": "Armstrong, J. S. (1985). First. Wiley."},
+                              {"id": "B7", "id_type": "claimset", "target": "entrylib:2026.000777#C1"}]}
+        doc["claims"][0]["support"] = [{"kind": "cited", "references": ["B2", "B3"]}]
+        written = {"entrylib:2026.000008@v2#C33": "Svetunkov, I. (2026). Evaluating forecasts. EntryLib.",
+                   "entrylib:2026.000008@v2#C6": "Svetunkov, I. (2026). Evaluating forecasts. EntryLib.",
+                   "entrylib:2026.000009@v1#C5": "Svetunkov, I. (2026). Which forecast. EntryLib."}
+
+        def ref_text(b):
+            return written.get(b["target"])
+        P = H._Paper(doc, ref_text=ref_text)
+        # one claimset, one label, each claim named after it; a second claimset of the same year takes the next letter
+        self.assertEqual(P.labels["B2"], "Svetunkov (2026a), C33")
+        self.assertEqual(P.labels["B4"], "Svetunkov (2026a), C6")
+        self.assertEqual(P.labels["B3"], "Svetunkov (2026b), C5")
+        self.assertEqual(P.labels["B7"], "entrylib:2026.000777#C1")           # not published here: as it was
+        self.assertEqual([b["id"] for b in P.refs_in_order()], ["B6", "B4", "B2", "B3", "B1", "B5", "B7"])
+        body = H.render_parts(doc, ref_text=ref_text)["body"]
+        refs = body.split('<ol class="cs-refs">')[1].split("</ol>")[0]
+        self.assertEqual(re.findall(r'<li id="(B\d)"', refs), ["B6", "B4", "B2", "B3", "B1", "B5", "B7"])
+        self.assertIn('Svetunkov, I. (2026). Evaluating forecasts. EntryLib. <a class="global-id" '
+                      'href="/p/2026.000008@v2#C33">', refs)
+        self.assertEqual(P.ref("B2"), '<a class="ref" href="#B2">Svetunkov (2026a), C33</a>')   # where it is cited
+        alone = H._Paper({"paper": {}, "claims": [], "references": doc["references"][1:2]}, ref_text=ref_text)
+        self.assertEqual(alone.labels["B2"], "Svetunkov (2026), C33")          # no letter without a second work
 
 
 class TestImages(unittest.TestCase):

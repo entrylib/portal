@@ -380,7 +380,8 @@ def test_reading_aids(env):
     css = (out / "site.css").read_text()
     assert '.button, button[type="submit"]:not(.button-quiet) {' in css      # one style for every action button
     assert ".cards { display: grid; grid-template-columns: minmax(0, 1fr);" in css      # never wider than a phone
-    assert 'math[display="block"] { max-width: 100%; overflow-x: auto;' in css         # long formulae scroll alone
+    assert ".cs-eq { display: block;" in (out / "claimset.css").read_text()            # long formulae scroll alone
+    assert "@media (min-width: 720px) { .pv-term" not in css               # a term stands above its definition
     assert ".cs-brief li > span:last-child { min-width: 0; }" in css
     assert not re.search(r"\.(search|read-filters|upload|request|pending) button", css)
     js = (out / "page.js").read_text()

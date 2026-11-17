@@ -82,6 +82,11 @@ def view(doc):
     return {sid: block for sid, _t, _n, block in out["sections"]}, out
 
 
+def article(page, cid):
+    """The part of a page that is one claim."""
+    return page.split(f'<article class="pv-claim" id="{cid}">')[1].split("</article>")[0]
+
+
 def test_claims_in_reading_order_each_with_its_proof():
     sections, _ = view(proofs())
     claims = sections["claims"]
@@ -210,8 +215,8 @@ def test_the_pages_and_the_switch_between_them():
     for sid in ('id="summary"', 'id="claims"', 'id="limitations"', 'id="versions"',
                 'class="cs-page entry" data-view="paper"', 'class="cs-claim-page" href="/p/2026.000099/C3"'):
         assert sid in page, sid
-    assert ('<ol class="pv-toc"><li><a href="#C1"><span class="pv-toc-id">C1</span> The term depends on the ratio'
-            in page)
+    assert ('<ol class="pv-toc"><li><a href="#C1"><span class="pv-toc-id">C1</span> <span>The term depends on the '
+            'ratio' in page)
     # what a program is given at the claimset's address does not depend on the view (design §7.1): the server's
     # rules look at the address, and the page still tells an assistant where the reading view is
     assert f"{BASE}/p/2026.000099@v1.read" in page and "/p/2026.000099@v1.txt" in page
@@ -224,6 +229,23 @@ def test_the_pages_and_the_switch_between_them():
     assert '<link rel="canonical" href="https://entrylib.test/p/2026.000099">' in record
     old = site.claimset_page(doc, base_url=BASE, listing=listing + [{"version": 2}], current=2)
     assert "view-switch" not in old                                     # the paper view is of the current version
+
+
+def test_highlights_are_marked_where_they_stand_not_listed():
+    doc = proofs()
+    doc["paper"]["highlights"] = ["C3", "D1"]
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    page = site.paper_page(doc, base_url=BASE, listing=listing)
+    assert 'id="highlights"' not in page and 'href="#highlights"' not in page       # no section in the paper view
+    c3, c1 = article(page, "C3"), article(page, "C1")
+    assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[c1.index("<h3>"):]
+    assert '<span class="pv-how pv-key">key term</span>' in page                    # a highlighted term, at the term
+    assert '<li class="pv-toc-key"><a href="#C3">' in page and '<li><a href="#C1">' in page
+    assert '<span class="visually-hidden">(key claim)</span>' in page               # said, not only shown in bold
+    record = site.claimset_page(doc, base_url=BASE, listing=listing)
+    assert 'id="highlights"' in record                                              # the record keeps the section
+    plain = proofs()                                                                # no highlights: nothing marked
+    assert "pv-key" not in site.paper_page(plain, base_url=BASE, listing=listing)
 
 
 def test_the_authors_own_document_is_linked():

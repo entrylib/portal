@@ -508,3 +508,35 @@ window.entrylibOpen = (function () {
     popups[id].open();
   });
 })();
+
+// A formula on its own line that is wider than the line (.cs-eq): one that is a little too wide is made smaller, so
+// that it fits; a wider one keeps its size and scrolls in its box, which the keyboard can then reach. Measured again
+// when the box's width changes (a fold opens, the window is resized). Without the script every such formula scrolls.
+(function () {
+  "use strict";
+  var boxes = document.querySelectorAll(".cs-eq");
+  if (!boxes.length || !("ResizeObserver" in window)) return;
+  var SMALLEST = 0.8;                                    // of the formula's own size
+  var widths = new WeakMap();
+  function fit(box) {
+    var math = box.firstElementChild, room = box.clientWidth;
+    if (!math || !room || widths.get(box) === room) return;
+    widths.set(box, room);
+    math.style.fontSize = "";
+    var need = box.scrollWidth;
+    if (need > room + 1) {
+      var scale = Math.floor(100 * room / need) / 100;
+      if (scale >= SMALLEST) {
+        math.style.fontSize = scale * 100 + "%";
+        if (box.scrollWidth > room + 1) math.style.fontSize = (scale - 0.02) * 100 + "%";
+      }
+    }
+    if (box.scrollWidth > room + 1) box.setAttribute("tabindex", "0"); else box.removeAttribute("tabindex");
+  }
+  var watch = new ResizeObserver(function (entries) { entries.forEach(function (e) { fit(e.target); }); });
+  boxes.forEach(function (box) { watch.observe(box); });
+  // The maths font may arrive after the first measure, and changes every formula's width.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () {
+    boxes.forEach(function (box) { widths.delete(box); fit(box); });
+  });
+})();

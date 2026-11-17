@@ -225,7 +225,7 @@ class _Paper:
     # ---------- references ----------
     def _reference_labels(self):
         """Author (year) for each reference: "Hyndman et al. (2008)", "Kolassa (2011)"; a, b for repeats."""
-        labels, self.written = {}, {}
+        labels, self.written, self.by_identifier = {}, {}, set()
         for b in self.refs:
             t, kind = b.get("target"), b.get("id_type")
             if kind not in (None, "reference") and self.ref_text is not None:
@@ -235,9 +235,11 @@ class _Paper:
                     kind = "reference"
             if kind == "doi":
                 labels[b["id"]] = f"doi:{t}"
+                self.by_identifier.add(b["id"])
                 continue
             if kind not in (None, "reference") or not isinstance(t, str):
                 labels[b["id"]] = _s(t)
+                self.by_identifier.add(b["id"])
                 continue
             y = YEAR.search(t)
             if not y:
@@ -247,14 +249,36 @@ class _Paper:
             who = (names[0] if len(names) == 1 else f"{names[0]} and {names[1]}" if len(names) == 2
                    else f"{names[0]} et al.")
             labels[b["id"]] = f"{who} ({y.group(1)})"
+        # One work, one label: claims of one claimset share it, each named after it ("Svetunkov (2026a), C33").
+        claim_of, work = {}, {}
+        for b in self.refs:
+            m = GLOBAL_ID.fullmatch(b["target"]) if b.get("id_type") == "claimset" and isinstance(
+                b.get("target"), str) else None
+            if m and b["id"] in self.written:
+                work[b["id"]] = m.group(1) + (m.group(2) or "")
+                if m.group(3):
+                    claim_of[b["id"]] = m.group(3)
         seen = {}
         for rid, lab in labels.items():
-            seen.setdefault(lab, []).append(rid)
-        for lab, rids in seen.items():
-            if len(rids) > 1 and lab.endswith(")"):
-                for i, rid in enumerate(rids):
-                    labels[rid] = f"{lab[:-1]}{chr(97 + i)})"
+            works = seen.setdefault(lab, [])
+            if work.get(rid, rid) not in works:
+                works.append(work.get(rid, rid))
+        for rid, lab in list(labels.items()):
+            works = seen[lab]
+            if len(works) > 1 and lab.endswith(")"):
+                labels[rid] = f"{lab[:-1]}{chr(97 + works.index(work.get(rid, rid)))})"
+            if rid in claim_of:
+                labels[rid] += f", {claim_of[rid]}"
         return labels
+
+    def refs_in_order(self):
+        """The references in the order of a reference list: by their labels, those known only by an identifier
+        after those with an author, a number in a label by its value (C6 before C33)."""
+        def key(b):
+            lab = self.labels.get(b["id"], b["id"])
+            return (b["id"] in self.by_identifier,
+                    [(0, int(x), "") if x.isdigit() else (1, 0, x.casefold()) for x in re.split(r"(\d+)", lab) if x])
+        return sorted(self.refs, key=key)
 
     def ref(self, rid, locator=None):
         lab = self.labels.get(rid, rid)
@@ -1120,7 +1144,7 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         ("questions", "Open questions", question_items),
         ("corrections", "Corrections to " + P.against.removeprefix("the "),
          [_correction_item(P, corr) for corr in P.corrections]),
-        ("references", "References", [f'<ol class="cs-refs">{"".join(reference(b) for b in P.refs)}</ol>']
+        ("references", "References", [f'<ol class="cs-refs">{"".join(reference(b) for b in P.refs_in_order())}</ol>']
          if P.refs else []),
         ("artefacts", "Artefacts", [f'<ul class="cs-artefacts">{"".join(artefact(a) for a in P.artefacts)}</ul>']
          if P.artefacts else []),
