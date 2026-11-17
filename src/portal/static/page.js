@@ -217,8 +217,8 @@ window.entrylibPopup = function (className, label) {
 // this script every section is open.
 window.entrylibOpen = (function () {
   "use strict";
-  // brief: claimset < 0.41.12; terms and claims: the paper view's own sections (design §7.4)
-  var OPEN = { summary: true, highlights: true, brief: true, principal: true, terms: true, claims: true };
+  // brief: claimset < 0.41.12; claims: the paper view's own section (design §7.4)
+  var OPEN = { summary: true, highlights: true, brief: true, principal: true, claims: true };
   var body = document.querySelector(".cs-body");
   function setOpen(section, open) {
     if (!section || !section.classList.contains("fold")) return;

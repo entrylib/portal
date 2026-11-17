@@ -545,7 +545,8 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-open-all { margin-left: auto; }
 .pv-label { margin: 0 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .pv-more { margin: 6px 0 0; font-size: 15px; color: var(--muted); }
-.pv-terms { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.pv-defs { padding: 10px 14px 12px; background: var(--panel); border-radius: 4px; font-size: 16px; }
+.pv-terms { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .pv-term { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .pv-term dt { font-weight: 600; }
 .pv-term dd { margin: 0; min-width: 0; }

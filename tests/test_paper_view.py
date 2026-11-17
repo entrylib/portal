@@ -140,11 +140,38 @@ def test_evidence_under_a_computed_claim():
     assert 'id="gal-E4"' in out["extra"] and out["extra"].count('id="gal-E4"') == 1
 
 
-def test_terms_are_those_the_claims_name_with_their_symbols():
-    sections, _ = view(proofs())
-    terms = sections["terms"]
-    assert '<div class="pv-term" id="D1"><dt>the term <span class="pv-symbol">' in terms and "<math" in terms
-    assert 'id="D2"' not in terms and '1 more definition' in terms and '/p/2026.000099/record#definitions' in terms
+def test_a_term_stands_before_the_claim_that_first_uses_it():
+    doc = proofs()
+    doc["definitions"].append({"id": "D3", "term": "the ratio", "kind": "variable", "symbol": "$r$",
+                               "definition": "The actual over the forecast, as the [[D1:term]] reads it."})
+    doc["claims"][1]["statement"] = ("For $y > 0$: (a) the [[D1:term]] is symmetric in the [[D3:ratio]]; "
+                                     "(b) it is bounded.")
+    sections, _ = view(doc)
+    assert "terms" not in sections                                      # no section of terms
+    claims = sections["claims"]
+    c1, c2 = claims.index('id="C1"'), claims.index('id="C2"')
+    d1 = claims.index('<div class="pv-term" id="D1"><dt>the term <span class="pv-symbol">')
+    assert c1 < d1 < claims.index("Claim C1.")                          # before the claim that first uses it,
+    assert claims.count('id="D1"') == 1                                 # and only there
+    assert c2 < claims.index('<div class="pv-term" id="D3">') < claims.index("Claim C2.")
+    assert "Term this claim uses" in claims[c1:c2] and "pv-defs" not in claims[claims.index('id="C3"'):]
+    assert 'id="D2"' not in claims and "1 more definition" in claims and "/p/2026.000099/record#definitions" in claims
+    doc["definitions"][0]["definition"] = "What the [[D3:ratio]] gives."   # a term whose text names a later one
+    claims = view(doc)[0]["claims"]
+    assert claims.index('id="D3"') < claims.index('id="D1"') < claims.index("Claim C1.")
+
+
+def test_a_finding_keeps_its_place_and_a_proof_follows_what_it_uses():
+    doc = proofs()
+    doc["claims"][3]["depends_on"] = ["C5"]                             # C4, computed, rests on a later claim
+    doc["claims"].append({"id": "C6", "type": "descriptive", "role": "supporting", "novelty": "no_prior_found",
+                          "statement": "A check.", "support": [{"kind": "empirical_quant", "evidence": "E4"}]})
+    doc["claims"][3]["depends_on"] = ["C6"]
+    assert re.findall(r'class="pv-claim" id="(C\d+)"', view(doc)[0]["claims"]) == ["C1", "C2", "C3", "C4", "C6"]
+    doc["claims"][0]["depends_on"] = ["C3"]                             # C1, proved, needs a later claim
+    doc["claims"][2]["depends_on"] = []
+    doc["evidence"][2]["steps"] = doc["evidence"][2]["steps"][-1:]
+    assert re.findall(r'class="pv-claim" id="(C\d+)"', view(doc)[0]["claims"]) == ["C3", "C1", "C2", "C4", "C6"]
 
 
 def test_a_file_without_the_new_fields():
@@ -156,7 +183,7 @@ def test_a_file_without_the_new_fields():
     sections, _ = view(doc)
     assert '<span class="pv-claim-id">Claim C3</span>' in sections["claims"]
     assert "pv-name" not in sections["claims"] and "pv-summary" not in sections["claims"]
-    assert "pv-symbol" not in sections["terms"]
+    assert "pv-symbol" not in sections["claims"]
 
 
 def test_what_the_file_holds_is_escaped():
@@ -180,7 +207,7 @@ def test_the_pages_and_the_switch_between_them():
     anchors, held = set(re.findall(r'href="#([^"]+)"', page)), set(re.findall(r'\bid="([^"]+)"', page))
     assert anchors - held <= {"content"}, anchors - held      # nothing links to what the page does not hold
     assert 'href="/p/2026.000099/record#E3"' in page                # what only the record holds is linked there
-    for sid in ('id="summary"', 'id="terms"', 'id="claims"', 'id="limitations"', 'id="versions"',
+    for sid in ('id="summary"', 'id="claims"', 'id="limitations"', 'id="versions"',
                 'class="cs-page entry" data-view="paper"', 'class="cs-claim-page" href="/p/2026.000099/C3"'):
         assert sid in page, sid
     assert ('<ol class="pv-toc"><li><a href="#C1"><span class="pv-toc-id">C1</span> The term depends on the ratio'
