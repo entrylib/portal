@@ -74,10 +74,12 @@ CSS = """\
 .cs-table thead th { background: var(--cs-panel); font-weight: 600; }
 .cs-table th[scope="row"] { position: sticky; left: 0; background: var(--cs-panel); font-weight: 400; }
 .cs-table td.num { text-align: right; }
+.cs-table-long.cs-folded tr.cs-more { display: none; }
+.cs-rows-toggle { margin: 6px 10px 8px; }
 .cs-results, .cs-steps { margin: 8px 0; padding-left: 22px; }
 .cs-figures { display: flex; flex-wrap: wrap; gap: 16px; margin: 10px 0; }
 .cs-figure { margin: 0; flex: 1 1 100%; max-width: 100%; }
-.cs-figures-many .cs-figure { flex: 1 1 calc(50% - 8px); }
+.cs-figures-many .cs-figure { flex: 1 1 calc(50% - 8px); min-width: 0; }
 .cs-figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--cs-rule); background: #fff; }
 .cs-figure figcaption { font-size: 15px; margin-top: 6px; }
 .cs-refs, .cs-artefacts { margin: 0; padding: 0; list-style: none; }

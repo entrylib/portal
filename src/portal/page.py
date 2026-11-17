@@ -188,6 +188,9 @@ class _Paper:
             self.corrected.setdefault(corr["field"].split(".")[0], []).append(corr)
         self.computed = self._verifiability()
         self.used_by = self._uses()
+        # table rows a claim cites: a long table keeps them in view when it is folded (design §7.1)
+        self.cited_rows = {x for c in self.claims for sp in c.get("support") or [] if isinstance(sp, dict)
+                           for x in sp.get("results") or [] if isinstance(x, str)}
 
     # ---------- references ----------
     def _reference_labels(self):
@@ -810,6 +813,11 @@ def _definitions(P):
     return "\n".join(out)
 
 
+#: A table longer than this many rows starts folded on the page, showing its first SHOWN_ROWS rows and the rows a claim
+#: cites (page.js; without the script every row shows). The file and the reading view for models keep every row.
+LONG_TABLE, SHOWN_ROWS = 12, 8
+
+
 def _table(P, eid, t):
     cols = [P.column(c) for c in t.get("columns") or []]
     units = t.get("units")
@@ -819,17 +827,27 @@ def _table(P, eid, t):
     caption = (f"{esc(eid)}.{esc(t.get('id'))} · {P.text(t.get('description', ''))}"
                + (f" {P.conditions(t.get('conditions'))}" if t.get("conditions") else ""))
     rows = []
-    for r in t.get("rows") or []:
+    all_rows = [r for r in t.get("rows") or [] if isinstance(r, dict)]
+    long = len(all_rows) > LONG_TABLE
+    for i, r in enumerate(all_rows):
         if isinstance(r, dict):
             labels = [P.term(x) for x in r.get("label") or []]
             vals = r.get("values") or []
-            rows.append(f'<tr id="{esc(eid)}.{esc(t.get("id", ""))}.{esc(r.get("id", ""))}">'
+            rid = f"{eid}.{t.get('id', '')}.{r.get('id', '')}"
+            more = ' class="cs-more"' if long and i >= SHOWN_ROWS and rid not in P.cited_rows else ""
+            rows.append(f'<tr id="{esc(rid)}"{more}>'
                         + f'<th scope="row">{esc(r.get("id", ""))}{esc(_stat_note(r))}</th>'
                         + "".join(f"<td>{x}</td>" for x in labels)
                         + "".join(_cell(P, v) for v in vals) + "</tr>")
-    return (f'<div class="cs-table" id="{esc(eid)}.{esc(t.get("id", ""))}"><table><caption>{caption}</caption>'
+    cls, toggle = "cs-table", ""
+    if long:
+        cls += " cs-table-long"
+        toggle = (f'<button type="button" class="button-quiet cs-rows-toggle" hidden '
+                  f'data-all="Show all {len(all_rows)} rows" data-fewer="Show fewer rows">Show all {len(all_rows)} rows'
+                  f'</button>')
+    return (f'<div class="{cls}" id="{esc(eid)}.{esc(t.get("id", ""))}"><table><caption>{caption}</caption>'
             "<thead><tr>" + "".join(f'<th scope="col">{h}</th>' for h in head) + "</tr></thead>"
-            "<tbody>" + "".join(rows) + "</tbody></table></div>")
+            "<tbody>" + "".join(rows) + f"</tbody></table>{toggle}</div>")
 
 
 def _evidence(P, e, source_link):
