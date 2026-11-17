@@ -182,6 +182,10 @@ class _Paper:
         self.by_id = {x["id"]: x for lst in (self.claims, self.defs, self.evidence, self.limitations, self.refs,
                                              self.artefacts, self.warrants, self.questions) for x in lst}
         self.labels = self._reference_labels()
+        self.corrections, self.against = _corrections(self.paper)
+        self.corrected = {}
+        for corr in self.corrections:
+            self.corrected.setdefault(corr["field"].split(".")[0], []).append(corr)
         self.computed = self._verifiability()
         self.used_by = self._uses()
 
@@ -540,6 +544,34 @@ def _line(P, role, people, default):
     return default
 
 
+def _corrections(p):
+    """Where the claimset departs from what it restates (claimset spec §3.1): the corrections of a converted source, or
+    those of the published paper its authors converted; and the words for what they correct."""
+    if isinstance(p.get("converted_from"), dict):
+        found, against = p["converted_from"].get("corrections"), "the source paper"
+    elif isinstance(p.get("published_as"), dict):
+        found, against = p["published_as"].get("corrections"), "the published paper"
+    else:
+        return [], ""
+    if not isinstance(found, list):
+        return [], against
+    return [c for c in found if isinstance(c, dict) and isinstance(c.get("field"), str) and c["field"]], against
+
+
+CORRECTION_WORDS = {"misprint": "misprint", "correction": "correction by the authors"}
+
+
+def _corrected(P, oid):
+    """The note under an object the claimset corrects: what was printed, and a link to why (spec §3.1)."""
+    out = []
+    for corr in P.corrected.get(oid, []):
+        kind = CORRECTION_WORDS.get(corr.get("kind"), "corrected")
+        where = f", {esc(corr['where'])}" if corr.get("where") else ""
+        out.append(f'<p class="cs-correction"><span class="k">Corrected from {P.against}</span> ({esc(kind)}{where}): '
+                   f'printed {P.text(str(corr.get("printed", "")))}. <a href="#corrections">Why</a></p>')
+    return "".join(out)
+
+
 def _header(P):
     p, out = P.paper, []
     out.append(f'<h1 class="cs-title">{esc(p.get("title", ""))}</h1>')
@@ -590,6 +622,10 @@ def _header(P):
     meta = [m for m in meta if m]
     if meta:
         out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
+    if P.corrections:
+        n = len(P.corrections)
+        out.append(f'<p class="cs-correction">This claimset corrects {P.against} in {n} place{"s" if n != 1 else ""}: '
+                   'see <a href="#corrections">Corrections</a>.</p>')
     return "\n".join(out)
 
 
@@ -656,7 +692,7 @@ def _claim(P, c, principal=False):
     elif c.get("planning") == "planned_estimate":
         head.append("planned estimate")
     lines = [f'<p class="cs-claim-meta">{before}' + " · ".join(h for h in head if h) + f"{after}</p>",
-             f'<p class="cs-statement">{P.text(c.get("statement", ""))}</p>']
+             f'<p class="cs-statement">{P.text(c.get("statement", ""))}</p>' + _corrected(P, c.get("id"))]
     links = []
     if c.get("scope"):
         links.append(f'<span class="k">Scope:</span> {P.text(_scope(c["scope"]))}')
@@ -737,7 +773,8 @@ def _definition(P, d, nested=False):
     return (f'<div class="{cls}" id="{esc(d["id"])}"><p><span class="cs-def-head">{head}'
             + (f' · {" · ".join(rel)}' if rel and nested else "")
             + f' <strong>{esc(d.get("term", ""))}</strong></span>: {P.text(d.get("definition", ""))}'
-            + (f' <span class="cs-tail">{". ".join(tail)}.</span>' if tail else "") + "</p></div>")
+            + (f' <span class="cs-tail">{". ".join(tail)}.</span>' if tail else "") + "</p>"
+            + _corrected(P, d.get("id")) + "</div>")
 
 
 def _definitions(P):
@@ -807,7 +844,8 @@ def _evidence(P, e, source_link):
     cited = P.users(e["id"])
     if cited:
         head.append(f"cited by {cited}")
-    out = [f'<p class="cs-claim-meta">{" · ".join(head)}</p>', f'<p>{P.text(e.get("description", ""))}</p>']
+    out = [f'<p class="cs-claim-meta">{" · ".join(head)}</p>', f'<p>{P.text(e.get("description", ""))}</p>'
+           + _corrected(P, e.get("id"))]
     setup = e.get("setup") if isinstance(e.get("setup"), dict) else {}
     parts = [f"{role} " + ", ".join(P.term(x) for x in setup[role]) for role in ("studied", "cases", "procedure", "lens", "context")
              if isinstance(setup.get(role), list) and setup[role]]
@@ -861,6 +899,22 @@ def _evidence(P, e, source_link):
     if figures:
         out.append('<div class="cs-figures">' + "".join(P.figure(a) for a in figures) + "</div>")
     return f'<div class="cs-item cs-evidence" id="{esc(e["id"])}">' + "".join(out) + "</div>"
+
+
+def _correction_item(P, corr):
+    """One correction in the paper's list (spec §3.1): what it corrects, where in the paper, what was printed, what is
+    stated instead, why, and who found it."""
+    oid = corr["field"].split(".")[0]
+    head = [P.ids([oid]) if oid in P.by_id else esc(oid), esc(CORRECTION_WORDS.get(corr.get("kind"), "correction")),
+            esc(corr.get("where") or "")]
+    finder = next((c for c in P.doc.get("contributors") or [] if isinstance(c, dict)
+                   and c.get("id") == corr.get("found_by")), None)
+    if finder:
+        head.append("found by " + esc(finder.get("name") or finder.get("id")))
+    return (f'<div class="cs-item cs-correction-item"><p class="cs-claim-meta">{" · ".join(h for h in head if h)}</p>'
+            f'<p><span class="k">Printed:</span> {P.text(str(corr.get("printed", "")))}</p>'
+            f'<p><span class="k">Stated here:</span> {P.text(str(corr.get("recorded", "")))}</p>'
+            f'<p><span class="k">Why:</span> {P.text(str(corr.get("reason", "")))}</p></div>')
 
 
 def _section(sid, title, items, intro=""):
@@ -955,7 +1009,8 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
     assumption_items = [
         f'<div class="cs-item" id="{esc(c["id"])}"><p class="cs-claim-meta">{esc(c["id"])}'
         + (f' · {esc(c["assumption_category"])}' if c.get("assumption_category") else "")
-        + f' · {esc(c.get("check", "unchecked"))}</p><p>{P.text(c.get("statement", ""))}{rested(c)}</p></div>'
+        + f' · {esc(c.get("check", "unchecked"))}</p><p>{P.text(c.get("statement", ""))}{rested(c)}</p>'
+        + _corrected(P, c.get("id")) + "</div>"
         for c in assumptions]
 
     warrants = [f'<div class="cs-item" id="{esc(w["id"])}"><p class="cs-claim-meta">{esc(w["id"])} · argument'
@@ -1009,6 +1064,8 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         ("evidence", "Evidence", [_evidence(P, e, source_link) for e in P.evidence] + warrants),
         ("limitations", "Limitations", limitation_items),
         ("questions", "Open questions", question_items),
+        ("corrections", "Corrections to " + P.against.removeprefix("the "),
+         [_correction_item(P, corr) for corr in P.corrections]),
         ("references", "References", [f'<ol class="cs-refs">{"".join(reference(b) for b in P.refs)}</ol>']
          if P.refs else []),
         ("artefacts", "Artefacts", [f'<ul class="cs-artefacts">{"".join(artefact(a) for a in P.artefacts)}</ul>']
@@ -1017,6 +1074,7 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
     counts = {"definitions": len(P.defs), "assumptions": len(assumptions), "principal": len(principal),
               "supporting": len(supporting), "evidence": len(P.evidence) + len(P.warrants),
               "limitations": len(P.limitations), "questions": len(P.questions), "references": len(P.refs),
+              "corrections": len(P.corrections),
               "artefacts": len(P.artefacts)}
     body, nav, shown, blocks = [], [], [], {}
     for sid, title, items in sections:

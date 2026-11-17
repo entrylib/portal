@@ -311,3 +311,52 @@ class TestOriginAndHeader(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCorrections(unittest.TestCase):
+    """Where a claimset departs from what it restates (claimset spec §3.1): each corrected item says so and the page
+    lists the corrections with their reasons."""
+
+    def doc(self, where="published"):
+        d = example()
+        cid, did = d["claims"][0]["id"], d["definitions"][0]["id"]
+        entries = [{"kind": "correction", "field": f"{cid}.statement", "where": "Section 3.3",
+                    "printed": "growth for $\\alpha_1 > 1$", "recorded": "growth for $\\alpha_1 > 1$ and $\\alpha_0 < 2$",
+                    "reason": "At $\\alpha_0 = 2.2$ the dominant eigenvalue is negative.",
+                    "found_by": d["contributors"][0]["id"]},
+                   {"kind": "misprint", "field": f"{did}.definition", "where": "Equation (4)",
+                    "printed": "a <b>sum</b>", "recorded": "a squared sum", "reason": "the sum is of squares"}]
+        if where == "published":
+            d["paper"]["published_as"] = {"id_type": "doi", "id": "10.1002/nav.22074", "corrections": entries}
+        else:
+            d["paper"]["origin"] = "converted"
+            d["paper"]["converted_from"] = {"source_id": "10.1/x", "corrections": [
+                {k: v for k, v in e.items() if k not in ("kind", "found_by")} for e in entries]}
+        return d, cid, did
+
+    def test_published_paper_corrections_are_shown(self):
+        d, cid, did = self.doc()
+        parts = H.render_parts(d)
+        self.assertIn("This claimset corrects the published paper in 2 places", parts["header"])
+        claim_html = parts["body"].split(f'id="{cid}"', 1)[1].split("</div>", 1)[0]
+        self.assertIn("Corrected from the published paper", claim_html)
+        self.assertIn("correction by the authors, Section 3.3", claim_html)
+        self.assertIn("<math", claim_html)                                    # the printed formula is typeset
+        self.assertIn("Corrected from the published paper", parts["body"].split(f'id="{did}"', 1)[1].split("</div>", 1)[0])
+        section = parts["blocks"]["corrections"]
+        self.assertIn("Corrections to published paper", section)
+        self.assertIn("found by " + d["contributors"][0]["name"], section)
+        self.assertIn("Why:", section)
+        self.assertNotIn("<b>sum</b>", section)                               # the paper's text is never HTML
+        self.assertIn(("corrections", "Corrections to published paper", 2), parts["sections"])
+
+    def test_a_converted_source_s_corrections_are_shown_too(self):
+        d, cid, _ = self.doc("converted")
+        parts = H.render_parts(d)
+        self.assertIn("corrects the source paper in 2 places", parts["header"])
+        self.assertIn("Corrected from the source paper", parts["body"])
+
+    def test_nothing_without_corrections(self):
+        parts = H.render_parts(example())
+        self.assertNotIn("corrections", parts["blocks"])
+        self.assertNotIn("Corrected from", parts["body"] + parts["header"])
