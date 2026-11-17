@@ -433,3 +433,26 @@ def test_competing_interests_beside_the_score():
     doc["paper"]["declarations"] = {"competing_interests": long, "funding": []}
     row = _page(doc).split('class="panel-row interests-row"')[1].split("</div>")[0]
     assert '<details class="small interests"><summary>' in row and f"<p>{long}</p>" in row and "Funding" not in row
+
+
+def test_not_claimed_after_the_score():
+    """Design §7.6: the planned proofs that give no claim of their own are listed after Score, one line per reason."""
+    doc = example()
+    cid = doc["claims"][0]["id"]
+    doc["paper"].setdefault("exploration", {})["not_claimed"] = [
+        {"lab_event": "H1", "lab_plan": "PL5", "outcome": "supported", "because": "reworded", "into": cid,
+         "why": "Restated and decided again under PL8."},
+        {"lab_event": "H9", "lab_plan": "PL5", "outcome": "inconclusive", "because": "revised", "into": cid,
+         "why": "Merged into H3 as its part (b)."},
+        {"lab_event": "H11", "lab_plan": "PL5", "outcome": "inconclusive", "because": "abandoned",
+         "why": "Reported by a simulation <b>instead</b>."}]
+    page = _page(doc)
+    section = page[page.index('id="not-claimed"'):page.index('id="versions"')]
+    assert '<a href="#not-claimed">Not claimed</a> <span class="count">3</span>' in page
+    assert f'<li><strong>Reworded, then proved again:</strong> <span title="Restated and decided again under PL8.">H1' \
+           f'</span> → <a href="#{cid}">{cid}</a></li>' in section
+    merged = '<strong>Merged:</strong> <span title="Merged into H3 as its part (b).">H9</span> (inconclusive) → '
+    assert merged in section
+    assert "<strong>Dropped:</strong>" in section and "&lt;b&gt;instead&lt;/b&gt;" in section and "<b>" not in section
+    del doc["paper"]["exploration"]["not_claimed"]
+    assert 'id="not-claimed"' not in _page(doc)
