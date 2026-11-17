@@ -185,6 +185,22 @@ def test_the_pages_and_the_switch_between_them():
     assert "view-switch" not in old                                     # the paper view is of the current version
 
 
+def test_the_authors_own_document_is_linked():
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    assert "pv-document" not in site.paper_page(proofs(), base_url=BASE, listing=listing)
+    doc = proofs()
+    files = "https://entrylib.test/p/2026.000099/v1/files/"
+    doc["artefacts"] += [{"id": "A3", "kind": "proof", "uri": files + "proofs.md", "description": "The proofs."},
+                         {"id": "A4", "kind": "proof", "uri": files + "proofs.pdf", "description": "The same, as PDF."}]
+    page = site.paper_page(doc, base_url=BASE, listing=listing)
+    assert (f'<p class="pv-document"><a class="button-quiet" href="{files}proofs.pdf">The proofs as one document</a>'
+            in page)
+    doc["artefacts"].append({"id": "A5", "kind": "manuscript", "uri": files + "paper.PDF", "description": "The paper."})
+    assert site.own_document(doc) == ("The paper as its authors wrote it", files + "paper.PDF")   # a manuscript first
+    for uri in ("files/proofs.pdf", "javascript:alert(1)//x.pdf", files + "proofs.docx", None, 3):
+        assert site.own_document({"artefacts": [{"id": "A1", "kind": "proof", "uri": uri}]}) is None, uri
+
+
 def test_written_with_the_claimset(tmp_path):
     doc = proofs()
     site.write_claimset(tmp_path, BASE, "2026.000099", {1: doc}, [{"version": 1, "date": "2026-11-17"}], {})

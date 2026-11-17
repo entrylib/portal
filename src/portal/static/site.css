@@ -540,6 +540,7 @@ form.inline { display: inline; margin-left: 8px; }
 .view-switch a:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
 
 /* The paper view (paper.py): terms, then the claims in reading order, each with what supports it. */
+.pv-document { margin: 12px 0 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .pv-lead { margin: 0 0 14px; color: var(--muted); font-size: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .pv-open-all { margin-left: auto; }
 .pv-label { margin: 0 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }

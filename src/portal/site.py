@@ -836,6 +836,26 @@ def view_switch(key, view):
             + "</nav>")
 
 
+#: The artefacts that are the authors' own document of the paper, in the order they are looked for, and what the paper
+#: view calls each.
+DOCUMENT_KINDS = (("manuscript", "The paper as its authors wrote it"), ("proof", "The proofs as one document"))
+
+
+def own_document(doc):
+    """The authors' own document of the paper, for a reader who wants it in one piece (design §7.4, *Paper view*):
+    the first artefact of kind `manuscript`, or else `proof`, that is a PDF at an http(s) address (a file of the
+    claimset's package is at one once published). (what it is called, its address), or None."""
+    artefacts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
+    for kind, label in DOCUMENT_KINDS:
+        for a in artefacts:
+            uri = a.get("uri")
+            if a.get("kind") != kind or not pageview._href(uri):
+                continue
+            if uri.lower().split("?")[0].split("#")[0].endswith(".pdf"):
+                return label, uri
+    return None
+
+
 #: The sections of the record page that the paper view keeps as they are, after its own.
 PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
 
@@ -889,10 +909,13 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
+    own = own_document(doc)
+    document = (f'<p class="pv-document"><a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> '
+                f'<span class="small">PDF</span></p>') if own else ""
     main = (f'<div class="cs-page entry paper-view"><div class="cs-header entry-header">'
             f'{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
-            f'{ask_ai(doc, base_url)}</div>{_panel(doc, parts, base_url, key, scores)}{nav}'
+            f'{document}{ask_ai(doc, base_url)}</div>{_panel(doc, parts, base_url, key, scores)}{nav}'
             f'<article class="cs-body pv-body">{"".join(body)}{view["extra"]}</article></div>')
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
             f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">')
