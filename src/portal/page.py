@@ -850,6 +850,22 @@ def _table(P, eid, t):
             "<tbody>" + "".join(rows) + f"</tbody></table>{toggle}</div>")
 
 
+def _result(P, e, r, ids=True):
+    """One result of an evidence object, as a list item; without `ids` it carries no ID of its own in the page (the
+    paper view shows a result where a claim cites it, and the record page holds it)."""
+    stat = _statistic(r.get("statistic"))
+    more = esc(_join([_uncertainty(r.get("uncertainty")), r.get("unit"), _interval(r.get("interval")),
+                      f"n {_num(r['n'])}" if r.get("n") is not None else ""], " "))
+    cond = P.conditions(r.get("conditions"))
+    var = r.get("variable")
+    shown = P.term(var) if isinstance(var, str) and var in P.by_id else P.text(_s(var))
+    rid = f' id="{esc(e["id"])}.{esc(r.get("id", ""))}"' if ids else ""
+    return (f'<li{rid}><span class="cs-id">{esc(r.get("id", ""))}</span> '
+            f'{shown}{(" (" + esc(stat) + ")") if stat else ""} = '
+            f'{"about " if r.get("approximate") is True else ""}{P.value(r.get("value"))}'
+            f'{(" " + more) if more.strip() else ""}{(" " + cond) if cond else ""}</li>')
+
+
 def _evidence(P, e, source_link):
     head = [esc(e["id"]), esc(e.get("profile"))]
     for key in ("design", "data_origin", "analytic_approach", "sampling"):
@@ -890,19 +906,7 @@ def _evidence(P, e, source_link):
     if figures:
         many = " cs-figures-many" if len(figures) > 3 else ""
         out.append(f'<div class="cs-figures{many}">' + "".join(P.figure(a) for a in figures) + "</div>")
-    results = []
-    for r in e.get("results") or []:
-        if isinstance(r, dict):
-            stat = _statistic(r.get("statistic"))
-            more = esc(_join([_uncertainty(r.get("uncertainty")), r.get("unit"), _interval(r.get("interval")),
-                              f"n {_num(r['n'])}" if r.get("n") is not None else ""], " "))
-            cond = P.conditions(r.get("conditions"))
-            var = r.get("variable")
-            shown = P.term(var) if isinstance(var, str) and var in P.by_id else P.text(_s(var))
-            results.append(f'<li id="{esc(e["id"])}.{esc(r.get("id", ""))}"><span class="cs-id">{esc(r.get("id", ""))}</span> '
-                           f'{shown}{(" (" + esc(stat) + ")") if stat else ""} = '
-                           f'{"about " if r.get("approximate") is True else ""}{P.value(r.get("value"))}'
-                           f'{(" " + more) if more.strip() else ""}{(" " + cond) if cond else ""}</li>')
+    results = [_result(P, e, r) for r in e.get("results") or [] if isinstance(r, dict)]
     if results:
         out.append('<ul class="cs-results">' + "".join(results) + "</ul>")
     for t in e.get("tables") or []:

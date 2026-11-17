@@ -26,6 +26,7 @@ from claimset.claim import claim_bundle
 
 from . import areas, ids, indexnow, limits, planning, score_html, skills, source, specs
 from . import page as pageview
+from . import paper as paperview
 from . import scores as score_data
 from .history import claims_changed
 from .text import html as plain_html
@@ -803,8 +804,10 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                    + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>', doc)
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
+    switch = view_switch(key, "record") if not current or current == n else ""
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
-            f'{INTRO_STRIP}<p class="entry-top">{" · ".join(top)}</p>{newer}{_notice(p, published_at(listing, n))}'
+            f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}'
+            f'{_notice(p, published_at(listing, n))}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores)}'
             f'{nav}<article class="cs-body">{body}'
@@ -819,6 +822,84 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                           scores=scores)
     return shell(p.get("title", ""), main, active="read", description=description, head=head, canonical=canonical,
                  script="/page.js")
+
+
+def view_switch(key, view):
+    """The two views of a paper's current version (design §7.4, *Paper view*): the paper, to read the argument, and
+    the record, to check it. `view`: the one this page is."""
+    def one(name, href, what):
+        here = ' aria-current="page"' if view == name.lower() else ""
+        return f'<a href="{href}"{here} title="{what}">{name}</a>'
+    return ('<nav class="view-switch" aria-label="Views of this paper">'
+            + one("Paper", f"/p/{key}/paper", "The claims in reading order, each with its proof or evidence")
+            + one("Record", f"/p/{key}", "Every object of the claimset: definitions, claims, evidence, artefacts")
+            + "</nav>")
+
+
+#: The sections of the record page that the paper view keeps as they are, after its own.
+PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
+
+
+def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None, scores=None):
+    """The paper view of a claimset's current version, at /p/<key>/paper (design §7.4, *Paper view*): the header and
+    panel of the record page, its Summary and Highlights, then the terms the claims name and the claims in reading
+    order, each with what supports it (`paper.render`), then the record page's Assumptions, Limitations, Open
+    questions and References. Its canonical address is the record page's: they are two views of one paper."""
+    p = doc["paper"]
+    key, n = ids.url_key(p["id"]), p.get("version")
+    record = f"/p/{key}"
+    parts = render(doc, file_url, ref_text, scores, claim_pages(doc))
+    view = paperview.render(doc, record, file_url=file_url, ref_text=ref_text, number=number, scores=scores)
+    blocks = dict(parts.get("blocks") or {})
+    titles = {sid: (title, c) for sid, title, c in parts.get("sections") or []}
+    summary = _summary(doc)
+    if "brief" in blocks and 'class="cs-summary"' in blocks["brief"]:
+        del blocks["brief"]
+    if summary and "summary" not in blocks:
+        blocks["summary"] = (f'<section class="cs-section" id="summary"><h2>Summary</h2>'
+                             f'<p class="cs-summary">{plain_html(summary)}</p></section>')
+    body, shown = [], []
+
+    def keep(sid):
+        if sid in blocks:
+            old, c = titles.get(sid, (PAGE_SECTIONS.get(sid, sid), 0))
+            title = PAGE_SECTIONS.get(sid, old)
+            body.append(_retitle(blocks[sid], old, title))
+            shown.append((sid, title, c, ""))
+    for sid in ("summary", "highlights", "brief"):
+        keep(sid)
+    names = {c["id"]: " ".join(c["name"].split()) for c in doc.get("claims") or []
+             if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)}
+    for sid, title, c, block in view["sections"]:
+        body.append(block)
+        inner = ""
+        if sid == "claims" and names:                    # the claims by name, in the contents
+            cids = re.findall(r'<article class="pv-claim" id="(C[0-9]+)"', block)
+            inner = ('<ol class="pv-toc">' + "".join(
+                f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> {esc(names.get(cid, ""))}</a></li>'
+                for cid in cids) + "</ol>")
+        shown.append((sid, title, c, inner))
+    for sid in PAPER_KEEPS:
+        keep(sid)
+    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>'
+                               + (f' <span class="count">{esc(c)}</span>' if c else "") + inner + "</li>"
+                               for sid, t, c, inner in shown) + "</ol></nav>")
+    top = [_status(p)] if (p.get("status") or "active") != "active" else []
+    top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
+    if subfield_name(doc):
+        top.append(esc(subfield_name(doc)))
+    main = (f'<div class="cs-page entry paper-view"><div class="cs-header entry-header">'
+            f'{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
+            f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
+            f'{ask_ai(doc, base_url)}</div>{_panel(doc, parts, base_url, key, scores)}{nav}'
+            f'<article class="cs-body pv-body">{"".join(body)}{view["extra"]}</article></div>')
+    head = (f'<link rel="alternate" type="application/json" href="/p/{key}@v{n}.json">'
+            f'<link rel="alternate" type="text/plain" href="/p/{key}@v{n}.txt">')
+    head += claimset_meta(doc, base_url, f"{base_url}{record}",
+                          first_date=(listing[0].get("date") if listing else None), scores=scores)
+    return shell(p.get("title", ""), main, active="read", description=_lead_text(doc), head=head,
+                 canonical=f"{base_url}{record}", script="/page.js")
 
 
 def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a submission"):
@@ -1559,6 +1640,9 @@ def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=N
             _write(p / f"{key}.html", page)
             _write(p / f"{key}.bib", bibtex(doc, base_url))
             _write(p / f"{key}.ris", ris(doc, base_url))
+            _write(p / key / "paper.html", paper_page(doc, base_url=base_url, listing=listing, lab=labs.get(n),
+                                                      file_url=file_url, ref_text=ref_text,
+                                                      scores=(scores or {}).get(n)))
             write_claim_pages(p / key, doc, base_url=base_url, scores=(scores or {}).get(n), file_url=file_url,
                               ref_text=ref_text, published=published_at(listing, n))
 

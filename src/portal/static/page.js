@@ -105,18 +105,101 @@ window.entrylibPopup = function (className, label) {
   popup.body.appendChild(figure);
   popup.dialog.addEventListener("close", function () { img.removeAttribute("src"); });
 
+  // A set of figures (the paper view, design §7.4): the page holds the set once (ol.pv-gallery, each item a
+  // figure's address and caption), and a link names the set and where to start (data-gallery, data-i). The pop-up
+  // then steps through the set: the buttons, or the arrow keys.
+  var nav = document.createElement("div"), count = document.createElement("span");
+  var prev = document.createElement("button"), next = document.createElement("button");
+  nav.className = "zoom-nav";
+  count.className = "zoom-count";
+  [[prev, "\u2039", "Previous figure"], [next, "\u203a", "Next figure"]].forEach(function (b) {
+    b[0].type = "button";
+    b[0].className = "button-quiet";
+    b[0].textContent = b[1];
+    b[0].setAttribute("aria-label", b[2]);
+  });
+  nav.appendChild(count);
+  nav.appendChild(prev);
+  nav.appendChild(next);
+  nav.hidden = true;
+  popup.body.insertBefore(nav, figure);
+  var set = null, at = 0;
+  function copy(from) {
+    caption.replaceChildren();
+    if (from) Array.prototype.forEach.call(from.childNodes, function (n) { caption.appendChild(n.cloneNode(true)); });
+  }
+  function show(i) {
+    at = Math.max(0, Math.min(set.length - 1, i));
+    img.src = set[at].getAttribute("data-src");
+    img.alt = "";
+    copy(set[at]);
+    count.textContent = (at + 1) + " of " + set.length;
+    prev.disabled = at === 0;
+    next.disabled = at === set.length - 1;
+  }
+  prev.addEventListener("click", function () { show(at - 1); });
+  next.addEventListener("click", function () { show(at + 1); });
+  popup.dialog.addEventListener("keydown", function (e) {
+    if (!set || set.length < 2) return;
+    if (e.key === "ArrowLeft") { show(at - 1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { show(at + 1); e.preventDefault(); }
+  });
+
   document.addEventListener("click", function (e) {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var member = e.target.closest("a[data-gallery]");
+    var list = member && document.getElementById(member.getAttribute("data-gallery"));
+    if (list) {
+      e.preventDefault();
+      set = Array.prototype.slice.call(list.children);
+      nav.hidden = set.length < 2;
+      show(Number(member.getAttribute("data-i") || 0));
+      popup.open();
+      return;
+    }
     var link = e.target.closest(".cs-figure > a");
-    if (!link || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!link) return;
     e.preventDefault();
+    set = null;
+    nav.hidden = true;
     var shown = link.querySelector("img");
     img.src = link.getAttribute("href");
     img.alt = shown ? shown.alt : "";
-    caption.replaceChildren();
-    var text = link.parentNode.querySelector("figcaption");
-    if (text) Array.prototype.forEach.call(text.childNodes, function (n) { caption.appendChild(n.cloneNode(true)); });
+    copy(link.parentNode.querySelector("figcaption"));
     popup.open();
   });
+})();
+
+// The paper view (design §7.4): the rows of a table that bear on a claim open in a pop-up (the page holds them in a
+// <template>; without this script the link goes to the claim whose evidence they are), and one button opens every
+// proof.
+(function () {
+  "use strict";
+  if (!document.querySelector(".pv-body")) return;
+  var rows = window.HTMLDialogElement ? window.entrylibPopup("rows", "Table rows") : null;
+  document.addEventListener("click", function (e) {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var link = e.target.closest("a[data-rows]");
+    var held = link && document.getElementById(link.getAttribute("data-rows"));
+    if (rows && held && held.content) {
+      e.preventDefault();
+      e.stopPropagation();
+      rows.body.replaceChildren(held.content.cloneNode(true));
+      rows.open();
+      return;
+    }
+    if (rows && rows.dialog.open && e.target.closest("a[href^='#']")) rows.dialog.close();
+  }, true);
+  var all = document.querySelector(".pv-open-all");
+  if (all) {
+    all.hidden = false;
+    all.addEventListener("click", function () {
+      var open = all.getAttribute("aria-pressed") !== "true";
+      document.querySelectorAll("details.pv-proof").forEach(function (d) { d.open = open; });
+      all.setAttribute("aria-pressed", String(open));
+      all.textContent = all.getAttribute(open ? "data-close" : "data-open");
+    });
+  }
 })();
 
 // Claimset and claim pages: the long sections start folded (design §7.4). Summary, Highlights and the principal claims stay open;
@@ -124,7 +207,8 @@ window.entrylibPopup = function (className, label) {
 // this script every section is open.
 window.entrylibOpen = (function () {
   "use strict";
-  var OPEN = { summary: true, highlights: true, brief: true, principal: true };   // brief: claimset < 0.41.12
+  // brief: claimset < 0.41.12; terms and claims: the paper view's own sections (design §7.4)
+  var OPEN = { summary: true, highlights: true, brief: true, principal: true, terms: true, claims: true };
   var body = document.querySelector(".cs-body");
   function setOpen(section, open) {
     if (!section || !section.classList.contains("fold")) return;
