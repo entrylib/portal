@@ -19,6 +19,39 @@ class TestMathML(unittest.TestCase):
         self.assertIn("<msubsup><mi>e</mi><mi>t</mi><mn>2</mn></msubsup>", body("e_t^2"))
         self.assertIn('<msup><mi>y</mi><mo>′</mo></msup>', body("y'"))
 
+    def test_a_fraction_without_braces_takes_one_token_each(self):
+        """\\tfrac12 is one half: an argument without braces is one token, and of a number its first digit."""
+        half = "<mfrac><mn>1</mn><mn>2</mn></mfrac>"
+        self.assertIn(half, body(r"\tfrac12"))
+        self.assertIn(half + '<mrow><msup><mi mathvariant="normal">sech</mi><mn>2</mn></msup>',
+                      body(r"-\tfrac12\operatorname{sech}^2(x)"))
+        self.assertIn("<mfrac><mn>1</mn><mi>n</mi></mfrac>", body(r"\frac1n\sum_t y_t"))
+        self.assertIn("<mfrac><mn>1</mn><mn>24</mn></mfrac>", body(r"\tfrac1{24}"))
+        self.assertIn("<mfrac><mi>v</mi><mi>σ</mi></mfrac>", body(r"\frac v\sigma"))
+        self.assertIn("<mfrac><mn>12</mn><mn>5</mn></mfrac>", body(r"\frac{12}{5}"))          # braces keep the number
+        self.assertIn('<mfrac linethickness="0"><mi>n</mi><mn>2</mn></mfrac>', body(r"\binom n2"))
+        self.assertIn("<msup><mi>x</mi><mn>10</mn></msup>", body("x^10"))                       # scripts as before
+
+    def test_a_delimiter_of_a_chosen_size(self):
+        big = 'fence="true" stretchy="true" symmetric="true" minsize="1.2em" maxsize="1.2em"'
+        self.assertIn(f"<mo {big}>(</mo>", body(r"\big(\tfrac{x}{2}\big)"))
+        self.assertIn(f"<mo {big}>)</mo>", body(r"\big(\tfrac{x}{2}\big)"))
+        for name, size in (("Big", "1.8em"), ("bigg", "2.4em"), ("Bigg", "3em"), ("Bigl", "1.8em"), ("biggr", "2.4em")):
+            self.assertIn(f'minsize="{size}" maxsize="{size}">[</mo>', body(rf"\{name}[ x"), name)
+        self.assertIn('maxsize="1.8em">{</mo>', body(r"\Big\{ x \Big\}"))
+        self.assertIn('maxsize="1.2em">|</mo>', body(r"\big| x \big|"))
+        self.assertEqual(body(r"\big x"), "<mi>x</mi>")                    # no delimiter follows: nothing to size
+
+    def test_a_function_stands_off_its_argument(self):
+        gap = '<mspace width="0.1667em"></mspace>'
+        self.assertIn(f"<mi>ln</mi><mo>\u2061</mo>{gap}</mrow><mi>y</mi>", body(r"\ln y"))
+        self.assertIn(f"<mo>\u2061</mo>{gap}</mrow><mfrac>", body(r"\ln\frac{a}{b}"))
+        self.assertIn(f"<mo>\u2061</mo>{gap}</mrow><mi>θ</mi>", body(r"\sin \theta"))
+        self.assertIn(f"<mo>\u2061</mo>{gap}</mrow><mi>x</mi>", body(r"\operatorname{sech} x"))
+        for tex in (r"\tanh(x)", r"\exp\left(x\right)", r"\ln|x|", r"\max_x", r"\operatorname{sech}^2\Big(x\Big)",
+                    r"\log = 1", r"\sin \le 1"):
+            self.assertNotIn(gap, body(tex), tex)                          # none before a bracket or an operator
+
     def test_fractions_roots_and_accents(self):
         self.assertIn("<mfrac><mi>T</mi><mrow><mi>T</mi><mo>−</mo><mi>k</mi></mrow></mfrac>", body(r"\frac{T}{T-k}"))
         self.assertIn("<msqrt><msub><mi>V</mi><mi>h</mi></msub></msqrt>", body(r"\sqrt{V_h}"))
