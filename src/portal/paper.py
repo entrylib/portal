@@ -1,8 +1,9 @@
 """The paper view of a claimset (design §7.4, *Paper view*): the same file as the record page, set out as a paper.
 
 The record page lists a claimset's objects by kind: definitions, claims, evidence. A reader who wants the argument
-reads the paper view: the claims in the order the argument needs them, each with its name, its plain summary, its
-statement, and under the statement what supports it (the proof in steps, or the figures and the rows it cites); beside
+reads the paper view: the claims in the paper's order (a proved claim after the claims its proof uses), each with the
+terms it is the first to use, its name, its plain summary, its statement, and under the statement what supports it
+(the proof in steps, or the figures and the rows it cites); beside
 a claim, the other claims of the paper that bear on it, with the observations their relation names. What the record
 holds of a claim besides (its plan, its checks, its score) is one click away, and everything else is on the record
 page, which the view links to.
@@ -84,6 +85,7 @@ class _View:
         self.shown = [cid for cid in self.order() if not P.is_assumption(self.claims[cid])]
         self.assumed = [c["id"] for c in P.claims if P.is_assumption(c)]
         self.galleries, self.panels, self.tables_shown = {}, [], set()
+        self.introduced = []                                # the definitions shown so far, each before its first use
         # what bears on a claim from the paper's other claims: {target: [(claim, relation)]}
         self.incoming = {}
         for c in P.claims:
@@ -101,14 +103,19 @@ class _View:
         return None
 
     def needs(self, c):
-        out = _strs(c.get("depends_on"))
+        """The claims a proved claim comes after: those it depends on and those its proof uses. A claim without a
+        proof keeps its place: a finding stands before the checks it rests on, as its authors numbered them."""
         e = self.proof(c)
-        for st in _dicts((e or {}).get("steps")):
+        if e is None:
+            return []
+        out = _strs(c.get("depends_on"))
+        for st in _dicts(e.get("steps")):
             out += [b for b in _strs(st.get("by")) if b in self.claims]
         return sorted({x for x in out if x in self.claims and x != c["id"]}, key=_number_of)
 
     def order(self):
-        """Reading order: a claim after the claims it depends on and those its proof uses, otherwise by ID."""
+        """Reading order: the paper's own, by ID, except that a proved claim comes after the claims its proof
+        needs."""
         done, seen = [], set()
 
         def visit(cid):
@@ -467,27 +474,40 @@ class _View:
         summary = c.get("summary")
         plain = (f'<p class="pv-summary">{self.text(summary)}</p>'
                  if isinstance(summary, str) and summary.strip() else "")
-        return (f'<article class="pv-claim" id="{esc(cid)}">{head}{plain}{self.statement(c.get("statement"))}'
+        return (f'<article class="pv-claim" id="{esc(cid)}">{self.terms_block(c)}{head}{plain}'
+                f'{self.statement(c.get("statement"))}'
                 f'{self.support(c)}{self.beside(c)}{self.remarks(c)}{self.record_fold(c)}</article>')
 
     # ---------- terms ----------
-    def terms(self):
-        """The definitions the claims shown name, with those these name in turn, in the file's order."""
-        todo = []
-        for cid in self.shown:
-            c = self.claims[cid]
-            todo += [m.group(1) for m in pageview.TERM.finditer(c.get("statement") or "")]
-            about = c.get("about") if isinstance(c.get("about"), dict) else {}
-            for key in ("subject", "object", "comparator", "conditions"):
-                v = about.get(key)
-                todo += _strs(v if isinstance(v, list) else [v])
-        used = []
-        while todo:
-            d = todo.pop(0)
-            if d in self.defs and d not in used:
-                used.append(d)
-                todo += [m.group(1) for m in pageview.TERM.finditer(self.defs[d].get("definition") or "")]
-        return [d["id"] for d in self.P.defs if d["id"] in used]
+    def named(self, text):
+        return [m.group(1) for m in pageview.TERM.finditer(text or "") if m.group(1) in self.defs]
+
+    def new_terms(self, c):
+        """The definitions a claim is the first to use, in the order it names them (in its statement, in `about`,
+        in the steps of its proof), each after the definitions its own text names."""
+        named = self.named(c.get("statement") if isinstance(c.get("statement"), str) else "")
+        about = c.get("about") if isinstance(c.get("about"), dict) else {}
+        for key in ("subject", "object", "comparator", "conditions"):
+            v = about.get(key)
+            named += [x for x in _strs(v if isinstance(v, list) else [v]) if x in self.defs]
+        e = self.proof(c)
+        for st in _dicts((e or {}).get("steps")):
+            named += self.named(st.get("statement") if isinstance(st.get("statement"), str) else "")
+        out = []
+
+        def add(did, depth=0):
+            if did in self.introduced or did in out or depth > 20:
+                return
+            out.append(did)                                 # held first, so that two terms naming each other end
+            mine = self.defs[did].get("definition")
+            for inner in self.named(mine if isinstance(mine, str) else ""):
+                add(inner, depth + 1)
+            out.remove(did)
+            out.append(did)
+        for did in named:
+            add(did)
+        self.introduced += out
+        return out
 
     def term(self, did):
         d = self.defs[did]
@@ -496,10 +516,17 @@ class _View:
         return (f'<div class="pv-term" id="{esc(did)}"><dt>{esc(pageview._s(d.get("term")))}{symbol}</dt>'
                 f'<dd>{self.text(d.get("definition", ""))}</dd></div>')
 
+    def terms_block(self, c):
+        new = self.new_terms(c)
+        if not new:
+            return ""
+        return (f'<div class="pv-defs"><p class="pv-label">Term{"s" if len(new) != 1 else ""} this claim uses</p>'
+                f'<dl class="pv-terms">{"".join(self.term(d) for d in new)}</dl></div>')
+
 
 def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, claim_url=None):
-    """The sections of the paper view that are its own, [(id, title, count, html)]: *Terms*, the definitions the
-    claims name, and *Claims*, in reading order; and `extra`, what the page holds besides (the sets of figures the
+    """The section of the paper view that is its own, [(id, title, count, html)]: *Claims*, in reading order, each
+    with the terms it is the first to use before it; and `extra`, what the page holds besides (the sets of figures the
     viewer steps through, the rows a pop-up shows). `record`: the address of the record page of the same version;
     `number`: how numbers are written, as the record page writes them (`render_parts`); `claim_url(id)`: the address
     of a claim's own page, or None."""
@@ -508,23 +535,17 @@ def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, 
         P = pageview._Paper(doc, file_url=file_url, ref_text=ref_text)
         V = _View(doc, record, P, scores, claim_url)
         claims = "".join(V.claim(V.claims[cid]) for cid in V.shown)
-        terms = V.terms()
-        rest = len(P.defs) - len(terms)
-        other = (f'<p class="pv-more">{rest} more definition{"s" if rest != 1 else ""} (designs, data, cases) '
-                 f'{"are" if rest != 1 else "is"} on <a href="{esc(record)}#definitions">the record page</a>.</p>'
-                 if rest > 0 else "")
-        sections = []
-        if terms:
-            sections.append(("terms", "Terms", len(terms),
-                             '<section class="cs-section pv-section" id="terms"><h2>Terms</h2>'
-                             '<p class="pv-lead">What the claims below name. A term in the text links back here.</p>'
-                             f'<dl class="pv-terms">{"".join(V.term(d) for d in terms)}</dl>{other}</section>'))
-        sections.append(("claims", "Claims", len(V.shown),
-                         '<section class="cs-section pv-section" id="claims"><h2>Claims</h2>'
-                         '<p class="pv-lead">In the order the argument needs them. What supports a claim stands '
-                         'under its statement.<button type="button" class="button-quiet pv-open-all" hidden '
-                         'data-open="Open all proofs" data-close="Close all proofs">Open all proofs</button></p>'
-                         f'{claims}</section>'))
+        rest = len(P.defs) - len(V.introduced)
+        other = (f'<p class="pv-more">{rest} more definition{"s" if rest != 1 else ""} that no claim names (designs, '
+                 f'data, cases) {"are" if rest != 1 else "is"} on <a href="{esc(record)}#definitions">the record '
+                 f'page</a>.</p>' if rest > 0 else "")
+        sections = [("claims", "Claims", len(V.shown),
+                     '<section class="cs-section pv-section" id="claims"><h2>Claims</h2>'
+                     '<p class="pv-lead">In the paper\'s order; a proved claim comes after the claims its proof uses. '
+                     'A term is defined before the claim that first uses it, and what supports a claim stands under '
+                     'its statement.<button type="button" class="button-quiet pv-open-all" hidden '
+                     'data-open="Open all proofs" data-close="Close all proofs">Open all proofs</button></p>'
+                     f'{claims}{other}</section>')]
         return {"sections": sections, "extra": "".join(V.galleries.values()) + "".join(V.panels)}
     finally:
         DIGITS.reset(token)
