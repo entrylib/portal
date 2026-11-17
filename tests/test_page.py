@@ -215,6 +215,23 @@ class TestImages(unittest.TestCase):
             doc["artefacts"].append(dict(doc["artefacts"][-1], id=f"A{i}"))
         self.assertIn('<div class="cs-figures cs-figures-many">', H.render_parts(doc)["body"])
 
+    def test_a_long_table_folds_all_but_its_first_rows_and_the_cited_ones(self):
+        """Design §7.1: past 12 rows, rows after the 8th are marked to fold, except those a claim cites."""
+        doc = example()
+        e, c = doc["evidence"][0], doc["claims"][0]
+        e["tables"] = [{"id": "T1", "description": "Errors", "row_labels": ["case"], "columns": ["MAE"],
+                        "rows": [{"id": f"r{i}", "label": [f"case {i}"], "values": [i]} for i in range(1, 21)]}]
+        c["support"] = [{"kind": "empirical_quant", "evidence": e["id"], "results": [f'{e["id"]}.T1.r15']}]
+        body = H.render_parts(doc)["body"]
+        eid = e["id"]
+        self.assertIn(f'<div class="cs-table cs-table-long" id="{eid}.T1">', body)
+        self.assertIn(f'<tr id="{eid}.T1.r8">', body)
+        self.assertIn(f'<tr id="{eid}.T1.r9" class="cs-more">', body)
+        self.assertIn(f'<tr id="{eid}.T1.r15">', body)                       # cited: stays in view
+        self.assertIn('data-all="Show all 20 rows"', body)
+        e["tables"][0]["rows"] = e["tables"][0]["rows"][:12]
+        self.assertNotIn("cs-more", H.render_parts(doc)["body"])
+
     def test_the_site_gives_the_address(self):
         body = H.render_parts(self.doc("figures/errors.png"), file_url=lambda a: f"/files/{a['id']}.png")["body"]
         self.assertIn('<img src="/files/A9.png"', body)

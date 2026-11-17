@@ -133,9 +133,27 @@ window.entrylibOpen = (function () {
     b.setAttribute("aria-expanded", open ? "true" : "false");
     b.querySelector(".fold-state").textContent = open ? "Hide" : "Show";
   }
-  function reveal(el) {                       // opens the section that holds `el`
-    if (el) setOpen(el.closest("section.cs-section.fold"), true);
+  function reveal(el) {                       // opens the section that holds `el`, and its folded table
+    if (!el) return;
+    setOpen(el.closest("section.cs-section.fold"), true);
+    var t = el.closest(".cs-table-long");
+    if (t && el.classList.contains("cs-more")) foldRows(t, false);
   }
+  // Long tables show their first rows and the rows a claim cites; a button shows the rest (design §7.1).
+  function foldRows(t, folded) {
+    t.classList.toggle("cs-folded", folded);
+    var b = t.querySelector(".cs-rows-toggle");
+    if (b) {
+      b.hidden = false;
+      b.textContent = folded ? b.dataset.all : b.dataset.fewer;
+      b.setAttribute("aria-expanded", folded ? "false" : "true");
+    }
+  }
+  document.querySelectorAll(".cs-table-long").forEach(function (t) { foldRows(t, true); });
+  document.addEventListener("click", function (ev) {        // also in pop-ups, which copy the table
+    var b = ev.target.closest && ev.target.closest(".cs-rows-toggle");
+    if (b) foldRows(b.closest(".cs-table-long"), !b.closest(".cs-table-long").classList.contains("cs-folded"));
+  });
   if (body) {
     body.querySelectorAll(":scope > section.cs-section").forEach(function (s) {
       var h = s.querySelector(":scope > h2");
