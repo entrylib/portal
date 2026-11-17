@@ -586,9 +586,9 @@ def _interests_row(doc):
         if len(interests) > INTERESTS_SHOWN:
             cut = interests[:INTERESTS_SHOWN].rsplit(" ", 1)[0].rstrip(",;:")
             rows.append(f'<details class="small interests"><summary>{esc(cut)}… <span class="more">more</span>'
-                        f'</summary><p>{esc(interests)}</p></details>')
+                        f'</summary><p>{pageview.linked(interests)}</p></details>')
         else:
-            rows.append(f'<p class="small">{esc(interests)}</p>')
+            rows.append(f'<p class="small">{pageview.linked(interests)}</p>')
     if funders:
         rows.append(f'<p class="small">Funding: {esc("; ".join(funders))}</p>')
     return (f'<div class="panel-row interests-row"><h2 title="{INTERESTS_NOTE}">Conflicts of interest</h2>'

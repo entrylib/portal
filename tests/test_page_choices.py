@@ -126,3 +126,27 @@ class TestSmallFixes(unittest.TestCase):
         self.assertIn('The code that runs every forecast <a class="cs-open" '
                       'href="https://github.com/x/y/blob/main/model.R">model.R</a>', body)
         self.assertEqual(html._link_name("https://zenodo.org/"), "zenodo.org")
+
+
+class TestEntryLibIdentifiers(unittest.TestCase):
+    """An EntryLib identifier written in a paper is a link to its page (design §7.4). From entrylib:2026.000009,
+    whose summary, relations and declarations named entrylib:2026.000008 as text."""
+
+    def test_in_text_and_relations(self):
+        d = copy.deepcopy(NATIVE)
+        d["paper"]["summary"] = "The results test the recommendations of entrylib:2026.000008."
+        c2 = next(c for c in d["claims"] if c["id"] == "C2")
+        c2["relations"] = [{"type": "supports", "target": "entrylib:2026.000008@v2#C29", "id_type": "claimset",
+                            "note": "C29 states that squared error is consistent for the mean."}]
+        parts = html.render_parts(d)
+        page = "".join(v for v in parts["blocks"].values() if isinstance(v, str))
+        self.assertIn('<a class="global-id" href="/p/2026.000008">entrylib:2026.000008</a>.', page)  # the full stop stays
+        self.assertIn('<a class="global-id" href="/p/2026.000008@v2#C29">entrylib:2026.000008@v2#C29</a>', page)
+        self.assertNotIn("entrylib:2026.000008@v2#C29</dt>", page)
+
+    def test_other_text_is_escaped(self):
+        self.assertEqual(html.linked("a <b> entrylib:2026.000008@v3#E6.2, then"),
+                         'a &lt;b&gt; <a class="global-id" href="/p/2026.000008@v3#E6.2">entrylib:2026.000008@v3#E6.2'
+                         '</a>, then')
+        self.assertEqual(html.linked("entrylib:26.1"), "entrylib:26.1")            # not an identifier
+
