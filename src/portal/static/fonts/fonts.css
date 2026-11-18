@@ -47,11 +47,13 @@
   src: url(/fonts/source-serif-4-latin-wght-italic.woff2) format('woff2');
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
-/* STIX Two Math (SIL Open Font License 1.1, STIX-OFL.txt), for formulae (MathML), from @fontsource/stix-two-math 5.3.0 */
+/* STIX Two Math (SIL Open Font License 1.1, STIX-OFL.txt), for formulae (MathML), from @fontsource/stix-two-math 5.3.0,
+   with its TrueType hinting removed (18 November 2026): a reader's browser painted formulae without their brackets,
+   bars and slashes at some text sizes, glyphs of thin strokes that grid-fitting can lose. The outlines are unchanged. */
 @font-face {
   font-family: 'STIX Two Math';
   font-style: normal;
   font-display: swap;
   font-weight: 400;
-  src: url(/fonts/stix-two-math.woff2) format('woff2');
+  src: url(/fonts/stix-two-math-unhinted.woff2) format('woff2');
 }
