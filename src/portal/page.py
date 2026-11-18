@@ -271,6 +271,7 @@ class _Paper:
                 labels[rid] = f"{lab[:-1]}{chr(97 + works.index(work.get(rid, rid)))})"
             if rid in claim_of:
                 labels[rid] += f", {claim_of[rid]}"
+        self.work, self.claim_of = work, claim_of
         return labels
 
     def refs_in_order(self):
@@ -1134,6 +1135,43 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         return (f'<li id="{esc(b["id"])}">{shown}'
                 + (f' <span class="cs-tail">Used by: {used}</span>' if used else "") + "</li>")
 
+    def work_entry(group):
+        """One entry for a claimset published here of which the paper cites several claims (or one): the work is
+        written once, as a list of references has a work once, then its identifier, then the claims cited, each a
+        link to that claim. The entry answers to every reference's ID, so a citation in the text still lands here."""
+        first = group[0]
+        m = GLOBAL_ID.fullmatch(first["target"])
+        text = P.written[first["id"]]
+        lettered = re.search(r"\((\d{4})([a-z])\)", P.labels.get(first["id"], ""))
+        if lettered:
+            text = re.sub(rf"(?<=, ){lettered.group(1)}(?=\.)", lettered.group(1) + lettered.group(2), text, count=1)
+        key, version = m.group(1), m.group(2) or ""
+        whole = f'<a class="global-id" href="/p/{key}{version}">entrylib:{esc(key + version)}</a>'
+        cited = sorted({P.claim_of[b["id"]] for b in group if b["id"] in P.claim_of},
+                       key=lambda c: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", c)])
+        claims = ", ".join(f'<a href="/p/{key}{version}#{esc(c)}">{esc(c)}</a>' for c in cited)
+        users = list(dict.fromkeys(u for b in group for u in P.used_by.get(b["id"], [])))
+        used = ", ".join('<a href="#context">Context</a>' if u == "context" else f'<a href="#{esc(u)}">{esc(u)}</a>'
+                         for u in users)
+        anchors = "".join(f'<span id="{esc(b["id"])}"></span>' for b in group[1:])
+        return (f'<li id="{esc(first["id"])}">{anchors}{esc(text)} {whole}'
+                + (f' <span class="cs-cited">Claim{"s" if len(cited) > 1 else ""} cited: {claims}.</span>' if cited else "")
+                + (f' <span class="cs-tail">Used by: {used}</span>' if used else "") + "</li>")
+
+    def reference_list():
+        """The entries in the list's order; the claims cited from one claimset published here share one entry."""
+        ordered, out, done = P.refs_in_order(), [], set()
+        for b in ordered:
+            if b["id"] in done:
+                continue
+            if b["id"] in P.work:
+                group = [x for x in ordered if P.work.get(x["id"]) == P.work[b["id"]]]
+                done.update(x["id"] for x in group)
+                out.append(work_entry(group))
+            else:
+                out.append(reference(b))
+        return "".join(out)
+
     def artefact(a):
         desc = a.get("description") or a.get("uri") or ""
         src = P.image_src(a)
@@ -1161,15 +1199,15 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         ("questions", "Open questions", question_items),
         ("corrections", "Corrections to " + P.against.removeprefix("the "),
          [_correction_item(P, corr) for corr in P.corrections]),
-        ("references", "References", [f'<ol class="cs-refs">{"".join(reference(b) for b in P.refs_in_order())}</ol>']
+        ("references", "References", [f'<ol class="cs-refs">{reference_list()}</ol>']
          if P.refs else []),
         ("artefacts", "Artefacts", [f'<ul class="cs-artefacts">{"".join(artefact(a) for a in P.artefacts)}</ul>']
          if P.artefacts else []),
     ]
     counts = {"definitions": len(P.defs), "assumptions": len(assumptions), "principal": len(principal),
               "supporting": len(supporting), "evidence": len(P.evidence) + len(P.warrants),
-              "limitations": len(P.limitations), "questions": len(P.questions), "references": len(P.refs),
-              "corrections": len(P.corrections),
+              "limitations": len(P.limitations), "questions": len(P.questions), "corrections": len(P.corrections),
+              "references": len({P.work.get(b["id"], b["id"]) for b in P.refs}),      # entries: a cited claimset once
               "artefacts": len(P.artefacts)}
     body, nav, shown, blocks = [], [], [], {}
     for sid, title, items in sections:
