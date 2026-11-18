@@ -133,6 +133,24 @@ def test_the_other_claims_that_bear_on_a_claim_with_their_rows_and_figures():
     del doc["claims"][3]["relations"][0]["results"]                     # without results: a line, no box
     plain = view(doc)[0]["claims"]
     assert "pv-beside" not in plain and "Supported by" in plain and "Elsewhere in this paper" in plain
+    doc = proofs()                                  # results recorded one by one, not in a table: a box too
+    e4 = next(e for e in doc["evidence"] if e["id"] == doc["claims"][3]["support"][0]["evidence"])
+    e4["results"] = [{"id": "R1", "variable": "the count", "value": 7}, {"id": "R2", "variable": "other", "value": 9}]
+    doc["claims"][3]["relations"][0]["results"] = [f"{e4['id']}.R1"]
+    alone, out = view(doc)
+    c3 = alone["claims"][alone["claims"].index('id="C3"'):alone["claims"].index('id="C4"')]
+    assert 'data-rows="rows-C3-C4">1 result</a>' in c3 and "table row" not in c3
+    held = re.search(r'<template id="rows-C3-C4">(.*?)</template>', out["extra"], re.S).group(1)
+    assert "the count" in held and "7" in held and "other" not in held
+    assert "The results in full, under claim C4" in held
+
+
+def test_a_scope_is_written_with_its_formulae():
+    doc = proofs()
+    doc["claims"][3]["scope"] = {"population": "two cases", "conditions": "errors with $s=0.32$"}
+    c4 = article(site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-17"}]), "C4")
+    scope = c4.split("<dt>Scope</dt><dd>")[1].split("</dd>")[0]
+    assert "<math>" in scope and "$s=0.32$" not in scope
 
 
 def test_evidence_under_a_computed_claim():

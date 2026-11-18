@@ -95,13 +95,20 @@ def main(argv=None):
             print(f"published {concept}@v{version}")
             return 0
 
-    _refresh(settings, claimset.__version__)
+    # The app answers first, and rebuilds the pages behind its back when the code or claimset changed: a rebuild
+    # takes minutes, during which nothing could be submitted or confirmed (design §10).
+    after_start = None
+    if _prepare(settings, claimset.__version__):
+        print("portal: the pages are rebuilt in the background; the app answers meanwhile", flush=True)
+
+        def after_start():
+            _refresh(settings, claimset.__version__, locked=True)
 
     import uvicorn
 
     from .app import create_app
     # No access log: it would keep every reader's IP address (the privacy page says addresses are used in memory only).
-    uvicorn.run(create_app(settings), host=args.host, port=args.port, proxy_headers=True,
+    uvicorn.run(create_app(settings, after_start=after_start), host=args.host, port=args.port, proxy_headers=True,
                 forwarded_allow_ips="*", access_log=False)
     return 0
 
@@ -148,17 +155,49 @@ def _rebuild_registry(settings):
     return None
 
 
-def _refresh(settings, version):
-    """At start: rebuild the reading views if claimset changed since they were written. A failure is reported and
-    the app starts anyway; the next start tries again."""
+def _prepare(settings, version):
+    """At start, before the app answers: the files that do not wait (indexer.write_site). Returns whether the index
+    and the pages are to be rebuilt, which `_refresh` then does behind the app's back."""
     import psycopg
 
-    from .indexer import refresh_if_claimset_changed
+    from . import indexer
     try:
-        registry = _rebuild_registry(settings)
         with psycopg.connect(settings.database_url, autocommit=True) as conn:
-            if refresh_if_claimset_changed(conn, registry, settings.published_dir, settings.base_url, version):
-                print(f"reading views rebuilt with claimset {version}")
+            indexer.write_site(conn, settings.published_dir, settings.base_url)
+        due = indexer.rebuild_due(settings.published_dir, version)
+    except Exception as exc:  # noqa: BLE001 - serving matters more; the rebuild tries again and reports
+        print(f"portal: could not write the fixed pages: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return True
+    if not due:
+        print("portal: pages up to date", flush=True)
+    return due
+
+
+def _refresh(settings, version, locked=False):
+    """Rebuild the reading views and the pages if claimset or the site's code changed since they were written. A
+    failure is reported and the app goes on; the next start tries again. `locked`: under the publisher's lock
+    (indexer.publishing), as the app does when it rebuilds while it answers, so that no round of the publisher uses
+    the registry meanwhile."""
+    import contextlib
+    import time
+
+    import psycopg
+
+    from . import indexer
+    try:
+        with psycopg.connect(settings.database_url, autocommit=True) as conn, (
+                indexer.publishing(conn) if locked else contextlib.nullcontext()):
+            started = time.monotonic()
+            registry = _rebuild_registry(settings)
+            fetched = time.monotonic()
+            # what each step took, so that a slow start says where the time went
+            print(f"portal: registry ready in {fetched - started:.0f} s", flush=True)
+            if indexer.refresh_if_claimset_changed(conn, registry, settings.published_dir, settings.base_url,
+                                                   version):
+                print(f"reading views rebuilt with claimset {version} in {time.monotonic() - fetched:.0f} s",
+                      flush=True)
+            else:
+                print(f"portal: pages up to date ({time.monotonic() - fetched:.0f} s)", flush=True)
     except Exception as exc:  # noqa: BLE001 - serving matters more; the next start retries
         print(f"portal: could not rebuild the reading views: {type(exc).__name__}: {exc}", file=sys.stderr)
 

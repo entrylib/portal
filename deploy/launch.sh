@@ -49,6 +49,7 @@ echo "waiting for the app..."
 for _ in $(seq 60); do
   if docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')" 2>/dev/null; then
     echo "the portal is running: https://$domain (check https://$domain/healthz and https://$domain/llms.txt)"
+    echo "after an update the pages are rebuilt in the background: docker compose logs --tail 20 app"
     exit 0
   fi
   sleep 5

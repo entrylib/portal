@@ -160,6 +160,10 @@ again: a version can be published once. `tests/test_mcp.py` keeps the address an
 - **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
   and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
   restart app`.
+  The app answers while it rebuilds: it starts, and rebuilds the pages behind its back (the log says `portal: the
+  pages are rebuilt in the background`, then `portal: registry ready in … s` and `reading views rebuilt with claimset
+  … in … s`; `/healthz` shows `"rebuilding": true` meanwhile). A paper confirmed during the rebuild is published when
+  it ends. When nothing changed the log says `portal: pages up to date`.
 - **Retraction and removal requests** from anyone but the guarantor wait for review: `cd /opt/entrylib/portal && sudo
   docker compose exec app portal requests` lists them; `... portal decide rq_... apply` (or `decline --note "why"`)
   decides. An applied request is written to the registry and the site within ten minutes. Answer the requester by

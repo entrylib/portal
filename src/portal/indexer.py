@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shutil
+import threading
 import unicodedata
 from pathlib import Path
 
@@ -112,8 +113,10 @@ def _validation(registry, folder, n):
         return {}
 
 
-def index_version(conn, registry, folder, n, published_dir, base_url):
-    """Index version n of the claimset in `folder`: database rows and static files. Idempotent."""
+def index_version(conn, registry, folder, n, published_dir, base_url, static=True):
+    """Index version n of the claimset in `folder`: database rows and static files. Idempotent. `static=False` leaves
+    the files to the caller, which writes them once for the folder (`write_static`) after its last version: the
+    files of a claimset are those of all its versions, so writing them at each version repeats the work."""
     raw = registry.read(folder, n)
     doc = notices.overlay(raw, registry.notices(folder))   # retracted: as readers see it (notices.py)
     paper = doc["paper"]
@@ -162,11 +165,13 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
                      " WHERE concept_id = %s AND current_version = %s",
                      (paper.get("licence"), guarantor_ids(doc), title_key(title), title, keyword_text, rest_text,
                       concept, n))
-    write_static(conn, registry, folder, published_dir, base_url)
+    if static:
+        write_static(conn, registry, folder, published_dir, base_url)
 
 
-def write_static(conn, registry, folder, published_dir, base_url):
-    """The static files of one claimset, from its registry folder, and the index."""
+def write_static(conn, registry, folder, published_dir, base_url, index=True):
+    """The static files of one claimset, from its registry folder, and the index (`index=False`: the caller writes
+    the index once, after the last claimset)."""
     published_dir = Path(published_dir)
     scores.use_published(published_dir)                  # cited claims, by their scores here (rubric 0.5)
     versions = registry.versions(folder)
@@ -243,7 +248,8 @@ def write_static(conn, registry, folder, published_dir, base_url):
                         ref_text=lambda b: (cited.get(b.get("target")) if b.get("id_type") == "claimset"
                                             else written.get(crossref.normalise(b.get("target")))), legacy=legacy,
                         scores=scored)
-    write_index(conn, published_dir, base_url)
+    if index:
+        write_index(conn, published_dir, base_url)
 
 
 def claimset_texts(conn, targets):
@@ -286,7 +292,8 @@ def apply_notices(conn, registry, folder, published_dir, base_url):
     removed one is taken out of the index and the site, its addresses answering with the notice."""
     if registry.versions(folder):
         for n in registry.versions(folder):
-            index_version(conn, registry, folder, n, published_dir, base_url)
+            index_version(conn, registry, folder, n, published_dir, base_url, static=False)
+        write_static(conn, registry, folder, published_dir, base_url)
         return
     write_removed(conn, registry.notices(folder), published_dir, base_url)
 
@@ -457,10 +464,14 @@ def reindex(conn, registry, published_dir, base_url):
         for year, last in counters.items():
             conn.execute("INSERT INTO id_counters (year, last) VALUES (%s, %s) ON CONFLICT (year)"
                          " DO UPDATE SET last = GREATEST(id_counters.last, EXCLUDED.last)", (year, last))
+        # A claimset's rows version by version, then its files once, and the index once at the end: the files
+        # were written at every version (for all of its versions) and the index with them, which made a rebuild
+        # take minutes, during which the app was not yet answering.
         folders = registry.folders()
         for folder in folders:
             for n in registry.versions(folder):
-                index_version(conn, registry, folder, n, published_dir, base_url)
+                index_version(conn, registry, folder, n, published_dir, base_url, static=False)
+            write_static(conn, registry, folder, published_dir, base_url, index=False)
         for folder in registry.removed_folders():
             write_removed(conn, registry.notices(folder), published_dir, base_url)
         write_index(conn, published_dir, base_url)
@@ -471,22 +482,54 @@ def reindex(conn, registry, published_dir, base_url):
 #: In the published directory: which claimset rendered the static files.
 RENDERED_BY = ".rendered-by"
 
+#: One publisher at a time across the app's threads and processes (a PostgreSQL advisory lock): a round of the
+#: publisher (worker.py), and a rebuild of the index, which reads the registry the publisher writes.
+PUBLISH_LOCK = 4_242_001
+
+#: Set while the app rebuilds the index and the pages behind its back (design §10); /healthz says so.
+REBUILDING = threading.Event()
+
+
+@contextlib.contextmanager
+def publishing(conn):
+    """Hold the publisher's lock on `conn`, waiting for a round of the publisher that is running to end. A round
+    that starts meanwhile publishes nothing and leaves it to the next one (worker.publish_confirmed)."""
+    conn.execute("SELECT pg_advisory_lock(%s)", (PUBLISH_LOCK,))
+    try:
+        yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (PUBLISH_LOCK,))
+
+
+def _rendered_by(version):
+    return f"{version} site {site.fingerprint()}"
+
+
+def rebuild_due(published_dir, version):
+    """Whether the static files were written by another claimset `version` or another state of the site's code than
+    the ones running (design §7.1), or by none."""
+    try:
+        return (Path(published_dir) / RENDERED_BY).read_text(encoding="utf-8").strip() != _rendered_by(version)
+    except FileNotFoundError:
+        return True
+
+
+def write_site(conn, published_dir, base_url):
+    """The files that do not wait for a rebuild: the fixed pages (with the stylesheets and the script of the code
+    that runs), /llms.txt and /index.jsonl, which exist before anything is published."""
+    site.write_fixed(published_dir, base_url)
+    write_index(conn, published_dir, base_url)
+
 
 def refresh_if_claimset_changed(conn, registry, published_dir, base_url, version):
-    """At the app's start, after it installed the newest claimset: write /llms.txt and /index.jsonl, and rebuild the
-    index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views are
-    regenerated when the renderer changes, and the pages when the site's look changes). Returns True if it
+    """After the app installed the newest claimset: write the fixed pages, /llms.txt and /index.jsonl, and rebuild
+    the index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views
+    are regenerated when the renderer changes, and the pages when the site's look changes). Returns True if it
     rebuilt."""
-    site.write_fixed(published_dir, base_url)
-    write_index(conn, published_dir, base_url)          # /llms.txt and /index.jsonl exist before anything is published
-    marker = Path(published_dir) / RENDERED_BY
-    version = f"{version} site {site.fingerprint()}"
-    try:
-        if marker.read_text(encoding="utf-8").strip() == version:
-            return False
-    except FileNotFoundError:
-        pass
+    write_site(conn, published_dir, base_url)
+    if not rebuild_due(published_dir, version):
+        return False
     if registry is not None:
         reindex(conn, registry, published_dir, base_url)
-    _write(marker, version + "\n")
+    _write(Path(published_dir) / RENDERED_BY, _rendered_by(version) + "\n")
     return True

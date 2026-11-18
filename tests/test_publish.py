@@ -162,6 +162,43 @@ def test_reindex_rebuilds_everything_from_the_registry(env):
     assert concept == "entrylib:2026.000003"                             # counters restored from the registry
 
 
+def test_reindex_writes_each_claimset_once(env, monkeypatch):
+    """A rebuild writes the files of a claimset once, not once for each of its versions, and the index once: the
+    app is not answering while it runs (design §10), and the result is the same."""
+    from portal import indexer, site
+    ctx, tmp = env
+    concept, _ = publish(write(tmp, example()), **ctx)
+    doc = example()
+    doc["paper"]["id"] = concept
+    doc["paper"]["correction_reason"] = "The statement of the first claim omitted that it held in every run."
+    doc["claims"][0]["statement"] += " This held in every run."
+    publish(write(tmp, doc, "v2.claimset.json"), **ctx)
+    publish(write(tmp, example(), "b.claimset.json"), **ctx)
+    out = ctx["published_dir"]
+
+    def files():
+        return {str(f.relative_to(out)): f.read_bytes() for f in sorted(out.rglob("*")) if f.is_file()}
+    before, rows = files(), ctx["conn"].execute("SELECT concept_id, version FROM versions ORDER BY 1, 2").fetchall()
+    calls = {"claimsets": 0, "index": 0}
+    write_claimset, write_index = site.write_claimset, indexer.write_index
+
+    def count_claimset(*a, **k):
+        calls["claimsets"] += 1
+        return write_claimset(*a, **k)
+
+    def count_index(*a, **k):
+        calls["index"] += 1
+        return write_index(*a, **k)
+    monkeypatch.setattr(site, "write_claimset", count_claimset)
+    monkeypatch.setattr(indexer, "write_index", count_index)
+    reindex(ctx["conn"], ctx["registry"], out, BASE)
+    assert calls == {"claimsets": 2, "index": 1}                         # two claimsets, three versions
+    assert ctx["conn"].execute("SELECT concept_id, version FROM versions ORDER BY 1, 2").fetchall() == rows
+    after = files()
+    assert sorted(after) == sorted(before)
+    assert [name for name in before if before[name] != after[name]] == []
+
+
 def test_classifier_input_uses_title_and_principal_claims():
     doc = example()
     inp = classifier_input(doc)
@@ -215,10 +252,10 @@ def test_a_failed_reindex_leaves_the_index_as_it_was(env, monkeypatch):
     from portal import indexer
     index_version = indexer.index_version
 
-    def failing(conn, registry, folder, n, *args):
+    def failing(conn, registry, folder, n, *args, **kwargs):
         if folder.endswith("000002"):
             raise RuntimeError("indexing failed")
-        return index_version(conn, registry, folder, n, *args)
+        return index_version(conn, registry, folder, n, *args, **kwargs)
 
     monkeypatch.setattr(indexer, "index_version", failing)
     with pytest.raises(RuntimeError):
