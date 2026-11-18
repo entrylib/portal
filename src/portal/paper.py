@@ -600,7 +600,7 @@ def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, 
         P = pageview._Paper(doc, file_url=file_url, ref_text=ref_text)
         V = _View(doc, record, P, scores, claim_url)
         if V.parts:                                     # under the paper's own headings
-            claims = "".join(f'<h3 class="pv-sec" id="sec-{i}">{esc(title)}</h3>'
+            claims = "".join(f'<h2 class="pv-sec" id="sec-{i}">{esc(title)}</h2>'
                              + "".join(V.claim(V.claims[cid]) for cid in cids)
                              for i, (title, cids) in enumerate(V.parts, 1))
         else:

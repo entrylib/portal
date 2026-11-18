@@ -580,10 +580,10 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-term:target { background: var(--cs-target, var(--panel)); }
 .pv-claim { display: flex; flex-direction: column; gap: 12px; padding: 24px 0 6px; border-top: 1px solid var(--rule-light); }
 .pv-section > .pv-claim:first-of-type { border-top: 0; padding-top: 6px; }
-/* A section of the paper (claimset §3.1): its title over its claims; in size between the h2 of *Claims* (26px) and a
-   claim's heading (20px). Named with its section, or claimset.css's `.cs-section h3` (19px) outranks it: until
-   18 November 2026 it did, and the heading was smaller than a claim's. */
-.pv-section > .pv-sec { margin: 34px 0 6px; padding-top: 20px; border-top: 2px solid var(--ink); font-size: 23px;
+/* A section of the paper (claimset §3.1): its title over its claims, an h2 of the page's size (26px), with the
+   claims' headings (h3, 20px) under it. Named with its section, so that claimset.css's rules for the headings of a
+   section do not outrank it: until 18 November 2026 one did, and the heading was smaller than a claim's. */
+.pv-section > .pv-sec { margin: 34px 0 6px; padding-top: 20px; border-top: 2px solid var(--ink); font-size: 26px;
   font-weight: 600; }
 .pv-section > .pv-lead + .pv-sec { margin-top: 8px; }
 .pv-sec + .pv-claim { border-top: 0; padding-top: 10px; }
@@ -718,7 +718,7 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .cs-section h2 { font-size: 15pt; }
   .pv-claim { padding: 12pt 0 4pt; }
   .pv-claim h3 { font-size: 12.5pt; break-after: avoid; }
-  .pv-section > .pv-sec { font-size: 14pt; margin: 16pt 0 0; padding-top: 8pt; border-top: 1px solid #000; break-after: avoid; }
+  .pv-section > .pv-sec { font-size: 15pt; margin: 16pt 0 0; padding-top: 8pt; border-top: 1px solid #000; break-after: avoid; }
   /* a section's heading is never alone at the foot of a page: its own break-after is not enough in Chromium, where
      the claim after it is a flex box whose first item then starts the next page */
   .pv-sec + .pv-claim, .pv-sec + .pv-claim > :first-child { break-before: avoid; }
