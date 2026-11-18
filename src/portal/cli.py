@@ -151,14 +151,23 @@ def _rebuild_registry(settings):
 def _refresh(settings, version):
     """At start: rebuild the reading views if claimset changed since they were written. A failure is reported and
     the app starts anyway; the next start tries again."""
+    import time
+
     import psycopg
 
     from .indexer import refresh_if_claimset_changed
     try:
+        started = time.monotonic()
         registry = _rebuild_registry(settings)
+        fetched = time.monotonic()
+        # what each step of the start took, so that a slow start says where the time went
+        print(f"portal: registry ready in {fetched - started:.0f} s", flush=True)
         with psycopg.connect(settings.database_url, autocommit=True) as conn:
             if refresh_if_claimset_changed(conn, registry, settings.published_dir, settings.base_url, version):
-                print(f"reading views rebuilt with claimset {version}")
+                print(f"reading views rebuilt with claimset {version} in {time.monotonic() - fetched:.0f} s",
+                      flush=True)
+            else:
+                print(f"portal: pages up to date ({time.monotonic() - fetched:.0f} s)", flush=True)
     except Exception as exc:  # noqa: BLE001 - serving matters more; the next start retries
         print(f"portal: could not rebuild the reading views: {type(exc).__name__}: {exc}", file=sys.stderr)
 

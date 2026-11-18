@@ -112,8 +112,10 @@ def _validation(registry, folder, n):
         return {}
 
 
-def index_version(conn, registry, folder, n, published_dir, base_url):
-    """Index version n of the claimset in `folder`: database rows and static files. Idempotent."""
+def index_version(conn, registry, folder, n, published_dir, base_url, static=True):
+    """Index version n of the claimset in `folder`: database rows and static files. Idempotent. `static=False` leaves
+    the files to the caller, which writes them once for the folder (`write_static`) after its last version: the
+    files of a claimset are those of all its versions, so writing them at each version repeats the work."""
     raw = registry.read(folder, n)
     doc = notices.overlay(raw, registry.notices(folder))   # retracted: as readers see it (notices.py)
     paper = doc["paper"]
@@ -162,11 +164,13 @@ def index_version(conn, registry, folder, n, published_dir, base_url):
                      " WHERE concept_id = %s AND current_version = %s",
                      (paper.get("licence"), guarantor_ids(doc), title_key(title), title, keyword_text, rest_text,
                       concept, n))
-    write_static(conn, registry, folder, published_dir, base_url)
+    if static:
+        write_static(conn, registry, folder, published_dir, base_url)
 
 
-def write_static(conn, registry, folder, published_dir, base_url):
-    """The static files of one claimset, from its registry folder, and the index."""
+def write_static(conn, registry, folder, published_dir, base_url, index=True):
+    """The static files of one claimset, from its registry folder, and the index (`index=False`: the caller writes
+    the index once, after the last claimset)."""
     published_dir = Path(published_dir)
     scores.use_published(published_dir)                  # cited claims, by their scores here (rubric 0.5)
     versions = registry.versions(folder)
@@ -243,7 +247,8 @@ def write_static(conn, registry, folder, published_dir, base_url):
                         ref_text=lambda b: (cited.get(b.get("target")) if b.get("id_type") == "claimset"
                                             else written.get(crossref.normalise(b.get("target")))), legacy=legacy,
                         scores=scored)
-    write_index(conn, published_dir, base_url)
+    if index:
+        write_index(conn, published_dir, base_url)
 
 
 def claimset_texts(conn, targets):
@@ -286,7 +291,8 @@ def apply_notices(conn, registry, folder, published_dir, base_url):
     removed one is taken out of the index and the site, its addresses answering with the notice."""
     if registry.versions(folder):
         for n in registry.versions(folder):
-            index_version(conn, registry, folder, n, published_dir, base_url)
+            index_version(conn, registry, folder, n, published_dir, base_url, static=False)
+        write_static(conn, registry, folder, published_dir, base_url)
         return
     write_removed(conn, registry.notices(folder), published_dir, base_url)
 
@@ -457,10 +463,14 @@ def reindex(conn, registry, published_dir, base_url):
         for year, last in counters.items():
             conn.execute("INSERT INTO id_counters (year, last) VALUES (%s, %s) ON CONFLICT (year)"
                          " DO UPDATE SET last = GREATEST(id_counters.last, EXCLUDED.last)", (year, last))
+        # A claimset's rows version by version, then its files once, and the index once at the end: the files
+        # were written at every version (for all of its versions) and the index with them, which made a rebuild
+        # take minutes, during which the app was not yet answering.
         folders = registry.folders()
         for folder in folders:
             for n in registry.versions(folder):
-                index_version(conn, registry, folder, n, published_dir, base_url)
+                index_version(conn, registry, folder, n, published_dir, base_url, static=False)
+            write_static(conn, registry, folder, published_dir, base_url, index=False)
         for folder in registry.removed_folders():
             write_removed(conn, registry.notices(folder), published_dir, base_url)
         write_index(conn, published_dir, base_url)
