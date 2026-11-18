@@ -270,7 +270,8 @@ def test_highlights_are_marked_where_they_stand_not_listed():
 def test_the_page_prints_whole_and_the_manuscript_is_linked():
     listing = [{"version": 1, "date": "2026-11-17"}]
     page = site.paper_page(proofs(), base_url=BASE, listing=listing)
-    assert '<button type="button" class="button-quiet pv-print" hidden>Print or save as PDF</button>' in page
+    assert ('<button type="button" class="button-quiet pv-print" aria-label="Print or save as PDF" '
+            'title="Print or save as PDF" hidden>PDF</button>') in page    # the button's name says what it does
     assert ('<p class="pv-print-id">entrylib:2026.000099@v1 · <a href="https://entrylib.test/p/2026.000099@v1">'
             'https://entrylib.test/p/2026.000099@v1</a></p>') in page          # on paper: the link to this version
     assert "pv-print-score" not in page                                    # no scores given: no line
@@ -298,8 +299,74 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
         assert site.own_document({"artefacts": [{"id": "A1", "kind": "manuscript", "uri": uri}]}) is None, uri
     css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
     js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
-    assert "@media print {" in css and ".entry > .panel, #score, #versions" in css
+    assert "@media print {" in css and ".entry > .panel, .entry-rail, #score, #versions" in css
+    assert ".toc-bar, .to-top, .intro-strip, .view-switch, .ask-ai," in css     # the row of buttons is not printed
     assert 'window.addEventListener("beforeprint", openAll)' in js and 'querySelectorAll("details.pv-proof")' in js
+
+
+def test_one_column_of_text_and_a_rail_with_the_panel_and_the_contents():
+    """Design §7.4, *One column of text*: the header with the Summary, then the rail (the panel and directly under
+    it the contents), then the claims; the record keeps its layout."""
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    page = site.paper_page(proofs(), base_url=BASE, listing=listing)
+    main = page.split('<div class="cs-page entry" data-view="paper">')[1]
+    order = [main.index(s) for s in ('<div class="cs-header entry-header">', '<div class="pv-opening">',
+                                     '<div class="entry-rail"><aside class="panel"', "</aside><nav class=\"cs-toc\"",
+                                     '</nav></div><article class="cs-body">')]
+    assert order == sorted(order)                         # header and Summary; panel, then contents; the text
+    rail = main.split('<div class="entry-rail">')[1].split('<article class="cs-body">')[0]
+    assert rail.count("<aside") == rail.count("<nav") == 1 and rail.endswith("</nav></div>")
+    assert '<a class="toc-top" href="#top">' in rail and '<a href="#summary">Summary</a>' in rail
+    assert '<a href="#claims">' in rail and 'id="summary"' in main and 'id="claims"' in main
+    record = site.claimset_page(proofs(), base_url=BASE, listing=listing)
+    assert "entry-rail" not in record and '</aside><nav class="cs-toc"' in record
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
+    wide = css.split(".entry-rail > .toc-bar { grid-area: bar; }")[1].split("@media (max-width: 1100px)")[0]
+    assert "@media (min-width: 861px) {" in wide and 'grid-template-areas: "head rail" "body rail"' in wide
+    assert "grid-template-columns: minmax(0, 50rem) 270px" in wide         # one width of text; the panel's width
+    assert ".entry-rail { display: block; grid-area: rail; align-self: stretch;" in wide   # as tall as the page
+    assert ".entry-rail { display: contents; }" in css                    # narrow: the one column's own items
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
+    assert 'document.querySelector(".cs-toc")' in js and "nav.parentNode.insertBefore(bar, nav)" in js
+
+
+def test_three_buttons_in_one_row_under_the_byline():
+    """Design §7.4, *Three buttons*: PDF, Ask your AI, and the reading view of this version as a file."""
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    page = site.paper_page(proofs(), base_url=BASE, listing=listing)
+    head = page.split('<div class="cs-header entry-header">')[1].split('<div class="pv-opening">')[0]
+    row = head.split('<div class="ask-row">')[1].split("</div>")[0]
+    assert re.findall(r"<(button|a) [^>]*>([^<]+)</", row) == [
+        ("button", "PDF"), ("button", "Ask your AI about this paper"), ("a", "Text file for AI")]
+    assert row.endswith('<a class="button-quiet" href="/p/2026.000099@v1.txt" '
+                        'download="entrylib-2026.000099-v1.txt">Text file for AI</a>')
+    assert 'class="button" data-copy="ask-message"' in row and row.count(" hidden>") == 2   # shown by the script
+    assert page.count("pv-print\"") == 1 and "pv-document" not in page    # one print button; no manuscript, no line
+    note = head.split('<p class="small ask-note">')[1].split("</p>")[0]
+    assert note == ('<span class="pv-print-note" hidden>PDF: the whole paper, every proof open. </span>'
+                    '<span class="ask-copy-note" hidden>Ask your AI: copies a message with this paper\'s address to '
+                    "paste into ChatGPT, Claude or Gemini. </span>Text file: the whole paper as plain text, to "
+                    "attach when your assistant cannot open the address.")
+    after = head.split('<p class="small ask-note">')[1]
+    assert after.index("<details><summary>The message</summary>") < after.index('<p class="pv-print-id">')
+    # the record: the same row without the PDF button, which is the paper view's
+    record = site.claimset_page(proofs(), base_url=BASE, listing=listing)
+    row = record.split('<div class="ask-row">')[1].split("</div>")[0]
+    assert re.findall(r"<(button|a) [^>]*>([^<]+)</", row) == [
+        ("button", "Ask your AI about this paper"), ("a", "Text file for AI")]
+    assert 'href="/p/2026.000099@v1.txt" download="entrylib-2026.000099-v1.txt"' in row
+    assert "pv-print" not in record
+    # a claim's page: the claim's own reading view
+    claim = site.claim_page(proofs(), "C3", base_url=BASE)
+    row = claim.split('<div class="ask-row">')[1].split("</div>")[0]
+    assert ">Ask your AI about this claim</button>" in row and "pv-print" not in claim
+    assert row.endswith('<a class="button-quiet" href="/p/2026.000099/C3.txt" '
+                        'download="entrylib-2026.000099-v1-C3.txt">Text file for AI</a>')
+    assert "Text file: the claim with what it rests on as plain text" in claim
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
+    assert 'querySelector(".pv-print-note")' in js and 'querySelector(".ask-copy-note")' in js
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
+    assert ".ask-row { display: flex; flex-wrap: wrap;" in css and ".ask-row [hidden] { display: none; }" in css
 
 
 def test_the_claims_stand_under_the_papers_sections():

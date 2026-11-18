@@ -219,13 +219,18 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertEqual([b["id"] for b in P.refs_in_order()], ["B6", "B4", "B2", "B3", "B1", "B5", "B7"])
         body = H.render_parts(doc, ref_text=ref_text)["body"]
         refs = body.split('<ol class="cs-refs">')[1].split("</ol>")[0]
-        self.assertEqual(re.findall(r'<li id="(B\d)"', refs), ["B6", "B4", "B2", "B3", "B1", "B5", "B7"])
-        self.assertIn('Svetunkov, I. (2026). Evaluating forecasts. EntryLib. <a class="global-id" '
-                      'href="/p/2026.000008@v2#C33">', refs)
+        # a claimset published here is one entry, whatever the number of its claims cited: the work once, then the
+        # claims, each a link; the entry answers to each reference's ID
+        self.assertEqual(re.findall(r'<li id="(B\d)"', refs), ["B6", "B4", "B3", "B1", "B5", "B7"])
+        self.assertEqual(refs.count("Evaluating forecasts"), 1)
+        self.assertIn('<li id="B4"><span id="B2"></span>Svetunkov, I. (2026). Evaluating forecasts. EntryLib. '
+                      '<a class="global-id" href="/p/2026.000008@v2">entrylib:2026.000008@v2</a> '
+                      '<span class="cs-cited">Claims cited: <a href="/p/2026.000008@v2#C6">C6</a>, '
+                      '<a href="/p/2026.000008@v2#C33">C33</a>.</span></li>', refs)
+        self.assertIn('<span class="cs-cited">Claim cited: <a href="/p/2026.000009@v1#C5">C5</a>.</span>', refs)
         self.assertEqual(P.ref("B2"), '<a class="ref" href="#B2">Svetunkov (2026a), C33</a>')   # where it is cited
         # an entry is written as a classical list has it: no label before it, the year with the label's letter,
         # a DOI by its address
-        self.assertIn('<li id="B4">Svetunkov, I. (2026). Evaluating forecasts.', refs)
         self.assertIn('<li id="B5"><a href="https://doi.org/10.1/unknown">https://doi.org/10.1/unknown</a>', refs)
         self.assertNotIn('<span class="cs-id">', refs)
         classical = {"B1": "Hyndman, R.J., Koehler, A.B., 2006. Another look. IJF 22, 679–688.",

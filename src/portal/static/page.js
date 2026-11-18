@@ -498,6 +498,8 @@ window.entrylibOpen = (function () {
     if (!from) return;
     var label = b.textContent;
     b.hidden = false;
+    var note = b.closest(".ask-ai") && b.closest(".ask-ai").querySelector(".ask-copy-note");
+    if (note) note.hidden = false;           // what the button does, in the line under the row of buttons
     b.addEventListener("click", function () {
       navigator.clipboard.writeText(from.textContent.trim()).then(function () {
         b.textContent = b.getAttribute("data-copied") || "Copied";

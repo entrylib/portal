@@ -538,24 +538,41 @@ def _cite_row(identifier, citation, extra=""):
             f'Copy the citation</button></details>{extra}</div>')
 
 
-def ask_ai(doc, base_url, cid=None):
-    """"Ask your AI" (design §7.4): a button that copies a message for an AI assistant, which reads the claimset's
-    reading view as a web page (or the claim's page), and the message itself, to read before copying or select by
-    hand."""
+#: The paper view's button that prints the page with everything open (design §7.4, *Printing*; page.js), the first
+#: of the row of buttons under the byline, and its part of the line under the row. Both hidden until the script
+#: runs: without it the browser's own print command prints the page as it stands.
+PRINT_BUTTON = ('<button type="button" class="button-quiet pv-print" aria-label="Print or save as PDF" '
+                'title="Print or save as PDF" hidden>PDF</button>')
+PRINT_NOTE = '<span class="pv-print-note" hidden>PDF: the whole paper, every proof open. </span>'
+
+
+def ask_ai(doc, base_url, cid=None, printed=False):
+    """The buttons under the byline (design §7.4, *Three buttons* and *Ask your AI*), in one row: with `printed`
+    (the paper view) "PDF", which prints the page; "Ask your AI", which copies a message for an AI assistant, which
+    reads the claimset's reading view as a web page (or the claim's page); and "Text file for AI", a link that
+    downloads the reading view of this version (or of the claim) as a file, for an assistant that cannot open the
+    address. Under the row a line saying what each does (of a button, once the script has shown the button), and
+    the message itself, to read before copying or select by hand."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     if cid:
         what, url = "claim", f"{base_url}/p/{key}/{cid}"
         message = (f"Read {url}, one claim of a research paper with the evidence it rests on. Tell me briefly what it "
                    "says and how well it is supported.")
+        text, name, whole = f"/p/{key}/{cid}.txt", f"entrylib-{key}-v{n}-{cid}.txt", "the claim with what it rests on"
     else:
         what, url = "paper", f"{base_url}/p/{key}@v{n}.read"
         message = (f"Read {url}, a research paper written as claims with their evidence. Give me a brief summary of "
                    "its main findings and how well each is supported.")
+        text, name, whole = f"/p/{key}@v{n}.txt", f"entrylib-{key}-v{n}.txt", "the whole paper"
     message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
-    return ('<div class="ask-ai"><button type="button" class="button" data-copy="ask-message" '
+    return ('<div class="ask-ai"><div class="ask-row">' + (PRINT_BUTTON if printed else "")
+            + '<button type="button" class="button" data-copy="ask-message" '
             f'data-copied="Copied: now paste it into your AI chat" hidden>Ask your AI about this {what}</button>'
-            '<p class="small">Copies a message for ChatGPT, Claude or Gemini: paste it there.</p>'
+            f'<a class="button-quiet" href="{esc(text)}" download="{esc(name)}">Text file for AI</a></div>'
+            f'<p class="small ask-note">{PRINT_NOTE if printed else ""}<span class="ask-copy-note" hidden>Ask your '
+            f"AI: copies a message with this {what}'s address to paste into ChatGPT, Claude or Gemini. </span>"
+            f"Text file: {whole} as plain text, to attach when your assistant cannot open the address.</p>"
             f'<details><summary>The message</summary><p class="cite-text" id="ask-message">{esc(message)}</p>'
             "</details></div>")
 
@@ -844,12 +861,6 @@ def view_switch(key, view):
 #: view calls each.
 DOCUMENT_KINDS = (("manuscript", "The paper as its authors wrote it"),)
 
-#: The paper view's button that prints the page with everything open (design §7.4, *Printing*; page.js). Hidden
-#: until the script runs: without it the browser's own print command prints the page as it stands.
-PRINT_BUTTON = ('<button type="button" class="button-quiet pv-print" hidden>Print or save as PDF</button> '
-                '<span class="small pv-print-note" hidden>the whole paper, every proof open</span>')
-
-
 def own_document(doc):
     """The authors' own document of the paper (design §7.4, *Paper view*): the first artefact of kind `manuscript`
     that is a PDF at an http(s) address (a file of the claimset's package is at one once published). (what it is
@@ -902,8 +913,8 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
             body.append(_retitle(blocks[sid], old, title))
             shown.append((sid, title, c, ""))
     # No Highlights: the paper view marks the highlighted claims where they stand ("key claim"), and nowhere else.
-    # The Summary stands with the header, above the contents and the claims: the panel is beside the two, at the
-    # top, and the claims below have the page's width (decided 18 November 2026).
+    # The Summary stands with the header and the claims follow directly below it, in one column of text; the panel
+    # and under it the contents are in a rail to its right (decided 18 November 2026).
     keep("summary")
     opening = "".join(body)
     body.clear()
@@ -941,17 +952,17 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
     own = own_document(doc)
-    document = ('<p class="pv-document">' + PRINT_BUTTON + (
-        f' <a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> <span class="small">PDF</span>'
-        if own else "") + "</p>"
+    document = ((f'<p class="pv-document"><a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> '
+                 '<span class="small">PDF</span></p>' if own else "") +
                 # on paper only: where this version is, and its score with the parts but not their explanations
                 f'<p class="pv-print-id">{esc(p["id"])}@v{esc(n)} · <a href="{esc(base_url)}/p/{esc(key)}@v{esc(n)}">'
                 f'{esc(base_url)}/p/{esc(key)}@v{esc(n)}</a></p>{score_html.print_line(scores)}')
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
-            f'{document}{ask_ai(doc, base_url)}<div class="pv-opening">{opening}</div></div>'
-            f'{_panel(doc, parts, base_url, key, scores)}{nav}'
+            f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
+            # the rail (site.css): the panel, and directly under it the contents, to the right of the text
+            f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores)}{nav}</div>'
             f'<article class="cs-body">{"".join(body)}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
             f'{unclaimed}{_versions(listing, key, n)}{view["extra"]}</article></div>')
