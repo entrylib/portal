@@ -215,8 +215,10 @@ def test_the_pages_and_the_switch_between_them():
     for sid in ('id="summary"', 'id="claims"', 'id="limitations"', 'id="versions"',
                 'class="cs-page entry" data-view="paper"', 'class="cs-claim-page" href="/p/2026.000099/C3"'):
         assert sid in page, sid
-    assert ('<ol class="pv-toc"><li><a href="#C1"><span class="pv-toc-id">C1</span> <span>The term depends on the '
-            'ratio' in page)
+    # the claims by name in the contents, folded until asked for: a paper may have dozens
+    assert ('<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc"><li><a href="#C1">'
+            '<span class="pv-toc-id">C1</span> <span>The term depends on the ratio' in page)
+    assert "<details class=\"pv-toc-fold\" open" not in page
     # what a program is given at the claimset's address does not depend on the view (design §7.1): the server's
     # rules look at the address, and the page still tells an assistant where the reading view is
     assert f"{BASE}/p/2026.000099@v1.read" in page and "/p/2026.000099@v1.txt" in page

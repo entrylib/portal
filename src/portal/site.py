@@ -905,12 +905,14 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
         inner = ""
         if sid == "claims" and names:                    # the claims by name, in the contents
             cids = re.findall(r'<article class="pv-claim" id="(C[0-9]+)"', block)
-            inner = ('<ol class="pv-toc">' + "".join(
+            # folded: a paper may have dozens of claims, and the contents would run off the screen
+            inner = ('<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc">'
+                     + "".join(
                 f'<li{" class=" + chr(34) + "pv-toc-key" + chr(34) if cid in keys else ""}><a href="#{cid}">'
                 f'<span class="pv-toc-id">{cid}</span> <span>{esc(names.get(cid, ""))}'
                 f'{said if cid in keys else ""}'
                 f'</span></a></li>'
-                for cid in cids) + "</ol>")
+                for cid in cids) + "</ol></details>")
         shown.append((sid, title, c, inner))
     for sid in PAPER_KEEPS:
         keep(sid)

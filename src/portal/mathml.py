@@ -353,6 +353,10 @@ class _Parser:
                 return mi(text, normal=True)
             if name == "mathit":
                 return mi(text)
+            # A browser drops the spaces at the ends of words in a formula: "$T \text{ is } U$" would read "TisU".
+            lead, trail = text[:len(text) - len(text.lstrip(" "))], text[len(text.rstrip(" ")):]
+            if text.strip(" "):
+                text = "\u00a0" * bool(lead) + text.strip(" ") + "\u00a0" * bool(trail)
             return f"<mtext>{esc(text)}</mtext>"
         if name == "left":
             return self.fenced()

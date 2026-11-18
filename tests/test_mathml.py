@@ -76,6 +76,9 @@ class TestMathML(unittest.TestCase):
                       body(r"\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}"))
         self.assertIn('<mtable columnalign="left">', body(r"\begin{cases} 0 & x < 0 \\ 1 & \text{otherwise} \end{cases}"))
         self.assertIn("<mtext>otherwise</mtext>", body(r"\text{otherwise}"))
+        # the spaces at the ends of words in a formula are kept: a browser drops plain ones ("TisU")
+        self.assertIn("<mtext>\u00a0is\u00a0</mtext>", body(r"T \text{ is } U"))
+        self.assertIn("<mtext>\u00a0with x</mtext>", body(r"y \text{ with x}"))
         out = body(r"\begin{aligned} y_t &= w v_{t-1} \\ v_t &= F v_{t-1} \end{aligned}")
         self.assertIn('<mtable columnalign="right left" columnspacing="0"><mtr><mtd><msub><mi>y</mi>', out)
 
