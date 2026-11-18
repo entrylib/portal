@@ -463,7 +463,7 @@ class _View:
                          + (f", {esc(ch['extent'])}" if isinstance(ch.get("extent"), str) else "")
                          + f". {esc(pageview._s(ch.get('notes') or ''))}{res}"))
         if isinstance(c.get("scope"), dict) and c["scope"]:
-            rows.append(("Scope", esc(pageview._scope(c["scope"]))))
+            rows.append(("Scope", self.text(pageview._scope(c["scope"]))))        # its formulae as formulae
         lims = [x for x in _strs(c.get("limitations")) if x in self.P.by_id]
         if lims:
             rows.append(("Limitations", ", ".join(f'<a href="#{esc(x)}">{esc(x)}</a>' for x in lims)))

@@ -145,6 +145,14 @@ def test_the_other_claims_that_bear_on_a_claim_with_their_rows_and_figures():
     assert "The results in full, under claim C4" in held
 
 
+def test_a_scope_is_written_with_its_formulae():
+    doc = proofs()
+    doc["claims"][3]["scope"] = {"population": "two cases", "conditions": "errors with $s=0.32$"}
+    c4 = article(site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-17"}]), "C4")
+    scope = c4.split("<dt>Scope</dt><dd>")[1].split("</dd>")[0]
+    assert "<math>" in scope and "$s=0.32$" not in scope
+
+
 def test_evidence_under_a_computed_claim():
     sections, out = view(proofs())
     c4 = sections["claims"][sections["claims"].index('id="C4"'):]
