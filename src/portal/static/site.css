@@ -659,6 +659,8 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .fold-toggle { font-size: 15pt; font-weight: 600; padding: 0; margin: 0 0 6pt; break-after: avoid; }
   .cs-refs li { border-top: 0; padding: 3pt 0 3pt 1.6em; text-indent: -1.6em; break-inside: avoid; }
   .pv-print-id, .pv-print-score { display: block; margin: 6px 0 0; font-size: 9.5pt; color: #333; }
+  .pv-print-score { margin-top: 8px; font-size: 10.5pt; color: #000; }
+  .pv-print-score strong { font-size: 13pt; font-weight: 700; }
   .pv-print-id a { text-decoration: underline !important; }
   .wrap { max-width: none; padding: 0; }
   .entry, .entry[data-view="paper"] { display: block; }

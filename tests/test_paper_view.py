@@ -279,9 +279,9 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     if scored:                                                             # with the rubric: the split, in one line
         line = site.paper_page(proofs(), base_url=BASE, listing=listing, scores=scored)
         line = line.split('<p class="pv-print-score">')[1].split("</p>")[0]
-        assert line.startswith(f"Support {scored['paper']['score']} of 100 (EntryLib rubric ")
+        assert line.startswith(f"<strong>Support: {scored['paper']['score']}/100</strong> (EntryLib rubric ")
         assert "points lost: Evidence " in line and "Open problems " in line and "Checks the record" in line
-        assert "To fix" not in line and "<" not in line                    # no explanations, no links
+        assert "To fix" not in line and "<a" not in line                   # no explanations, no links
     assert "as its authors wrote it" not in page                          # no manuscript: the button alone
     doc = proofs()
     files = "https://entrylib.test/p/2026.000099/v1/files/"
