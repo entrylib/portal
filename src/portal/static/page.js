@@ -215,6 +215,38 @@ window.entrylibPopup = function (className, label) {
       all.textContent = all.getAttribute(open ? "data-close" : "data-open");
     });
   }
+  // Printing (the button, or the browser's own command): the page prints whole, with every proof open, and is as
+  // it was afterwards. The Record folds and the notices stay shut: they are for checking, not for reading.
+  var paper = document.querySelector('.entry[data-view="paper"]');
+  if (!paper) return;
+  var opened = [];
+  function openAll() {
+    if (opened.length) return;
+    paper.querySelectorAll("details.pv-proof").forEach(function (d) {
+      if (!d.open) { d.open = true; opened.push(d); }
+    });
+    paper.querySelectorAll('img[loading="lazy"]').forEach(function (i) { i.loading = "eager"; });
+  }
+  window.addEventListener("beforeprint", openAll);
+  window.addEventListener("afterprint", function () {
+    opened.forEach(function (d) { d.open = false; });
+    opened = [];
+  });
+  var print = document.querySelector(".pv-print");
+  if (print && window.print) {
+    print.hidden = false;
+    var note = document.querySelector(".pv-print-note");
+    if (note) note.hidden = false;
+    print.addEventListener("click", function () {
+      openAll();
+      // the figures first: one that has not arrived would print as a gap
+      var waits = Array.prototype.map.call(paper.querySelectorAll("img"), function (i) {
+        return i.complete ? null : new Promise(function (done) { i.onload = i.onerror = done; });
+      });
+      var all = Promise.all(waits), late = new Promise(function (done) { setTimeout(done, 4000); });
+      Promise.race([all, late]).then(function () { window.print(); });
+    });
+  }
 })();
 
 // Claimset and claim pages: the long sections start folded (design §7.4). Summary, Highlights and the principal claims stay open;

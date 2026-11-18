@@ -842,13 +842,19 @@ def view_switch(key, view):
 
 #: The artefacts that are the authors' own document of the paper, in the order they are looked for, and what the paper
 #: view calls each.
-DOCUMENT_KINDS = (("manuscript", "The paper as its authors wrote it"), ("proof", "The proofs as one document"))
+DOCUMENT_KINDS = (("manuscript", "The paper as its authors wrote it"),)
+
+#: The paper view's button that prints the page with everything open (design §7.4, *Printing*; page.js). Hidden
+#: until the script runs: without it the browser's own print command prints the page as it stands.
+PRINT_BUTTON = ('<button type="button" class="button-quiet pv-print" hidden>Print or save as PDF</button> '
+                '<span class="small pv-print-note" hidden>the whole paper, every proof open</span>')
 
 
 def own_document(doc):
-    """The authors' own document of the paper, for a reader who wants it in one piece (design §7.4, *Paper view*):
-    the first artefact of kind `manuscript`, or else `proof`, that is a PDF at an http(s) address (a file of the
-    claimset's package is at one once published). (what it is called, its address), or None."""
+    """The authors' own document of the paper (design §7.4, *Paper view*): the first artefact of kind `manuscript`
+    that is a PDF at an http(s) address (a file of the claimset's package is at one once published). (what it is
+    called, its address), or None. A document of the proofs alone is not linked: the page itself prints whole, with
+    every proof open."""
     artefacts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
     for kind, label in DOCUMENT_KINDS:
         for a in artefacts:
@@ -932,8 +938,10 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
     own = own_document(doc)
-    document = (f'<p class="pv-document"><a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> '
-                f'<span class="small">PDF</span></p>') if own else ""
+    document = ('<p class="pv-document">' + PRINT_BUTTON + (
+        f' <a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> <span class="small">PDF</span>'
+        if own else "") + "</p>"
+                f'<p class="pv-print-id">{esc(p["id"])}@v{esc(n)} · {esc(base_url)}/p/{esc(key)}@v{esc(n)}</p>')
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'

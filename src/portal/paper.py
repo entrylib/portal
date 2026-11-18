@@ -34,6 +34,11 @@ SUPPORT_WORDS = (("formal_proof", "proved"), ("empirical_quant", "evidence"), ("
                  ("empirical_obs", "evidence"), ("simulation", "simulation"), ("demonstration", "demonstration"),
                  ("argument", "argued"), ("cited", "from earlier work"), ("consensus", "established knowledge"),
                  ("expert_judgement", "judgement"))
+#: What the paper view calls a claim that exists to check the paper's other claims by computation: one with
+#: computed support, not a principal claim, whose relations to claims of the paper are all `supports` (design §7.4).
+NUMERICAL_CHECK = "Numerical check"
+COMPUTED = {"simulation", "empirical_quant"}
+
 #: A relation to another claim of the paper, read from that claim's side.
 INCOMING = {"supports": "Supported by", "qualifies": "Qualified by", "explains": "Explained by",
             "contradicts": "Contradicted by", "refines": "Refined by",
@@ -380,7 +385,8 @@ class _View:
                              f'{"s" if n != 1 else ""}</a>')
             links.append(self.xref(by["id"]))
             boxes.append(f'<div class="pv-beside{"" if thumb else " pv-beside-plain"}">{thumb}<div>'
-                         f'<p class="pv-label">{esc(word)} {esc("claim " + by["id"])}</p><p>{note}</p>'
+                         f'<p class="pv-label">{esc(word)} {esc(self.called(by).lower() + " " + by["id"])}</p>'
+                         f'<p>{note}</p>'
                          f'<p class="pv-links">{" · ".join(links)}</p></div></div>')
         more = (f'<div class="pv-remarks"><p class="pv-label">Elsewhere in this paper</p><ul>{"".join(lines)}</ul>'
                 f'</div>') if lines else ""
@@ -481,6 +487,15 @@ class _View:
         return (f'<details class="pv-record"><summary><span class="pv-record-line">{shown}</span>'
                 f'<span class="pv-record-word">Record</span></summary><dl>{dl}</dl></details>')
 
+    def called(self, c):
+        """"Claim", or "Numerical check" for a claim that checks other claims of the paper by computation."""
+        own = [r for r in _dicts(c.get("relations")) if r.get("id_type") == "local" and r.get("target") in self.claims]
+        kinds = {sp.get("kind") for sp in _dicts(c.get("support"))}
+        if (own and all(r.get("type") == "supports" for r in own) and kinds and kinds <= COMPUTED
+                and c.get("role") != "principal"):
+            return NUMERICAL_CHECK
+        return "Claim"
+
     # ---------- a claim ----------
     def claim(self, c):
         cid = c["id"]
@@ -489,7 +504,7 @@ class _View:
         name = self.name(cid)
         tags = [f'<span class="pv-how pv-key">{KEY_CLAIM}</span>'] if cid in self.key else []
         tags += [f'<span class="pv-how">{esc(how)}</span>'] if how else []
-        head = (f'<h3><span class="pv-claim-id">Claim {esc(cid)}{"." if name else ""}</span> '
+        head = (f'<h3><span class="pv-claim-id">{self.called(c)} {esc(cid)}{"." if name else ""}</span> '
                 f'{("<span class=" + chr(34) + "pv-name" + chr(34) + ">" + esc(name) + "</span> ") if name else ""}'
                 f'{("<span class=" + chr(34) + "pv-tags" + chr(34) + ">" + "".join(tags) + "</span>") if tags else ""}'
                 f'</h3>')

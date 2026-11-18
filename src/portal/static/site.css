@@ -638,3 +638,39 @@ dialog.zoom .zoom-nav button:disabled { color: var(--rule); cursor: default; }
 dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 20px 24px; box-sizing: border-box; }
 @media (max-width: 640px) { dialog.rows .popup-body { max-height: 100%; height: 100%; padding: 16px 56px 16px 16px; } }
 .pv-claim figcaption, .pv-claim .pv-more, dialog.zoom figcaption { overflow-wrap: anywhere; }
+
+/* Printing the paper view (design §7.4, *Printing*): the paper as a document. Everything that is for moving about
+   the site goes; the text takes the page's width; proofs, terms and tables are open (page.js opens them); a claim's
+   heading stays with its statement, and a term, a figure or a formula is not cut by a page break. */
+.pv-print-id { display: none; }
+@media print {
+  @page { margin: 18mm 16mm 20mm; }
+  html, body { background: #fff; }
+  body { font-size: 11pt; }
+  .site-header, .site-footer, .skip-link, .cs-toc, .toc-bar, .to-top, .intro-strip, .view-switch, .ask-ai,
+  .ask-message, .pv-document, .pv-open-all, .pv-lead, .pv-record, .pv-more, .pv-thumb, .pv-links, dialog,
+  .entry > .panel, #score, #versions, #not-claimed, .fold-toggle, .cs-rows-toggle { display: none !important; }
+  .pv-print-id { display: block; margin: 6px 0 0; font-size: 9.5pt; color: #333; }
+  .wrap { max-width: none; padding: 0; }
+  .entry, .entry[data-view="paper"] { display: block; }
+  .entry > .cs-body, .entry[data-view="paper"] > .cs-body, .pv-opening { max-width: none; }
+  .cs-title { font-size: 20pt; }
+  .cs-section { margin-top: 18pt; padding-top: 10pt; }
+  .cs-section h2 { font-size: 15pt; }
+  .pv-claim { padding: 12pt 0 4pt; }
+  .pv-claim h3 { font-size: 12.5pt; break-after: avoid; }
+  .pv-summary, .pv-statement { break-before: avoid; }
+  .pv-defs, .pv-beside, .pv-evidence { background: none; border-left: 2px solid #999; border-radius: 0; }
+  .pv-term, .pv-beside, .cs-figure, .cs-eq, .cs-table tr, .pv-proof li { break-inside: avoid; }
+  .pv-how { border-color: #666; color: #000; }
+  .cs-table, .cs-eq { overflow: visible; }
+  .cs-table table { font-size: 9pt; }
+  .cs-figure img { max-height: 90mm; object-fit: contain; }
+  .pv-defs { break-after: avoid; }
+  .pv-defs > .pv-label, .pv-evidence > .pv-label, .pv-remarks > .pv-label { break-after: avoid; }
+  .cs-page a, .cs-body a, .cs-header a { color: inherit !important; text-decoration: none; }
+  .cs-refs a[href^="http"] { text-decoration: underline; }
+  details.pv-proof > summary { list-style: none; }
+  details.pv-proof > summary::-webkit-details-marker { display: none; }
+  .fold:not(.open) > .fold-body { display: block !important; }
+}
