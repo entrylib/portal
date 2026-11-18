@@ -149,7 +149,8 @@ def test_the_requests_keep_the_papers_order_and_propose_its_subfield(tmp_path):
     refuses a submission without one), and the summary may have 250 words."""
     cat = skills.catalogue()
     for text in (skills.short(BASE, cat), skills.request(BASE, cat), skills.message(BASE, cat)):
-        assert "give its sections as the claimset's sections" in text
+        assert "Its sections become the claimset's sections: the paper's headings, in its words" in text
+        assert "the section that holds its evidence, never under the abstract, introduction or conclusion" in text
         assert "list the definitions in the order the paper introduces them" in text
         assert "Propose the paper's subfield" in text and "tell me its name" in text
         assert "at most 250 words" in text and "150 words" not in text

@@ -136,9 +136,12 @@ def message(base_url, cat, example=None):
 
 
 #: The paper's own order, kept (claimset spec §3.1, §3.2): its sections, and its definitions as it introduces them.
-PAPER_ORDER = ("- Keep the paper's order: give its sections as the claimset's sections (the paper's headings, each "
-               "with the claims that fall under it), and list the definitions in the order the paper introduces "
-               "them, what the paper is about first and in full.\n")
+PAPER_ORDER = ("- Keep the paper's order. Its sections become the claimset's sections: the paper's headings, in its "
+               "words, without their numbers. Put each claim under the section that holds its evidence, never under "
+               "the abstract, introduction or conclusion. Where a top-level heading names only a part of the paper "
+               "(Results, Methods, Discussion), use its subheadings. Give no sections if the headings do not give at "
+               "least two. And list the definitions in the order the paper introduces them, what the paper is about "
+               "first and in full.\n")
 
 #: The subfield is proposed and shown to the author (claimset spec §3.1): EntryLib refuses a submission without one.
 SUBFIELD = ("- Propose the paper's subfield from EntryLib's list (the skills say where it is) and tell me its name, "
