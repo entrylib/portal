@@ -566,6 +566,11 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-term:target { background: var(--cs-target, var(--panel)); }
 .pv-claim { display: flex; flex-direction: column; gap: 12px; padding: 24px 0 6px; border-top: 1px solid var(--rule-light); }
 .pv-section > .pv-claim:first-of-type { border-top: 0; padding-top: 6px; }
+/* A section of the paper (claimset §3.1): its title over its claims. */
+.pv-sec { margin: 30px 0 0; padding-top: 18px; border-top: 2px solid var(--ink); font-size: 23px; font-weight: 600; }
+.pv-lead + .pv-sec { margin-top: 8px; }
+.pv-sec + .pv-claim { border-top: 0; padding-top: 10px; }
+.pv-toc-parts a { display: block; }
 .pv-claim:target > h3 { background: var(--cs-target, var(--panel)); }
 .pv-claim > * { margin-top: 0; margin-bottom: 0; min-width: 0; max-width: 100%; }
 .pv-claim h3 { margin: 0; font-size: 20px; font-weight: 400; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
@@ -663,6 +668,7 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .cs-section h2 { font-size: 15pt; }
   .pv-claim { padding: 12pt 0 4pt; }
   .pv-claim h3 { font-size: 12.5pt; break-after: avoid; }
+  .pv-sec { font-size: 14pt; margin-top: 16pt; padding-top: 8pt; border-top: 1px solid #000; break-after: avoid; }
   .pv-summary, .pv-statement { break-before: avoid; }
   .pv-defs, .pv-beside, .pv-evidence { background: none; border-left: 2px solid #999; border-radius: 0; }
   .pv-term, .pv-beside, .cs-figure, .cs-eq, .cs-table tr, .pv-proof li { break-inside: avoid; }

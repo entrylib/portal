@@ -302,6 +302,31 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     assert 'window.addEventListener("beforeprint", openAll)' in js and 'querySelectorAll("details.pv-proof")' in js
 
 
+def test_the_claims_stand_under_the_papers_sections():
+    doc = proofs()
+    doc["paper"]["sections"] = [{"title": "The weighted median", "claims": ["C3", "C1"]},
+                                {"title": "Computed", "claims": ["C4"]}]
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    page = site.paper_page(doc, base_url=BASE, listing=listing)
+    claims = page.split('<article class="cs-body">')[1]
+    order = re.findall(r'<h3 class="pv-sec" id="(sec-\d)">([^<]+)</h3>|<article class="pv-claim" id="(C\d)"', claims)
+    # the sections' order, not the IDs' nor the proofs'; a claim no section holds follows under a heading of its own
+    assert [a or c for a, _t, c in order] == ["sec-1", "C3", "C1", "sec-2", "C4", "sec-3", "C2"]
+    assert [t for _a, t, _c in order if t] == ["The weighted median", "Computed", "Other claims"]
+    assert "In the paper's sections." in claims and "a proved claim comes after" not in claims
+    nav = page.split('<nav class="cs-toc"')[1].split("</nav>")[0]
+    assert ('<ol class="pv-toc pv-toc-parts"><li><a href="#sec-1"><span>The weighted median</span></a></li>'
+            in nav) and '<details class="pv-toc-fold">' in nav                    # the sections, then the claims
+    plain = site.paper_page(proofs(), base_url=BASE, listing=listing)
+    assert 'class="pv-sec"' not in plain and "pv-toc-parts" not in plain        # no sections: as before
+    broken = proofs()                                                             # what is not a section is left out
+    broken["paper"]["sections"] = [{"title": "", "claims": ["C1"]}, "C2", {"title": "Real", "claims": ["C9", "C5"]}]
+    assert 'class="pv-sec"' not in site.paper_page(broken, base_url=BASE, listing=listing)
+    escaped = proofs()
+    escaped["paper"]["sections"] = [{"title": "<b>Bold</b>", "claims": ["C1", "C2", "C3", "C4"]}]
+    assert "&lt;b&gt;Bold&lt;/b&gt;" in site.paper_page(escaped, base_url=BASE, listing=listing)
+
+
 def test_a_claim_that_checks_others_by_computation_is_a_numerical_check():
     sections, _ = view(proofs())                    # C4, computed and secondary, supports C3 and nothing else
     claims = sections["claims"]

@@ -912,10 +912,13 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     for sid, title, c, block in view["sections"]:
         body.append(block)
         inner = ""
+        if sid == "claims" and view.get("parts"):         # the paper's sections, in the contents
+            inner = ('<ol class="pv-toc pv-toc-parts">' + "".join(
+                f'<li><a href="#{pid}"><span>{esc(t)}</span></a></li>' for pid, t, _n in view["parts"]) + "</ol>")
         if sid == "claims" and names:                    # the claims by name, in the contents
             cids = re.findall(r'<article class="pv-claim" id="(C[0-9]+)"', block)
             # folded: a paper may have dozens of claims, and the contents would run off the screen
-            inner = ('<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc">'
+            inner += ('<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc">'
                      + "".join(
                 f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> <span>{esc(names.get(cid, ""))}'
                 f'</span></a></li>'

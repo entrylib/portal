@@ -34,6 +34,9 @@ SUPPORT_WORDS = (("formal_proof", "proved"), ("empirical_quant", "evidence"), ("
                  ("empirical_obs", "evidence"), ("simulation", "simulation"), ("demonstration", "demonstration"),
                  ("argument", "argued"), ("cited", "from earlier work"), ("consensus", "established knowledge"),
                  ("expert_judgement", "judgement"))
+#: The heading of the claims that a paper with sections places in none of them.
+OTHER_CLAIMS = "Other claims"
+
 #: What the paper view calls a claim that exists to check the paper's other claims by computation: one with
 #: computed support, not a principal claim, whose relations to claims of the paper are all `supports` (design §7.4).
 NUMERICAL_CHECK = "Numerical check"
@@ -94,6 +97,11 @@ class _View:
         self.all_scores = scores
         self.scores = (scores or {}).get("claims") if isinstance(scores, dict) else None
         self.shown = [cid for cid in self.order() if not P.is_assumption(self.claims[cid])]
+        # the sections the paper is read in (claimset §3.1): theirs is then the order, and what they leave out
+        # follows under a heading of its own
+        self.parts = self.sections()
+        if self.parts:
+            self.shown = [cid for _t, cids in self.parts for cid in cids]
         self.assumed = [c["id"] for c in P.claims if P.is_assumption(c)]
         self.galleries, self.panels, self.tables_shown = {}, [], set()
         # what the authors chose as the paper's highlights (spec §3.1): marked where it stands, not listed apart
@@ -141,6 +149,24 @@ class _View:
         for cid in sorted(self.claims, key=_number_of):
             visit(cid)
         return done
+
+    def sections(self):
+        """[(title, [claim IDs])] from `paper.sections`: the claims of each that the page shows (a claim once, no
+        assumption), then the claims no section holds, under OTHER_CLAIMS. [] for a paper without sections."""
+        given = (self.doc.get("paper") or {}).get("sections")
+        out, placed = [], set()
+        for sec in given if isinstance(given, list) else []:
+            if not isinstance(sec, dict) or not isinstance(sec.get("title"), str) or not sec["title"].strip():
+                continue
+            cids = [c for c in _strs(sec.get("claims")) if c in self.shown and c not in placed]
+            cids = list(dict.fromkeys(cids))
+            if cids:
+                placed.update(cids)
+                out.append((" ".join(sec["title"].split()), cids))
+        left = [c for c in self.shown if c not in placed]
+        if out and left:
+            out.append((OTHER_CLAIMS, left))
+        return out
 
     # ---------- text ----------
     def name(self, cid):
@@ -572,18 +598,26 @@ def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, 
     try:
         P = pageview._Paper(doc, file_url=file_url, ref_text=ref_text)
         V = _View(doc, record, P, scores, claim_url)
-        claims = "".join(V.claim(V.claims[cid]) for cid in V.shown)
+        if V.parts:                                     # under the paper's own headings
+            claims = "".join(f'<h3 class="pv-sec" id="sec-{i}">{esc(title)}</h3>'
+                             + "".join(V.claim(V.claims[cid]) for cid in cids)
+                             for i, (title, cids) in enumerate(V.parts, 1))
+            order = "In the paper's sections."
+        else:
+            claims = "".join(V.claim(V.claims[cid]) for cid in V.shown)
+            order = "In the paper's order; a proved claim comes after the claims its proof uses."
         rest = len(P.defs) - len(V.introduced)
         other = (f'<p class="pv-more">{rest} more definition{"s" if rest != 1 else ""} that no claim names (designs, '
                  f'data, cases) {"are" if rest != 1 else "is"} on <a href="{esc(record)}#definitions">the record '
                  f'page</a>.</p>' if rest > 0 else "")
         sections = [("claims", "Claims", len(V.shown),
                      '<section class="cs-section pv-section" id="claims"><h2>Claims</h2>'
-                     '<p class="pv-lead">In the paper\'s order; a proved claim comes after the claims its proof uses. '
+                     f'<p class="pv-lead">{order} '
                      'A term is defined before the claim that first uses it, and what supports a claim stands under '
                      'its statement.<button type="button" class="button-quiet pv-open-all" hidden '
                      'data-open="Open all proofs" data-close="Close all proofs">Open all proofs</button></p>'
                      f'{claims}{other}</section>')]
-        return {"sections": sections, "extra": "".join(V.galleries.values()) + "".join(V.panels)}
+        return {"sections": sections, "extra": "".join(V.galleries.values()) + "".join(V.panels),
+                "parts": [(f"sec-{i}", title, len(cids)) for i, (title, cids) in enumerate(V.parts, 1)]}
     finally:
         DIGITS.reset(token)
