@@ -277,6 +277,9 @@ def test_robots_and_for_models(env):
     assert message.startswith(f"Read {BASE}/p/{KEY}@v1.read, a research paper") and "instead of guessing" in message
     claim = (out / "p" / KEY / "C2.html").read_text()
     assert ">Ask your AI about this claim</button>" in claim and f"Read {BASE}/p/{KEY}/C2, one claim" in claim
+    # beside it, the reading view as a file to attach, for an assistant that cannot open the address
+    assert f'href="/p/{KEY}@v1.txt" download="entrylib-{KEY}-v1.txt">Text file for AI</a>' in page
+    assert f'href="/p/{KEY}/C2.txt" download="entrylib-{KEY}-v1-C2.txt">Text file for AI</a>' in claim
 
 
 def test_a_proposed_subfield_is_kept(env):

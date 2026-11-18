@@ -198,14 +198,24 @@ details.notice[open] summary { margin-bottom: 4px; }
 .entry > .cs-body { grid-area: body; }
 .entry > .toc-bar { grid-area: bar; }
 @media (max-height: 700px) { .entry > .panel { position: static; } }
-/* The paper view: the panel stays at the top, beside the header and the Summary; the claims below it have the
-   width of the text and the panel together (a line of text no longer than a printed page's). */
-.pv-opening { margin-top: 24px; max-width: 47rem; }
+/* The paper view (design §7.4, *One column of text*): the header with the Summary and, directly below it, the claims
+   are one column of text, with one left edge and one width; the panel and under it the contents are in a rail to
+   its right (.entry-rail). The panel stays at the top; the contents stay in view below the site's header (sticky,
+   and scrolling on their own when taller than the screen: the rules above and claimset.css), so the rail is as tall
+   as the page. A page shorter than its rail gives the room to the text's last row, not between header and claims.
+   On a narrow screen the rail is no box at all: the panel, the contents and their bar (page.js) are items of the one
+   column, placed as on the record, and the bar stays at the top of the whole page. */
+.pv-opening { margin-top: 24px; }
 .pv-opening > .cs-section:first-child { margin-top: 0; }
-@media (min-width: 1101px) {
-  .entry[data-view="paper"] { grid-template-areas: "head head panel" "nav body body"; }
-  .entry[data-view="paper"] > .panel { position: static; max-height: none; overflow: visible; margin-bottom: 28px; }
-  .entry[data-view="paper"] > .cs-body { max-width: 47rem; }
+.entry-rail { display: contents; }
+.entry-rail > .panel { grid-area: panel; margin-bottom: 28px; }
+.entry-rail > .cs-toc { grid-area: nav; }
+.entry-rail > .toc-bar { grid-area: bar; }
+@media (max-width: 860px) { .entry-rail > .panel .panel-row { flex: 1 1 180px; } }      /* as the record's panel */
+@media (min-width: 861px) {
+  .entry[data-view="paper"] { grid-template-columns: minmax(0, 50rem) 270px; grid-template-rows: auto 1fr;
+    grid-template-areas: "head rail" "body rail"; justify-content: space-between; }
+  .entry-rail { display: block; grid-area: rail; align-self: stretch; min-width: 0; }
 }
 @media (max-width: 1100px) {
   .entry { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "head head" "panel panel" "nav body"; }
@@ -436,9 +446,13 @@ dialog.zoom figcaption { padding: 10px 56px 12px 16px; font-size: 15px; }
 .pager { margin-top: 16px; }
 
 /* Ask your AI (design §7.4) */
-.ask-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 16px 0 0; }
-.ask-ai > p { margin: 0; }
-.ask-ai details { flex-basis: 100%; font-size: 15px; color: var(--muted); }
+.ask-ai { margin: 16px 0 0; }
+/* its buttons in one row, of one height, wrapping on a phone; a button the script has not shown takes no room */
+.ask-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.ask-row .button-quiet { min-height: 44px; padding: 0 14px; font-size: inherit; }
+.ask-row [hidden] { display: none; }
+.ask-note { margin: 8px 0 0; }
+.ask-ai details { margin-top: 4px; font-size: 15px; color: var(--muted); }
 .ask-ai summary { cursor: pointer; }
 .cite button[data-copy] { margin-top: 6px; }
 
@@ -654,8 +668,8 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   body { font-size: 11pt; }
   .site-header, .site-footer, .skip-link, .cs-toc, .toc-bar, .to-top, .intro-strip, .view-switch, .ask-ai,
   .ask-message, .pv-document, .pv-open-all, .pv-lead, .pv-record, .pv-more, .pv-thumb, .pv-links, dialog,
-  .entry > .panel, #score, #versions, #not-claimed, .cs-rows-toggle, .fold-toggle .fold-state, .fold-toggle .count,
-  .cs-refs .cs-tail { display: none !important; }
+  .entry > .panel, .entry-rail, #score, #versions, #not-claimed, .cs-rows-toggle, .fold-toggle .fold-state,
+  .fold-toggle .count, .cs-refs .cs-tail { display: none !important; }
   .fold-toggle { font-size: 15pt; font-weight: 600; padding: 0; margin: 0 0 6pt; break-after: avoid; }
   .cs-refs li { border-top: 0; padding: 3pt 0 3pt 1.6em; text-indent: -1.6em; break-inside: avoid; }
   .pv-print-id, .pv-print-score { display: block; margin: 6px 0 0; font-size: 9.5pt; color: #333; }
@@ -664,7 +678,7 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .pv-print-id a { text-decoration: underline !important; }
   .wrap { max-width: none; padding: 0; }
   .entry, .entry[data-view="paper"] { display: block; }
-  .entry > .cs-body, .entry[data-view="paper"] > .cs-body, .pv-opening { max-width: none; }
+  .entry > .cs-body { max-width: none; }
   .cs-title { font-size: 20pt; }
   .cs-section { margin-top: 18pt; padding-top: 10pt; }
   .cs-section h2 { font-size: 15pt; }
