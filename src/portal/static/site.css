@@ -580,11 +580,13 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-term:target { background: var(--cs-target, var(--panel)); }
 .pv-claim { display: flex; flex-direction: column; gap: 12px; padding: 24px 0 6px; border-top: 1px solid var(--rule-light); }
 .pv-section > .pv-claim:first-of-type { border-top: 0; padding-top: 6px; }
-/* A section of the paper (claimset §3.1): its title over its claims. */
-.pv-sec { margin: 30px 0 0; padding-top: 18px; border-top: 2px solid var(--ink); font-size: 23px; font-weight: 600; }
-.pv-lead + .pv-sec { margin-top: 8px; }
+/* A section of the paper (claimset §3.1): its title over its claims; in size between the h2 of *Claims* (26px) and a
+   claim's heading (20px). Named with its section, or claimset.css's `.cs-section h3` (19px) outranks it: until
+   18 November 2026 it did, and the heading was smaller than a claim's. */
+.pv-section > .pv-sec { margin: 34px 0 6px; padding-top: 20px; border-top: 2px solid var(--ink); font-size: 23px;
+  font-weight: 600; }
+.pv-section > .pv-lead + .pv-sec { margin-top: 8px; }
 .pv-sec + .pv-claim { border-top: 0; padding-top: 10px; }
-.pv-toc-parts a { display: block; }
 .pv-claim:target > h3 { background: var(--cs-target, var(--panel)); }
 .pv-claim > * { margin-top: 0; margin-bottom: 0; min-width: 0; max-width: 100%; }
 .pv-claim h3 { margin: 0; font-size: 20px; font-weight: 400; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
@@ -647,6 +649,38 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-toc-fold > summary { cursor: pointer; font-size: 14px; color: var(--muted); line-height: 1.6; }
 .pv-toc-fold > summary:hover { color: var(--ink); }
 .pv-toc-fold[open] > summary { margin-bottom: 2px; }
+/* The paper's sections in the contents (design §7.4, *Sections*): the title opens the list of the section's claims
+   (closed until the reader opens it; page.js never does), and the arrow beside it leads to the section's heading.
+   The arrow is outside the title's <summary>, placed on its first line: a link inside a summary is a button in a
+   button. A long title wraps, under itself and not under its marker. page.js marks the entry of the section being
+   read (.pv-toc-here), as it marks a link ([aria-current], above). */
+.cs-toc .pv-toc, .cs-toc .pv-toc-parts { line-height: 1.3; }      /* not the contents' own 2: names and titles wrap */
+.pv-toc-parts { list-style: none; margin: 2px 0 6px; padding: 0; font-size: 14px; }
+.pv-toc-sec { position: relative; }
+.pv-toc-sec > details > summary { position: relative; list-style: none; cursor: pointer; color: var(--muted);
+  padding: 5px 28px 5px 15px; overflow-wrap: anywhere; }
+.pv-toc-sec > details > summary::-webkit-details-marker { display: none; }
+.pv-toc-sec > details > summary::before { content: "\25B8"; position: absolute; left: 0; }
+.pv-toc-sec > details[open] > summary::before { content: "\25BE"; }
+.pv-toc-sec > details > summary:hover { color: var(--ink); }
+.pv-toc-sec > details > .pv-toc { margin: 2px 0 10px 15px; }
+.cs-toc a.pv-toc-go { position: absolute; top: 0; right: 0; width: 28px; padding: 5px 0; text-align: center;
+  font-weight: 400; color: var(--accent); }
+.cs-toc a.pv-toc-go:hover { background: var(--panel); border-radius: 4px; }
+.cs-toc a.pv-toc-go::before { content: none; }
+.pv-toc-here > details > summary { font-weight: 600; color: var(--ink); }
+.pv-toc-here::before { content: ""; position: absolute; left: -10px; top: 6px; width: 3px; height: 1em;
+  background: var(--accent); }
+@media (max-width: 860px) {         /* behind the bar (page.js): rows a finger can press; a name still wraps */
+  .toc-js .cs-toc .pv-toc { gap: 0; }
+  .toc-js .cs-toc .pv-toc a { display: grid; align-content: center; min-height: 44px; padding: 6px 0; line-height: 1.3; }
+  .toc-js .pv-toc-sec > details > summary { padding-top: 13px; padding-bottom: 13px; padding-right: 48px; }
+  .toc-js .cs-toc a.pv-toc-go { width: 44px; padding: 0; }
+  .toc-js .pv-toc-here::before { top: 14px; }
+  /* the bar names the section being read: one line, however long the paper's title of it */
+  .toc-js .toc-bar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toc-js .toc-bar::after { flex: none; margin-left: 8px; }
+}
 /* the viewer of a set of figures: the figure pop-up, with a way to the one before and the one after */
 dialog.zoom .zoom-nav { display: flex; align-items: center; gap: 12px; padding: 8px 64px 0 16px; font-size: 15px; }
 dialog.zoom .zoom-nav[hidden] { display: none; }
@@ -684,7 +718,10 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .cs-section h2 { font-size: 15pt; }
   .pv-claim { padding: 12pt 0 4pt; }
   .pv-claim h3 { font-size: 12.5pt; break-after: avoid; }
-  .pv-sec { font-size: 14pt; margin-top: 16pt; padding-top: 8pt; border-top: 1px solid #000; break-after: avoid; }
+  .pv-section > .pv-sec { font-size: 14pt; margin: 16pt 0 0; padding-top: 8pt; border-top: 1px solid #000; break-after: avoid; }
+  /* a section's heading is never alone at the foot of a page: its own break-after is not enough in Chromium, where
+     the claim after it is a flex box whose first item then starts the next page */
+  .pv-sec + .pv-claim, .pv-sec + .pv-claim > :first-child { break-before: avoid; }
   .pv-summary, .pv-statement { break-before: avoid; }
   .pv-defs, .pv-beside, .pv-evidence { background: none; border-left: 2px solid #999; border-radius: 0; }
   .pv-term, .pv-beside, .cs-figure, .cs-eq, .cs-table tr, .pv-proof li { break-inside: avoid; }

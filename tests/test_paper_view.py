@@ -380,18 +380,69 @@ def test_the_claims_stand_under_the_papers_sections():
     # the sections' order, not the IDs' nor the proofs'; a claim no section holds follows under a heading of its own
     assert [a or c for a, _t, c in order] == ["sec-1", "C3", "C1", "sec-2", "C4", "sec-3", "C2"]
     assert [t for _a, t, _c in order if t] == ["The weighted median", "Computed", "Other claims"]
-    assert "In the paper's sections." in claims and "a proved claim comes after" not in claims
+    # the line under Claims says nothing of the order, with sections or without (design §7.4, *Sections*)
+    lead = '<h2>Claims</h2><p class="pv-lead">A term is defined before the claim that first uses it, and what supports'
+    assert lead in claims and "a proved claim comes after" not in claims and "In the paper's" not in claims
+    # the contents (design §7.4, *Sections*): under Claims each section is an entry whose title opens the list of its
+    # claims, in the section's order, each shown as the claims by name show one; an arrow leads to its heading
     nav = page.split('<nav class="cs-toc"')[1].split("</nav>")[0]
-    assert ('<ol class="pv-toc pv-toc-parts"><li><a href="#sec-1"><span>The weighted median</span></a></li>'
-            in nav) and '<details class="pv-toc-fold">' in nav                    # the sections, then the claims
+    assert ('<a href="#claims">Claims</a> <span class="count">4</span><ol class="pv-toc-parts">'
+            '<li class="pv-toc-sec"><details><summary>The weighted median</summary>') in nav
+    entries = re.findall(
+        r'<li class="pv-toc-sec"><details><summary>([^<]+)</summary><ol class="pv-toc">(.*?)</ol></details>'
+        r'<a class="pv-toc-go" href="#(sec-\d)" title="Go to this section" aria-label="([^"]+)">\u2192</a></li>', nav)
+    assert [(title, re.findall(r'<li><a href="#(C\d)"><span class="pv-toc-id">(C\d)</span> <span>[^<]+</span></a></li>',
+                               inside), sec, label) for title, inside, sec, label in entries] == [
+        ("The weighted median", [("C3", "C3"), ("C1", "C1")], "sec-1", "Go to the section The weighted median"),
+        ("Computed", [("C4", "C4")], "sec-2", "Go to the section Computed"),
+        ("Other claims", [("C2", "C2")], "sec-3", "Go to the section Other claims")]     # a claim in no section
+    assert nav.count("<details") == nav.count("<details>") == 3                # every list closed until opened
+    assert nav.count('href="#C') == 4 and "The claims by name" not in nav and "pv-toc-fold" not in nav
+    assert '<li><a href="#C1"><span class="pv-toc-id">C1</span> <span>The term depends on the ratio' in nav
+    # no sections: the contents as before, one folded list of every claim by name
     plain = site.paper_page(proofs(), base_url=BASE, listing=listing)
-    assert 'class="pv-sec"' not in plain and "pv-toc-parts" not in plain        # no sections: as before
+    assert 'class="pv-sec"' not in plain and lead in plain and "a proved claim comes after" not in plain
+    assert 'data-close="Close all proofs">Open all proofs</button></p>' in plain          # the button stays
+    for new in ("pv-toc-parts", "pv-toc-sec", "pv-toc-go", "Go to this section"):
+        assert new not in plain, new
+    nav = plain.split('<nav class="cs-toc"')[1].split("</nav>")[0]
+    shown = re.findall(r'<article class="pv-claim" id="(C\d)"', plain)
+    names = {c["id"]: " ".join(c.get("name", "").split()) for c in proofs()["claims"]}
+    assert len(shown) == 4 and ('<li><a href="#claims">Claims</a> <span class="count">4</span>'
+                                '<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc">'
+                                + "".join(f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> '
+                                          f'<span>{site.esc(names[cid])}</span></a></li>' for cid in shown)
+                                + "</ol></details></li>") in nav
     broken = proofs()                                                             # what is not a section is left out
     broken["paper"]["sections"] = [{"title": "", "claims": ["C1"]}, "C2", {"title": "Real", "claims": ["C9", "C5"]}]
     assert 'class="pv-sec"' not in site.paper_page(broken, base_url=BASE, listing=listing)
     escaped = proofs()
     escaped["paper"]["sections"] = [{"title": "<b>Bold</b>", "claims": ["C1", "C2", "C3", "C4"]}]
-    assert "&lt;b&gt;Bold&lt;/b&gt;" in site.paper_page(escaped, base_url=BASE, listing=listing)
+    escaped["claims"][0]["name"] = 'A <i>name</i> & "quoted"'
+    page = site.paper_page(escaped, base_url=BASE, listing=listing)
+    nav = page.split('<nav class="cs-toc"')[1].split("</nav>")[0]
+    assert '<h3 class="pv-sec" id="sec-1">&lt;b&gt;Bold&lt;/b&gt;</h3>' in page and "<b>Bold" not in page
+    assert ("<summary>&lt;b&gt;Bold&lt;/b&gt;</summary>" in nav
+            and 'aria-label="Go to the section &lt;b&gt;Bold&lt;/b&gt;"' in nav)
+    assert "<span>A &lt;i&gt;name&lt;/i&gt; &amp; &quot;quoted&quot;</span>" in nav and "<i>name" not in page
+    # the script marks the entry of the section being read and opens no list; the styles of the entries and headings
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
+    assert 'nav.querySelectorAll("a.pv-toc-go")' in js and 'classList.toggle("pv-toc-here", on)' in js
+    assert ".open = " not in js.split("// The site's header")[0]              # the lists are the reader's to open
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
+    assert ".pv-toc-here > details > summary { font-weight: 600;" in css
+    # a section's heading: between the heading of Claims and a claim's in size, and not outranked by the rule of
+    # claimset.css for the headings in a section, which drew it smaller than a claim's
+    assert ".pv-section > .pv-sec { margin: 34px 0 6px; padding-top: 20px; border-top: 2px solid var(--ink); " \
+           "font-size: 23px;" in css
+    record_css = (Path(site.__file__).parent / "page_css.py").read_text(encoding="utf-8")
+    assert ".cs-section h2 { margin: 0 0 10px; font-size: 26px;" in record_css
+    assert ".cs-section h3 { margin: 22px 0 8px; font-size: 19px;" in record_css and "\n.pv-sec {" not in css
+    assert ".pv-claim h3 { margin: 0; font-size: 20px;" in css                     # and the one below it
+    printed = css.split("@media print {")[1]
+    assert (".pv-section > .pv-sec { font-size: 14pt; margin: 16pt 0 0; padding-top: 8pt; border-top: 1px solid #000; "
+            "break-after: avoid; }") in printed                # on paper: never alone at the foot of a page
+    assert ".pv-sec + .pv-claim, .pv-sec + .pv-claim > :first-child { break-before: avoid; }" in printed
 
 
 def test_a_claim_that_checks_others_by_computation_is_a_numerical_check():

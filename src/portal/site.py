@@ -920,20 +920,26 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     body.clear()
     names = {c["id"]: " ".join(c["name"].split()) for c in doc.get("claims") or []
              if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)}
+    def by_name(cids):                                   # claims in the contents: the ID, then the name
+        return '<ol class="pv-toc">' + "".join(
+            f'<li><a href="#{esc(cid)}"><span class="pv-toc-id">{esc(cid)}</span> <span>{esc(names.get(cid, ""))}'
+            f'</span></a></li>' for cid in cids) + "</ol>"
     for sid, title, c, block in view["sections"]:
         body.append(block)
         inner = ""
-        if sid == "claims" and view.get("parts"):         # the paper's sections, in the contents
-            inner = ('<ol class="pv-toc pv-toc-parts">' + "".join(
-                f'<li><a href="#{pid}"><span>{esc(t)}</span></a></li>' for pid, t, _n in view["parts"]) + "</ol>")
-        if sid == "claims" and names:                    # the claims by name, in the contents
+        if sid == "claims" and view.get("parts"):
+            # The paper's sections (design §7.4, *Sections*): each an entry whose title opens the list of its claims,
+            # closed until the reader opens it; the arrow beside the title leads to the section's heading. Every
+            # claim is under its section, so there is no list of all the claims by name.
+            inner = '<ol class="pv-toc-parts">' + "".join(
+                f'<li class="pv-toc-sec"><details><summary>{esc(t)}</summary>{by_name(cids)}</details>'
+                f'<a class="pv-toc-go" href="#{esc(pid)}" title="Go to this section" '
+                f'aria-label="Go to the section {esc(t)}">\u2192</a></li>'
+                for pid, t, cids in view["parts"]) + "</ol>"
+        elif sid == "claims" and names:                  # no sections: the claims by name, in the contents
             cids = re.findall(r'<article class="pv-claim" id="(C[0-9]+)"', block)
             # folded: a paper may have dozens of claims, and the contents would run off the screen
-            inner += ('<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc">'
-                     + "".join(
-                f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> <span>{esc(names.get(cid, ""))}'
-                f'</span></a></li>'
-                for cid in cids) + "</ol></details>")
+            inner = f'<details class="pv-toc-fold"><summary>The claims by name</summary>{by_name(cids)}</details>'
         shown.append((sid, title, c, inner))
     for sid in PAPER_KEEPS:
         keep(sid)
