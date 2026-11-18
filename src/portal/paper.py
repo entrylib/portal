@@ -336,17 +336,22 @@ class _View:
 
     def beside(self, c):
         """The paper's other claims that bear on this one: with the observations their relation names, a box with
-        the figures that show them and the rows; otherwise a line."""
+        the figures that show them and the rows or results; otherwise a line."""
         boxes, lines = [], []
         for by, r in self.incoming.get(c["id"], []):
             word = INCOMING.get(r.get("type"), pageview._s(r.get("type")).replace("_", " "))
             note = self.text(r.get("note") or "", this=c["id"])
             named = _strs(r.get("results"))
-            sp = next((x for x in _dicts(by.get("support")) if x.get("evidence") in self.evidence), None)
+            # the evidence the named observations are of: the claim's own, by the first one's ID (claimset rule 104)
+            first = named[0].split(".")[0] if named else None
+            sp = next((x for x in _dicts(by.get("support")) if x.get("evidence") == first), None) or next(
+                (x for x in _dicts(by.get("support")) if x.get("evidence") in self.evidence), None)
             e = self.evidence.get(sp["evidence"]) if sp else None
             figs = self.figures(e, named) if e is not None and named else []
             rows = self.named_rows(e, named, _strs(sp.get("results"))) if e is not None and named else set()
-            if not figs and not rows:
+            found = [x for x in _dicts(e.get("results")) if f"{e['id']}.{x.get('id')}" in named] if (
+                e is not None and named) else []                       # results recorded one by one, not in a table
+            if not figs and not rows and not found:
                 lines.append(f'<li><span class="pv-rel">{esc(word)} {self.xref(by["id"], cap=False)}.</span> '
                              f'{note}</li>')
                 continue
@@ -359,16 +364,20 @@ class _View:
                          f'aria-label="Open the figures"><img src="{esc(src)}" alt="" loading="lazy"></a>')
                 links.append(f'<a href="{esc(src)}" data-gallery="{esc(gid)}" data-i="0">{len(figs)} '
                              f'figure{"s" if len(figs) != 1 else ""}</a>')
-            if rows:
+            if rows or found:
                 pid = f"rows-{c['id']}-{by['id']}"
                 tables = [t for t in _dicts(e.get("tables"))
                           if any(f"{e['id']}.{t.get('id')}.{x.get('id')}" in rows for x in _dicts(t.get("rows")))]
+                listed = ('<ul class="cs-results">' + "".join(
+                    pageview._result(self.P, e, x, ids=False) for x in found) + "</ul>") if found else ""
                 self.panels.append(f'<template id="{esc(pid)}">'
-                                   + "".join(self.rows(e, t, rows) for t in tables)
-                                   + f'<p><a href="#{esc(by["id"])}">The tables in full, under claim '
-                                     f'{esc(by["id"])}</a></p></template>')
-                links.append(f'<a href="#{esc(by["id"])}" data-rows="{esc(pid)}">{len(rows)} table '
-                             f'row{"s" if len(rows) != 1 else ""}</a>')
+                                   + "".join(self.rows(e, t, rows) for t in tables) + listed
+                                   + f'<p><a href="#{esc(by["id"])}">{"The tables" if tables else "The results"} in '
+                                     f'full, under claim {esc(by["id"])}</a></p></template>')
+                n = len(rows) + len(found)
+                what = "result" if found else "table row"
+                links.append(f'<a href="#{esc(by["id"])}" data-rows="{esc(pid)}">{n} {what}'
+                             f'{"s" if n != 1 else ""}</a>')
             links.append(self.xref(by["id"]))
             boxes.append(f'<div class="pv-beside{"" if thumb else " pv-beside-plain"}">{thumb}<div>'
                          f'<p class="pv-label">{esc(word)} {esc("claim " + by["id"])}</p><p>{note}</p>'
