@@ -117,6 +117,17 @@ def dot_list(scores, cid=None):
     return f'<ul class="dot-list small">{"".join(rows)}</ul>'
 
 
+def print_line(scores):
+    """The paper's score for a printed page (design §7.4, *Printing*): the number, its rubric and the five parts with
+    the points each lost, in one line and without the explanations, which the page on the site gives. "" without a
+    score."""
+    if not scores or not scores.get("paper") or scores["paper"].get("score") is None:
+        return ""
+    parts = ", ".join(f"{label} {'−' + str(lost) if lost else '0'}" for _n, label, _c, lost, _t in _parts(scores))
+    return (f'<p class="pv-print-score">{NAME} {esc(scores["paper"]["score"])} of 100 (EntryLib rubric '
+            f'{esc(scores.get("rubric", ""))}; points lost: {esc(parts)}). {CAPTION}</p>')
+
+
 def score_block(score, band, popup):
     """The score as the panel shows it: the number, then one link to how it was made (the Score section's
     explanation, in a pop-up), and the caption."""

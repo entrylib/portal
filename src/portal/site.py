@@ -941,7 +941,9 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     document = ('<p class="pv-document">' + PRINT_BUTTON + (
         f' <a class="button-quiet" href="{esc(own[1])}">{esc(own[0])}</a> <span class="small">PDF</span>'
         if own else "") + "</p>"
-                f'<p class="pv-print-id">{esc(p["id"])}@v{esc(n)} · {esc(base_url)}/p/{esc(key)}@v{esc(n)}</p>')
+                # on paper only: where this version is, and its score with the parts but not their explanations
+                f'<p class="pv-print-id">{esc(p["id"])}@v{esc(n)} · <a href="{esc(base_url)}/p/{esc(key)}@v{esc(n)}">'
+                f'{esc(base_url)}/p/{esc(key)}@v{esc(n)}</a></p>{score_html.print_line(scores)}')
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'

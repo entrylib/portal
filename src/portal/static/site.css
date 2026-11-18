@@ -642,7 +642,7 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
 /* Printing the paper view (design §7.4, *Printing*): the paper as a document. Everything that is for moving about
    the site goes; the text takes the page's width; proofs, terms and tables are open (page.js opens them); a claim's
    heading stays with its statement, and a term, a figure or a formula is not cut by a page break. */
-.pv-print-id { display: none; }
+.pv-print-id, .pv-print-score { display: none; }
 @media print {
   @page { margin: 18mm 16mm 20mm; }
   html, body { background: #fff; }
@@ -650,7 +650,8 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .site-header, .site-footer, .skip-link, .cs-toc, .toc-bar, .to-top, .intro-strip, .view-switch, .ask-ai,
   .ask-message, .pv-document, .pv-open-all, .pv-lead, .pv-record, .pv-more, .pv-thumb, .pv-links, dialog,
   .entry > .panel, #score, #versions, #not-claimed, .fold-toggle, .cs-rows-toggle { display: none !important; }
-  .pv-print-id { display: block; margin: 6px 0 0; font-size: 9.5pt; color: #333; }
+  .pv-print-id, .pv-print-score { display: block; margin: 6px 0 0; font-size: 9.5pt; color: #333; }
+  .pv-print-id a { text-decoration: underline !important; }
   .wrap { max-width: none; padding: 0; }
   .entry, .entry[data-view="paper"] { display: block; }
   .entry > .cs-body, .entry[data-view="paper"] > .cs-body, .pv-opening { max-width: none; }

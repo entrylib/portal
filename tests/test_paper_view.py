@@ -271,7 +271,17 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     listing = [{"version": 1, "date": "2026-11-17"}]
     page = site.paper_page(proofs(), base_url=BASE, listing=listing)
     assert '<button type="button" class="button-quiet pv-print" hidden>Print or save as PDF</button>' in page
-    assert '<p class="pv-print-id">entrylib:2026.000099@v1 · https://entrylib.test/p/2026.000099@v1</p>' in page
+    assert ('<p class="pv-print-id">entrylib:2026.000099@v1 · <a href="https://entrylib.test/p/2026.000099@v1">'
+            'https://entrylib.test/p/2026.000099@v1</a></p>') in page          # on paper: the link to this version
+    assert "pv-print-score" not in page                                    # no scores given: no line
+    from portal import scores as scoring
+    scored = scoring.compute(None, proofs())
+    if scored:                                                             # with the rubric: the split, in one line
+        line = site.paper_page(proofs(), base_url=BASE, listing=listing, scores=scored)
+        line = line.split('<p class="pv-print-score">')[1].split("</p>")[0]
+        assert line.startswith(f"Support {scored['paper']['score']} of 100 (EntryLib rubric ")
+        assert "points lost: Evidence " in line and "Open problems " in line and "Checks the record" in line
+        assert "To fix" not in line and "<" not in line                    # no explanations, no links
     assert "as its authors wrote it" not in page                          # no manuscript: the button alone
     doc = proofs()
     files = "https://entrylib.test/p/2026.000099/v1/files/"
