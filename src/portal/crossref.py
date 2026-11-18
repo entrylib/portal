@@ -102,17 +102,18 @@ def summary(msg):
 
 
 def written(s):
-    """A summary as a reference, in the order the page view reads (authors, then the year in brackets):
-    "Svetunkov, I., & Petropoulos, F. (2018). Title. Journal, 56(1), 1–10." """
+    """A summary as a reference of a classical list, authors, year, title, where it appeared (Elsevier's Harvard
+    style; the page view adds the DOI as a link):
+    "Svetunkov, I., Petropoulos, F., 2018. Old dog, new tricks. International Journal of Production Research 56,
+    6034–6047." """
     names = [f"{a['family']}, {a['initials']}".rstrip(", ") for a in s["authors"]]
     if len(names) > 20:
         names = names[:19] + ["…", names[-1]]
-    who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + ", & " + names[-1]
-    out = f"{who} ({s['year']}). {s['title'].rstrip('.')}."
+    out = f"{', '.join(names)}, {s['year']}. {s['title'].rstrip('.')}."
     if s.get("container"):
         where = s["container"]
         if s.get("volume"):
-            where += f", {s['volume']}" + (f"({s['issue']})" if s.get("issue") else "")
+            where += f" {s['volume']}"
         if s.get("page"):
             where += f", {s['page'].replace('-', '–')}"
         out += f" {where}."

@@ -255,7 +255,7 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True):
 def claimset_texts(conn, targets):
     """{target: written reference} for the claimsets published here that a paper cites (`entrylib:2026.000008`,
     `…@v2`, `…@v2#C33`): its guarantor as the author, the year of the cited version (the current one when none is
-    named) and its title, "Svetunkov, I. (2026). Title. EntryLib.", so that the page labels it "Svetunkov (2026)"
+    named) and its title, "Svetunkov, I., 2026. Title. EntryLib.", so that the page labels it "Svetunkov (2026)"
     as it labels any reference. A claimset not published here is left out."""
     out = {}
     for t in {t for t in targets if isinstance(t, str)}:
@@ -275,8 +275,7 @@ def claimset_texts(conn, targets):
         if not names or not re.fullmatch(r"\d{4}-.*", str(date)):
             continue
         who = [_surname_first(n) for n in names]
-        out[t] = (f"{who[0] if len(who) == 1 else ', '.join(who[:-1]) + ', & ' + who[-1]} ({date[:4]}). "
-                  f"{title.rstrip('.')}. EntryLib.")
+        out[t] = f"{', '.join(who)}, {date[:4]}. {title.rstrip('.')}. EntryLib."
     return out
 
 

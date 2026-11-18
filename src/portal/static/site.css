@@ -198,6 +198,15 @@ details.notice[open] summary { margin-bottom: 4px; }
 .entry > .cs-body { grid-area: body; }
 .entry > .toc-bar { grid-area: bar; }
 @media (max-height: 700px) { .entry > .panel { position: static; } }
+/* The paper view: the panel stays at the top, beside the header and the Summary; the claims below it have the
+   width of the text and the panel together (a line of text no longer than a printed page's). */
+.pv-opening { margin-top: 24px; max-width: 47rem; }
+.pv-opening > .cs-section:first-child { margin-top: 0; }
+@media (min-width: 1101px) {
+  .entry[data-view="paper"] { grid-template-areas: "head head panel" "nav body body"; }
+  .entry[data-view="paper"] > .panel { position: static; max-height: none; overflow: visible; margin-bottom: 28px; }
+  .entry[data-view="paper"] > .cs-body { max-width: 47rem; }
+}
 @media (max-width: 1100px) {
   .entry { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "head head" "panel panel" "nav body"; }
   .entry > .panel { position: static; margin-bottom: 28px; display: flex; flex-wrap: wrap; gap: 0 24px; }
@@ -557,6 +566,11 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-term:target { background: var(--cs-target, var(--panel)); }
 .pv-claim { display: flex; flex-direction: column; gap: 12px; padding: 24px 0 6px; border-top: 1px solid var(--rule-light); }
 .pv-section > .pv-claim:first-of-type { border-top: 0; padding-top: 6px; }
+/* A section of the paper (claimset §3.1): its title over its claims. */
+.pv-sec { margin: 30px 0 0; padding-top: 18px; border-top: 2px solid var(--ink); font-size: 23px; font-weight: 600; }
+.pv-lead + .pv-sec { margin-top: 8px; }
+.pv-sec + .pv-claim { border-top: 0; padding-top: 10px; }
+.pv-toc-parts a { display: block; }
 .pv-claim:target > h3 { background: var(--cs-target, var(--panel)); }
 .pv-claim > * { margin-top: 0; margin-bottom: 0; min-width: 0; max-width: 100%; }
 .pv-claim h3 { margin: 0; font-size: 20px; font-weight: 400; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
@@ -614,7 +628,6 @@ form.inline { display: inline; margin-left: 8px; }
 }
 .pv-toc { list-style: none; margin: 6px 0 6px; padding: 0; font-size: 14px; line-height: 1.3; display: flex; flex-direction: column; gap: 6px; }
 .pv-toc a { display: grid; grid-template-columns: 2.3em minmax(0, 1fr); }
-.pv-toc-key a { font-weight: 600; }
 /* The claims by name are folded in the contents: with dozens of claims the list ran off the screen. Open, the
    contents scroll on their own (.cs-toc, claimset.css). */
 .pv-toc-fold > summary { cursor: pointer; font-size: 14px; color: var(--muted); line-height: 1.6; }
@@ -630,3 +643,46 @@ dialog.zoom .zoom-nav button:disabled { color: var(--rule); cursor: default; }
 dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 20px 24px; box-sizing: border-box; }
 @media (max-width: 640px) { dialog.rows .popup-body { max-height: 100%; height: 100%; padding: 16px 56px 16px 16px; } }
 .pv-claim figcaption, .pv-claim .pv-more, dialog.zoom figcaption { overflow-wrap: anywhere; }
+
+/* Printing the paper view (design §7.4, *Printing*): the paper as a document. Everything that is for moving about
+   the site goes; the text takes the page's width; proofs, terms and tables are open (page.js opens them); a claim's
+   heading stays with its statement, and a term, a figure or a formula is not cut by a page break. */
+.pv-print-id, .pv-print-score { display: none; }
+@media print {
+  @page { margin: 18mm 16mm 20mm; }
+  html, body { background: #fff; }
+  body { font-size: 11pt; }
+  .site-header, .site-footer, .skip-link, .cs-toc, .toc-bar, .to-top, .intro-strip, .view-switch, .ask-ai,
+  .ask-message, .pv-document, .pv-open-all, .pv-lead, .pv-record, .pv-more, .pv-thumb, .pv-links, dialog,
+  .entry > .panel, #score, #versions, #not-claimed, .cs-rows-toggle, .fold-toggle .fold-state, .fold-toggle .count,
+  .cs-refs .cs-tail { display: none !important; }
+  .fold-toggle { font-size: 15pt; font-weight: 600; padding: 0; margin: 0 0 6pt; break-after: avoid; }
+  .cs-refs li { border-top: 0; padding: 3pt 0 3pt 1.6em; text-indent: -1.6em; break-inside: avoid; }
+  .pv-print-id, .pv-print-score { display: block; margin: 6px 0 0; font-size: 9.5pt; color: #333; }
+  .pv-print-score { margin-top: 8px; font-size: 10.5pt; color: #000; }
+  .pv-print-score strong { font-size: 13pt; font-weight: 700; }
+  .pv-print-id a { text-decoration: underline !important; }
+  .wrap { max-width: none; padding: 0; }
+  .entry, .entry[data-view="paper"] { display: block; }
+  .entry > .cs-body, .entry[data-view="paper"] > .cs-body, .pv-opening { max-width: none; }
+  .cs-title { font-size: 20pt; }
+  .cs-section { margin-top: 18pt; padding-top: 10pt; }
+  .cs-section h2 { font-size: 15pt; }
+  .pv-claim { padding: 12pt 0 4pt; }
+  .pv-claim h3 { font-size: 12.5pt; break-after: avoid; }
+  .pv-sec { font-size: 14pt; margin-top: 16pt; padding-top: 8pt; border-top: 1px solid #000; break-after: avoid; }
+  .pv-summary, .pv-statement { break-before: avoid; }
+  .pv-defs, .pv-beside, .pv-evidence { background: none; border-left: 2px solid #999; border-radius: 0; }
+  .pv-term, .pv-beside, .cs-figure, .cs-eq, .cs-table tr, .pv-proof li { break-inside: avoid; }
+  .pv-how { border-color: #666; color: #000; }
+  .cs-table, .cs-eq { overflow: visible; }
+  .cs-table table { font-size: 9pt; }
+  .cs-figure img { max-height: 90mm; object-fit: contain; }
+  .pv-defs { break-after: avoid; }
+  .pv-defs > .pv-label, .pv-evidence > .pv-label, .pv-remarks > .pv-label { break-after: avoid; }
+  .cs-page a, .cs-body a, .cs-header a { color: inherit !important; text-decoration: none; }
+  .cs-refs a[href^="http"] { text-decoration: underline; }
+  details.pv-proof > summary { list-style: none; }
+  details.pv-proof > summary::-webkit-details-marker { display: none; }
+  .fold:not(.open) > .fold-body { display: block !important; }
+}

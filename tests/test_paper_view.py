@@ -122,7 +122,7 @@ def test_the_parts_of_a_statement_are_a_list():
 def test_the_other_claims_that_bear_on_a_claim_with_their_rows_and_figures():
     sections, out = view(proofs())
     c3 = sections["claims"][sections["claims"].index('id="C3"'):sections["claims"].index('id="C4"')]
-    assert '<p class="pv-label">Supported by claim C4</p>' in c3
+    assert '<p class="pv-label">Supported by numerical check C4</p>' in c3
     assert 'data-gallery="gal-C3-C4" data-i="0">1 figure</a>' in c3     # the figure that shows a named row
     assert 'data-rows="rows-C3-C4">2 table rows</a>' in c3
     gallery = re.search(r'<ol class="pv-gallery" id="gal-C3-C4" hidden>(.*?)</ol>', out["extra"]).group(1)
@@ -260,28 +260,86 @@ def test_highlights_are_marked_where_they_stand_not_listed():
     c3, c1 = article(page, "C3"), article(page, "C1")
     assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[c1.index("<h3>"):]
     assert '<span class="pv-how pv-key">key term</span>' in page                    # a highlighted term, at the term
-    assert '<li class="pv-toc-key"><a href="#C3">' in page and '<li><a href="#C1">' in page
-    assert '<span class="visually-hidden">(key claim)</span>' in page               # said, not only shown in bold
+    assert "pv-toc-key" not in page and '<li><a href="#C3">' in page                # no mark in the contents
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
     assert 'id="highlights"' in record                                              # the record keeps the section
     plain = proofs()                                                                # no highlights: nothing marked
     assert "pv-key" not in site.paper_page(plain, base_url=BASE, listing=listing)
 
 
-def test_the_authors_own_document_is_linked():
+def test_the_page_prints_whole_and_the_manuscript_is_linked():
     listing = [{"version": 1, "date": "2026-11-17"}]
-    assert "pv-document" not in site.paper_page(proofs(), base_url=BASE, listing=listing)
+    page = site.paper_page(proofs(), base_url=BASE, listing=listing)
+    assert '<button type="button" class="button-quiet pv-print" hidden>Print or save as PDF</button>' in page
+    assert ('<p class="pv-print-id">entrylib:2026.000099@v1 · <a href="https://entrylib.test/p/2026.000099@v1">'
+            'https://entrylib.test/p/2026.000099@v1</a></p>') in page          # on paper: the link to this version
+    assert "pv-print-score" not in page                                    # no scores given: no line
+    from portal import scores as scoring
+    scored = scoring.compute(None, proofs())
+    if scored:                                                             # with the rubric: the split, in one line
+        line = site.paper_page(proofs(), base_url=BASE, listing=listing, scores=scored)
+        line = line.split('<p class="pv-print-score">')[1].split("</p>")[0]
+        assert line.startswith(f"<strong>Support: {scored['paper']['score']}/100</strong> (EntryLib rubric ")
+        assert "points lost: Evidence " in line and "Open problems " in line and "Checks the record" in line
+        assert "To fix" not in line and "<a" not in line                   # no explanations, no links
+    assert "as its authors wrote it" not in page                          # no manuscript: the button alone
     doc = proofs()
     files = "https://entrylib.test/p/2026.000099/v1/files/"
     doc["artefacts"] += [{"id": "A3", "kind": "proof", "uri": files + "proofs.md", "description": "The proofs."},
                          {"id": "A4", "kind": "proof", "uri": files + "proofs.pdf", "description": "The same, as PDF."}]
     page = site.paper_page(doc, base_url=BASE, listing=listing)
-    assert (f'<p class="pv-document"><a class="button-quiet" href="{files}proofs.pdf">The proofs as one document</a>'
-            in page)
+    assert "proofs.pdf" not in page.split('<article class="cs-body">')[0]   # the page itself is that document
+    assert site.own_document(doc) is None
     doc["artefacts"].append({"id": "A5", "kind": "manuscript", "uri": files + "paper.PDF", "description": "The paper."})
-    assert site.own_document(doc) == ("The paper as its authors wrote it", files + "paper.PDF")   # a manuscript first
-    for uri in ("files/proofs.pdf", "javascript:alert(1)//x.pdf", files + "proofs.docx", None, 3):
-        assert site.own_document({"artefacts": [{"id": "A1", "kind": "proof", "uri": uri}]}) is None, uri
+    assert site.own_document(doc) == ("The paper as its authors wrote it", files + "paper.PDF")
+    assert f'<a class="button-quiet" href="{files}paper.PDF">The paper as its authors wrote it</a>' in site.paper_page(
+        doc, base_url=BASE, listing=listing)
+    for uri in ("files/paper.pdf", "javascript:alert(1)//x.pdf", files + "paper.docx", None, 3):
+        assert site.own_document({"artefacts": [{"id": "A1", "kind": "manuscript", "uri": uri}]}) is None, uri
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
+    assert "@media print {" in css and ".entry > .panel, #score, #versions" in css
+    assert 'window.addEventListener("beforeprint", openAll)' in js and 'querySelectorAll("details.pv-proof")' in js
+
+
+def test_the_claims_stand_under_the_papers_sections():
+    doc = proofs()
+    doc["paper"]["sections"] = [{"title": "The weighted median", "claims": ["C3", "C1"]},
+                                {"title": "Computed", "claims": ["C4"]}]
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    page = site.paper_page(doc, base_url=BASE, listing=listing)
+    claims = page.split('<article class="cs-body">')[1]
+    order = re.findall(r'<h3 class="pv-sec" id="(sec-\d)">([^<]+)</h3>|<article class="pv-claim" id="(C\d)"', claims)
+    # the sections' order, not the IDs' nor the proofs'; a claim no section holds follows under a heading of its own
+    assert [a or c for a, _t, c in order] == ["sec-1", "C3", "C1", "sec-2", "C4", "sec-3", "C2"]
+    assert [t for _a, t, _c in order if t] == ["The weighted median", "Computed", "Other claims"]
+    assert "In the paper's sections." in claims and "a proved claim comes after" not in claims
+    nav = page.split('<nav class="cs-toc"')[1].split("</nav>")[0]
+    assert ('<ol class="pv-toc pv-toc-parts"><li><a href="#sec-1"><span>The weighted median</span></a></li>'
+            in nav) and '<details class="pv-toc-fold">' in nav                    # the sections, then the claims
+    plain = site.paper_page(proofs(), base_url=BASE, listing=listing)
+    assert 'class="pv-sec"' not in plain and "pv-toc-parts" not in plain        # no sections: as before
+    broken = proofs()                                                             # what is not a section is left out
+    broken["paper"]["sections"] = [{"title": "", "claims": ["C1"]}, "C2", {"title": "Real", "claims": ["C9", "C5"]}]
+    assert 'class="pv-sec"' not in site.paper_page(broken, base_url=BASE, listing=listing)
+    escaped = proofs()
+    escaped["paper"]["sections"] = [{"title": "<b>Bold</b>", "claims": ["C1", "C2", "C3", "C4"]}]
+    assert "&lt;b&gt;Bold&lt;/b&gt;" in site.paper_page(escaped, base_url=BASE, listing=listing)
+
+
+def test_a_claim_that_checks_others_by_computation_is_a_numerical_check():
+    sections, _ = view(proofs())                    # C4, computed and secondary, supports C3 and nothing else
+    claims = sections["claims"]
+    assert '<span class="pv-claim-id">Numerical check C4.</span>' in claims
+    assert '<p class="pv-label">Supported by numerical check C4</p>' in claims
+    assert '<span class="pv-claim-id">Claim C3.</span>' in claims
+    doc = proofs()
+    doc["claims"][3]["relations"].append({"type": "qualifies", "target": "C2", "id_type": "local", "note": "A limit."})
+    assert "Numerical check" not in view(doc)[0]["claims"]                 # it also limits a claim: a claim
+    doc = proofs()
+    doc["claims"][3]["role"] = "principal"
+    doc["paper"]["contributions"].append("C4")
+    assert "Numerical check" not in view(doc)[0]["claims"]                 # a principal result of the paper: a claim
 
 
 def test_written_with_the_claimset(tmp_path):

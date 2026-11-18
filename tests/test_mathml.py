@@ -76,6 +76,8 @@ class TestMathML(unittest.TestCase):
                       body(r"\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}"))
         self.assertIn('<mtable columnalign="left">', body(r"\begin{cases} 0 & x < 0 \\ 1 & \text{otherwise} \end{cases}"))
         self.assertIn("<mtext>otherwise</mtext>", body(r"\text{otherwise}"))
+        # a bar is a fence, not an operator between two terms: E|x|, not E | x |
+        self.assertIn('<mo stretchy="false" lspace="0" rspace="0">|</mo>', body(r"\mathrm E|x|^3"))
         # the spaces at the ends of words in a formula are kept: a browser drops plain ones ("TisU")
         self.assertIn("<mtext>\u00a0is\u00a0</mtext>", body(r"T \text{ is } U"))
         self.assertIn("<mtext>\u00a0with x</mtext>", body(r"y \text{ with x}"))

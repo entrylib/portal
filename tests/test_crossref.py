@@ -15,11 +15,12 @@ RECORD = {"author": [{"given": "Ivan", "family": "Svetunkov"}, {"given": "Fotios
 
 def test_written():
     s = crossref.summary(RECORD)
-    assert crossref.written(s) == ("Svetunkov, I., & Petropoulos, F. (2018). Old dog, new tricks: a modelling view. "
-                                   "International Journal of Production Research, 56(18), 6034–6047.")
+    # a classical reference list's entry: authors, year, title, journal and volume, pages (the DOI follows as a link)
+    assert crossref.written(s) == ("Svetunkov, I., Petropoulos, F., 2018. Old dog, new tricks: a modelling view. "
+                                   "International Journal of Production Research 56, 6034–6047.")
     book = {"author": [{"given": "J. K.", "family": "Ord"}], "issued": {"date-parts": [[2017]]},
             "title": ["Forecasting"], "publisher": "Springer", "type": "book"}
-    assert crossref.written(crossref.summary(book)) == "Ord, J. K. (2017). Forecasting. Springer."
+    assert crossref.written(crossref.summary(book)) == "Ord, J. K., 2017. Forecasting. Springer."
     assert crossref.summary({"title": ["No authors"]}) is None
     assert crossref.normalise("https://doi.org/10.1002/FOR.3980010202") == "10.1002/for.3980010202"
     assert crossref.normalise("not a doi") is None
@@ -37,7 +38,7 @@ def test_texts_are_asked_once_and_kept(env, monkeypatch):
         return RECORD if doi == "10.1000/known" else None
     conn = ctx["conn"]
     out = crossref.texts(conn, ["doi:10.1000/known", "10.1000/unknown", "10.1000/down"], fetcher=fake)
-    assert list(out) == ["10.1000/known"] and out["10.1000/known"].startswith("Svetunkov, I., & Petropoulos, F. (2018)")
+    assert list(out) == ["10.1000/known"] and out["10.1000/known"].startswith("Svetunkov, I., Petropoulos, F., 2018.")
     assert sorted(asked) == ["10.1000/down", "10.1000/known", "10.1000/unknown"]
     asked.clear()
     crossref.texts(conn, ["10.1000/known", "10.1000/unknown", "10.1000/down"], fetcher=fake)
@@ -60,9 +61,10 @@ def test_the_page_shows_author_year(env, monkeypatch):
     doc["definitions"][0]["source"] = "B1"
     concept, _ = publish(write(tmp, doc), **ctx)
     page = (ctx["published_dir"] / "p" / f"{concept.split(':', 1)[1]}.html").read_text()
-    from portal import page as pageview
-    if "ref_text" in pageview.render_parts.__code__.co_varnames:
-        assert "Svetunkov and Petropoulos (2018)" in page and "Old dog, new tricks" in page
+    record = (ctx["published_dir"] / "p" / concept.split(":", 1)[1] / "record.html").read_text()
+    # the list gives the reference as a classical list does; where the paper cites it, by author and year
+    assert "Svetunkov, I., Petropoulos, F., 2018. Old dog, new tricks: a modelling view." in page
+    assert "Svetunkov and Petropoulos (2018)" in record and "Old dog, new tricks" in record
     assert 'href="https://doi.org/10.1080/00207543.2017.1380326"' in page
     served = (ctx["published_dir"] / "p" / f"{concept.split(':', 1)[1]}.json").read_text()
     assert "Svetunkov" not in served                               # the published file is unchanged

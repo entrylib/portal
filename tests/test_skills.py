@@ -140,3 +140,18 @@ def test_the_requests_ask_for_the_byline_order():
     cat = {skills.FROM_PAPER: {"text": "x"}, skills.SUBMIT: {"text": "y"}}
     for text in (skills.short("https://entrylib.org", cat), skills.request("https://entrylib.org", cat)):
         assert "order of its byline" in text and "the agent, last" in text
+
+
+
+def test_the_requests_keep_the_papers_order_and_propose_its_subfield(tmp_path):
+    """What an author's assistant is asked on /convert follows the format (claimset §3.1, §3.2): the paper's
+    sections and the order of its definitions are kept, the subfield is proposed and told to the author (EntryLib
+    refuses a submission without one), and the summary may have 250 words."""
+    cat = skills.catalogue()
+    for text in (skills.short(BASE, cat), skills.request(BASE, cat), skills.message(BASE, cat)):
+        assert "give its sections as the claimset's sections" in text
+        assert "list the definitions in the order the paper introduces them" in text
+        assert "Propose the paper's subfield" in text and "tell me its name" in text
+        assert "at most 250 words" in text and "150 words" not in text
+    llms = reading.llms_txt(BASE)
+    assert "`paper.sections`" in llms and "what the paper is about first, defined in full" in llms

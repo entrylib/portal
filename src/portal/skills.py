@@ -109,8 +109,8 @@ def request(base_url, cat):
         "- Ask me the skill's questions before you build anything.\n"
         "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
         "worse.\n"
-        + AUTHOR_ORDER +
-        "- Draft a plain-language summary of at most 150 words for me to approve.\n"
+        + AUTHOR_ORDER + PAPER_ORDER + SUBFIELD +
+        "- Draft a plain-language summary of at most 250 words for me to approve.\n"
         "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
         f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "
         "and submit only when I say so.\n")
@@ -135,6 +135,16 @@ def message(base_url, cat, example=None):
     return "\n".join(parts)
 
 
+#: The paper's own order, kept (claimset spec §3.1, §3.2): its sections, and its definitions as it introduces them.
+PAPER_ORDER = ("- Keep the paper's order: give its sections as the claimset's sections (the paper's headings, each "
+               "with the claims that fall under it), and list the definitions in the order the paper introduces "
+               "them, what the paper is about first and in full.\n")
+
+#: The subfield is proposed and shown to the author (claimset spec §3.1): EntryLib refuses a submission without one.
+SUBFIELD = ("- Propose the paper's subfield from EntryLib's list (the skills say where it is) and tell me its name, "
+            "so that I can agree to it or name another.\n")
+
+
 def short(base_url, cat):
     """The message /convert shows and copies: what to do, and where to read the rules, in the order an assistant can
     use them (EntryLib's connector, an address, the package), then to stop if it can use none. It is short, so that
@@ -156,8 +166,8 @@ def short(base_url, cat):
         "- Ask me the skill's questions before you build anything.\n"
         "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
         "worse.\n"
-        + AUTHOR_ORDER +
-        "- Draft a plain-language summary of at most 150 words for me to approve.\n"
+        + AUTHOR_ORDER + PAPER_ORDER + SUBFIELD +
+        "- Draft a plain-language summary of at most 250 words for me to approve.\n"
         "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
         f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "
         "and submit only when I say so.\n")
