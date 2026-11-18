@@ -53,7 +53,9 @@ def _join(items, sep="; "):
 BRIEF_MAX = 5
 
 TERM = re.compile(r"\[\[([^:\]]+):([^\]]+)\]\]")
-YEAR = re.compile(r"\((\d{4}[a-z]?)\)")
+#: The year of a written reference: in brackets ("Kolassa, S. (2011). …") or, in a classical list, after the authors
+#: ("Kolassa, S., 2011. …").
+YEAR = re.compile(r"\((\d{4}[a-z]?)\)|(?<=[.\w], )(\d{4}[a-z]?)(?=\.(?:\s|$))")
 SURNAME = re.compile(r"(?:^|,\s*|&\s*|and\s+)([^\W\d_][^,&()]*?),\s*(?:[^\W\d_]\.)")
 
 #: Definition groups, in the order a reader meets them, with their headings.
@@ -248,7 +250,7 @@ class _Paper:
             names = [n.strip() for n in SURNAME.findall(t[:y.start()])] or [t.split(",")[0].strip()]
             who = (names[0] if len(names) == 1 else f"{names[0]} and {names[1]}" if len(names) == 2
                    else f"{names[0]} et al.")
-            labels[b["id"]] = f"{who} ({y.group(1)})"
+            labels[b["id"]] = f"{who} ({y.group(1) or y.group(2)})"
         # One work, one label: claims of one claimset share it, each named after it ("Svetunkov (2026a), C33").
         claim_of, work = {}, {}
         for b in self.refs:
@@ -1114,12 +1116,22 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         + f'</p><p>{P.text(q.get("question", ""))}</p></div>' for q in P.questions]
 
     def reference(b):
-        t = b.get("target")
-        shown = _link(t) if b.get("id_type") == "url" else _target(t, b.get("id_type"))
+        """One entry of the list, as a classical reference list has it: the reference as written (authors, year,
+        title, where it appeared), then its identifier as a link, a DOI by its address. No label before it: the
+        entry starts with the authors and the year its label is made of. A year that two entries share carries the
+        label's letter (2018a)."""
+        t, kind = b.get("target"), b.get("id_type")
+        shown = (_link(t) if kind == "url" else
+                 _link(f"https://doi.org/{t}") if kind == "doi" and isinstance(t, str) and t.startswith("10.")
+                 else _target(t, kind))
         if b["id"] in P.written:                              # written out by the site, then its identifier
-            shown = f"{esc(P.written[b['id']])} {shown}"
+            text = P.written[b["id"]]
+            lettered = re.search(r"\((\d{4})([a-z])\)", P.labels.get(b["id"], ""))
+            if lettered:
+                text = re.sub(rf"(?<=, ){lettered.group(1)}(?=\.)", lettered.group(1) + lettered.group(2), text, count=1)
+            shown = f"{esc(text)} {shown}"
         used = P.users(b["id"])
-        return (f'<li id="{esc(b["id"])}"><span class="cs-id">{esc(P.labels.get(b["id"], b["id"]))}</span> {shown}'
+        return (f'<li id="{esc(b["id"])}">{shown}'
                 + (f' <span class="cs-tail">Used by: {used}</span>' if used else "") + "</li>")
 
     def artefact(a):

@@ -223,6 +223,21 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertIn('Svetunkov, I. (2026). Evaluating forecasts. EntryLib. <a class="global-id" '
                       'href="/p/2026.000008@v2#C33">', refs)
         self.assertEqual(P.ref("B2"), '<a class="ref" href="#B2">Svetunkov (2026a), C33</a>')   # where it is cited
+        # an entry is written as a classical list has it: no label before it, the year with the label's letter,
+        # a DOI by its address
+        self.assertIn('<li id="B4">Svetunkov, I. (2026). Evaluating forecasts.', refs)
+        self.assertIn('<li id="B5"><a href="https://doi.org/10.1/unknown">https://doi.org/10.1/unknown</a>', refs)
+        self.assertNotIn('<span class="cs-id">', refs)
+        classical = {"B1": "Hyndman, R.J., Koehler, A.B., 2006. Another look. IJF 22, 679–688.",
+                     "B2": "Hyndman, R.J., Koehler, A.B., 2006. A second look. IJF 22, 700–710."}
+        both = {"paper": {}, "claims": [], "references": [{"id": k, "id_type": "doi", "target": f"10.1/{k}"}
+                                                          for k in classical]}
+        listed = H._Paper(both, ref_text=lambda r: classical[r["id"]])
+        self.assertEqual(listed.labels, {"B1": "Hyndman and Koehler (2006a)", "B2": "Hyndman and Koehler (2006b)"})
+        shown = H.render_parts(both, ref_text=lambda r: classical[r["id"]])["body"]
+        self.assertIn("Hyndman, R.J., Koehler, A.B., 2006a. Another look.", shown)
+        self.assertIn("Koehler, A.B., 2006b. A second look. IJF 22, 700–710. "
+                      '<a href="https://doi.org/10.1/B2">https://doi.org/10.1/B2</a>', shown)
         alone = H._Paper({"paper": {}, "claims": [], "references": doc["references"][1:2]}, ref_text=ref_text)
         self.assertEqual(alone.labels["B2"], "Svetunkov (2026), C33")          # no letter without a second work
 

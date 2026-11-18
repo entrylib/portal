@@ -20,7 +20,7 @@ def test_a_cited_claimset_is_written_by_its_guarantor(env):
     texts = indexer.claimset_texts(conn, targets)
     assert set(texts) == {concept, f"{concept}@v1#C1"}           # a version or a claimset not published: left out
     for written in texts.values():
-        assert written.startswith(f"{surname}, ") and written.endswith(f"({year}). {title}. EntryLib.")
+        assert written.startswith(f"{surname}, ") and written.endswith(f", {year}. {title}. EntryLib.")
     assert "Claude" not in texts[concept]                         # an agent is no author of the reference
 
 
