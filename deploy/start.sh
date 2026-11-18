@@ -13,5 +13,5 @@ if [ "${PORTAL_CLAIMSET_UPDATE:-1}" != "0" ]; then
   pip install --user --quiet --upgrade --no-deps "entrylib-rubric>=0.4" \
     || echo "portal: could not update the rubric; using the installed one" >&2
 fi
-echo "portal: starting (migrations, the registry, a rebuild of the pages if the code or claimset changed)"
+echo "portal: starting (migrations; the pages are rebuilt in the background if the code or claimset changed)"
 exec portal serve --port 8000

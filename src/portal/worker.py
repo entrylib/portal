@@ -15,20 +15,17 @@ from pathlib import Path
 from . import indexnow, notices
 from .archive import archive_version
 from .classify import ClassifierError
-from .indexer import index_version
+from .indexer import PUBLISH_LOCK, index_version
 from .publish import PublishError, prepare, publish
 from .registry import tag_name
 
 log = logging.getLogger("portal")
 
-#: One publisher at a time across the app's threads and processes (a PostgreSQL advisory lock).
-PUBLISH_LOCK = 4_242_001
-
-
 def publish_confirmed(conn, *, settings, registry, store, classifier, remote=None, archive=None):
     """Publish what can be published, and apply confirmed retractions and removals. Returns [(submission ID,
     published ID or None)] for the submissions published or refused in this round, and [(request ID, state)] for
-    the notices; [] at once if another publisher is running, which then does it."""
+    the notices; [] at once if another publisher is running, which then does it, or if the index is being rebuilt
+    (indexer.publishing), after which the app runs a round."""
     if not conn.execute("SELECT pg_try_advisory_lock(%s)", (PUBLISH_LOCK,)).fetchone()[0]:
         return []
     try:

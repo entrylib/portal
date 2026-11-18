@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shutil
+import threading
 import unicodedata
 from pathlib import Path
 
@@ -481,22 +482,54 @@ def reindex(conn, registry, published_dir, base_url):
 #: In the published directory: which claimset rendered the static files.
 RENDERED_BY = ".rendered-by"
 
+#: One publisher at a time across the app's threads and processes (a PostgreSQL advisory lock): a round of the
+#: publisher (worker.py), and a rebuild of the index, which reads the registry the publisher writes.
+PUBLISH_LOCK = 4_242_001
+
+#: Set while the app rebuilds the index and the pages behind its back (design §10); /healthz says so.
+REBUILDING = threading.Event()
+
+
+@contextlib.contextmanager
+def publishing(conn):
+    """Hold the publisher's lock on `conn`, waiting for a round of the publisher that is running to end. A round
+    that starts meanwhile publishes nothing and leaves it to the next one (worker.publish_confirmed)."""
+    conn.execute("SELECT pg_advisory_lock(%s)", (PUBLISH_LOCK,))
+    try:
+        yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (PUBLISH_LOCK,))
+
+
+def _rendered_by(version):
+    return f"{version} site {site.fingerprint()}"
+
+
+def rebuild_due(published_dir, version):
+    """Whether the static files were written by another claimset `version` or another state of the site's code than
+    the ones running (design §7.1), or by none."""
+    try:
+        return (Path(published_dir) / RENDERED_BY).read_text(encoding="utf-8").strip() != _rendered_by(version)
+    except FileNotFoundError:
+        return True
+
+
+def write_site(conn, published_dir, base_url):
+    """The files that do not wait for a rebuild: the fixed pages (with the stylesheets and the script of the code
+    that runs), /llms.txt and /index.jsonl, which exist before anything is published."""
+    site.write_fixed(published_dir, base_url)
+    write_index(conn, published_dir, base_url)
+
 
 def refresh_if_claimset_changed(conn, registry, published_dir, base_url, version):
-    """At the app's start, after it installed the newest claimset: write /llms.txt and /index.jsonl, and rebuild the
-    index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views are
-    regenerated when the renderer changes, and the pages when the site's look changes). Returns True if it
+    """After the app installed the newest claimset: write the fixed pages, /llms.txt and /index.jsonl, and rebuild
+    the index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views
+    are regenerated when the renderer changes, and the pages when the site's look changes). Returns True if it
     rebuilt."""
-    site.write_fixed(published_dir, base_url)
-    write_index(conn, published_dir, base_url)          # /llms.txt and /index.jsonl exist before anything is published
-    marker = Path(published_dir) / RENDERED_BY
-    version = f"{version} site {site.fingerprint()}"
-    try:
-        if marker.read_text(encoding="utf-8").strip() == version:
-            return False
-    except FileNotFoundError:
-        pass
+    write_site(conn, published_dir, base_url)
+    if not rebuild_due(published_dir, version):
+        return False
     if registry is not None:
         reindex(conn, registry, published_dir, base_url)
-    _write(marker, version + "\n")
+    _write(Path(published_dir) / RENDERED_BY, _rendered_by(version) + "\n")
     return True

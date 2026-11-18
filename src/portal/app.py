@@ -29,6 +29,7 @@ from . import (
     fetch,
     history,
     ids,
+    indexer,
     mcp_server,
     notices,
     pages,
@@ -122,9 +123,12 @@ def _publisher(settings):
     return out
 
 
-def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=None, limiter=None):
+def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=None, limiter=None,
+               after_start=None):
     """The app. `pool`, `orcid` (an ORCID client), `publisher` ({registry, store, classifier}) and `limiter` (the
-    per-address rate limits) may be given, as tests do; otherwise they are made from the settings."""
+    per-address rate limits) may be given, as tests do; otherwise they are made from the settings. `after_start`:
+    work the app does once behind its back when it has started, in a thread (the rebuild of the pages after an
+    update, cli.py); the app then publishes what was confirmed meanwhile."""
     settings = settings or Settings.from_env()
     own_pool = pool is None
     pool = pool or make_pool(settings.database_url, min_size=1, max_size=10)
@@ -169,19 +173,36 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 log.exception("expiring submissions failed")
             await asyncio.sleep(EXPIRY_INTERVAL_SECONDS)
 
+    async def background():
+        """The rebuild after an update, while the app answers; then a round of the publisher, for what was
+        confirmed while the rebuild held its lock."""
+        indexer.REBUILDING.set()
+        try:
+            await run_in_threadpool(after_start)
+        except Exception:  # noqa: BLE001 - the app goes on; the next start tries again
+            log.exception("the work after the start failed")
+        finally:
+            indexer.REBUILDING.clear()
+        try:
+            await run_in_threadpool(publish_now)
+        except Exception:  # noqa: BLE001 - the periodic round retries
+            log.exception("publishing after the rebuild failed")
+
     @asynccontextmanager
     async def lifespan(app):
         if own_pool:
             pool.open()
         task = asyncio.create_task(expiry_loop()) if run_expiry else None
+        rebuild = asyncio.create_task(background()) if after_start else None
         try:
             async with mcp.session_manager.run():
                 yield
         finally:
-            if task:
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
+            for running in (task, rebuild):
+                if running:
+                    running.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await running
             if own_pool:
                 pool.close()
 
@@ -206,6 +227,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
     def healthz():
         """Liveness and readiness: the app runs and the database answers."""
         body = {"portal": __version__, "claimset": claimset.__version__, "spec": claimset.SPEC_VERSION}
+        if indexer.REBUILDING.is_set():                 # after an update: the pages are being written again
+            body["rebuilding"] = True
         try:
             with pool.connection(timeout=2) as conn:
                 conn.execute("SELECT 1")
