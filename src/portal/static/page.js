@@ -33,24 +33,44 @@
   });
   nav.addEventListener("click", function (e) { if (e.target.closest("a")) close(); });
 
+  // The paper view's sections (design §7.4, *Sections*): headings inside Claims, not boxes of their own. Each has an
+  // entry in the contents whose title opens the list of its claims and whose arrow (a.pv-toc-go) leads to the
+  // heading. The section being read is the last whose heading has passed the line the observer watches; its entry
+  // is marked. The lists are the reader's to open and close: nothing here does.
+  var parts = [];
+  nav.querySelectorAll("a.pv-toc-go").forEach(function (a) {
+    var h = document.getElementById(a.getAttribute("href").slice(1));
+    if (h) parts.push(h);
+  });
+  function part(section) {
+    var line = window.innerHeight * 0.3 + 1, found = null;
+    parts.forEach(function (h) { if (section.contains(h) && h.getBoundingClientRect().top <= line) found = h; });
+    return found;
+  }
+  function entry(a) { return a.closest(".pv-toc-sec"); }
+  function set(a, on) {
+    if (on) a.setAttribute("aria-current", "location"); else a.removeAttribute("aria-current");
+    if (entry(a)) entry(a).classList.toggle("pv-toc-here", on);
+  }
+
   var current = null;
   function mark(id) {
     if (id === current || !links[id]) return;
-    if (current && links[current]) links[current].removeAttribute("aria-current");
-    links[id].setAttribute("aria-current", "location");
+    if (current && links[current]) set(links[current], false);
+    set(links[id], true);
     // Contents taller than the screen scroll on their own: keep the section being read in view in them.
     if (nav.scrollHeight > nav.clientHeight && links[id].offsetParent) {
       var at = links[id].getBoundingClientRect(), box = nav.getBoundingClientRect();
       if (at.top < box.top || at.bottom > box.bottom) nav.scrollTop += at.top - box.top - box.height / 2;
     }
-    label.textContent = links[id].textContent;
+    label.textContent = entry(links[id]) ? entry(links[id]).querySelector("summary").textContent : links[id].textContent;
     current = id;
   }
   var visible = {};
   var observer = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) { visible[e.target.id] = e.isIntersecting; });
     for (var i = 0; i < sections.length; i++) {
-      if (visible[sections[i].id]) { mark(sections[i].id); return; }
+      if (visible[sections[i].id]) { mark((part(sections[i]) || sections[i]).id); return; }
     }
   }, { rootMargin: "-15% 0px -70% 0px" });
   sections.forEach(function (s) { observer.observe(s); });

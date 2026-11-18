@@ -590,10 +590,11 @@ class _View:
 
 def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, claim_url=None):
     """The section of the paper view that is its own, [(id, title, count, html)]: *Claims*, in reading order, each
-    with the terms it is the first to use before it; and `extra`, what the page holds besides (the sets of figures the
-    viewer steps through, the rows a pop-up shows). `record`: the address of the record page of the same version;
-    `number`: how numbers are written, as the record page writes them (`render_parts`); `claim_url(id)`: the address
-    of a claim's own page, or None."""
+    with the terms it is the first to use before it; `extra`, what the page holds besides (the sets of figures the
+    viewer steps through, the rows a pop-up shows); and `parts`, the paper's sections the claims stand under,
+    [(the heading's id, title, [claim IDs in the section's order])], [] without sections. `record`: the address of
+    the record page of the same version; `number`: how numbers are written, as the record page writes them
+    (`render_parts`); `claim_url(id)`: the address of a claim's own page, or None."""
     token = DIGITS.set(number if callable(number) else None)
     try:
         P = pageview._Paper(doc, file_url=file_url, ref_text=ref_text)
@@ -602,22 +603,22 @@ def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, 
             claims = "".join(f'<h3 class="pv-sec" id="sec-{i}">{esc(title)}</h3>'
                              + "".join(V.claim(V.claims[cid]) for cid in cids)
                              for i, (title, cids) in enumerate(V.parts, 1))
-            order = "In the paper's sections."
         else:
             claims = "".join(V.claim(V.claims[cid]) for cid in V.shown)
-            order = "In the paper's order; a proved claim comes after the claims its proof uses."
         rest = len(P.defs) - len(V.introduced)
         other = (f'<p class="pv-more">{rest} more definition{"s" if rest != 1 else ""} that no claim names (designs, '
                  f'data, cases) {"are" if rest != 1 else "is"} on <a href="{esc(record)}#definitions">the record '
                  f'page</a>.</p>' if rest > 0 else "")
         sections = [("claims", "Claims", len(V.shown),
                      '<section class="cs-section pv-section" id="claims"><h2>Claims</h2>'
-                     f'<p class="pv-lead">{order} '
+                     # what a reader needs to know of the layout; not the order of the claims (removed on
+                     # 18 November 2026: design §7.4, *Paper view*)
+                     '<p class="pv-lead">'
                      'A term is defined before the claim that first uses it, and what supports a claim stands under '
                      'its statement.<button type="button" class="button-quiet pv-open-all" hidden '
                      'data-open="Open all proofs" data-close="Close all proofs">Open all proofs</button></p>'
                      f'{claims}{other}</section>')]
         return {"sections": sections, "extra": "".join(V.galleries.values()) + "".join(V.panels),
-                "parts": [(f"sec-{i}", title, len(cids)) for i, (title, cids) in enumerate(V.parts, 1)]}
+                "parts": [(f"sec-{i}", title, list(cids)) for i, (title, cids) in enumerate(V.parts, 1)]}
     finally:
         DIGITS.reset(token)
