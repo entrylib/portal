@@ -254,11 +254,15 @@ def test_an_older_package_gets_the_same_page():
 def test_a_real_page_starts_with_its_summary_or_its_highlights(env):
     doc = example()
     doc["paper"]["summary"] = "In plain words."
-    _, page = page_of(env, doc)
-    body = page.split('<article class="cs-body">')[1]
+    out, page = page_of(env, doc)
+    body = (out / "p" / KEY / "record.html").read_text().split('<article class="cs-body">')[1]
     assert body.startswith('<section class="cs-section" id="summary">') and "In brief" not in body
     if "<h2>Highlights</h2>" in body:                   # claimset 0.41.10-11 put the summary in their place
         assert body.index('id="summary"') < body.index("<h2>Highlights</h2>")
+    # the paper view: the Summary stands with the header, beside the panel, and the claims follow below
+    head, rest = page.split('<aside class="panel"')[0], page.split('<article class="cs-body">')[1]
+    assert '<div class="pv-opening"><section class="cs-section" id="summary">' in head
+    assert rest.startswith('<section class="cs-section pv-section" id="claims">') and 'id="summary"' not in rest
 
 
 def test_a_page_without_a_summary_starts_with_its_highlights(env):

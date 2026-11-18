@@ -79,8 +79,8 @@ PAGES = {
 HOW_TO_READ = """<ol>
 <li><strong>Summary</strong>, when the authors wrote one, gives the paper in a few sentences of plain language.</li>
 <li>A paper opens as a <strong>paper</strong>: its claims in reading order, each with its proof or its evidence
-under it. The claims the authors chose as the paper's main ones are marked <strong>key claim</strong>, and stand in
-bold in the contents. <strong>Record</strong>, at the top, lists everything the paper holds (definitions, claims,
+under it. The claims the authors chose as the paper's main ones are marked <strong>key claim</strong>.
+<strong>Record</strong>, at the top, lists everything the paper holds (definitions, claims,
 evidence, files), for checking it; its <strong>Highlights</strong> lists the key claims together.</li>
 <li>Each claim has a <strong>Support</strong> score, from 0 to 100: how well the paper's own record backs it. It checks
 the record, not the science. Click the score to see what lowered it.</li>
@@ -895,9 +895,12 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
             title = PAGE_SECTIONS.get(sid, old)
             body.append(_retitle(blocks[sid], old, title))
             shown.append((sid, title, c, ""))
-    keep("summary")              # no Highlights: the paper view marks the highlighted claims where they stand
-    keys = {h for h in p.get("highlights") or [] if isinstance(h, str)}
-    said = ' <span class="visually-hidden">(key claim)</span>'    # bold in the contents; said to a screen reader
+    # No Highlights: the paper view marks the highlighted claims where they stand ("key claim"), and nowhere else.
+    # The Summary stands with the header, above the contents and the claims: the panel is beside the two, at the
+    # top, and the claims below have the page's width (decided 18 November 2026).
+    keep("summary")
+    opening = "".join(body)
+    body.clear()
     names = {c["id"]: " ".join(c["name"].split()) for c in doc.get("claims") or []
              if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)}
     for sid, title, c, block in view["sections"]:
@@ -908,9 +911,7 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
             # folded: a paper may have dozens of claims, and the contents would run off the screen
             inner = ('<details class="pv-toc-fold"><summary>The claims by name</summary><ol class="pv-toc">'
                      + "".join(
-                f'<li{" class=" + chr(34) + "pv-toc-key" + chr(34) if cid in keys else ""}><a href="#{cid}">'
-                f'<span class="pv-toc-id">{cid}</span> <span>{esc(names.get(cid, ""))}'
-                f'{said if cid in keys else ""}'
+                f'<li><a href="#{cid}"><span class="pv-toc-id">{cid}</span> <span>{esc(names.get(cid, ""))}'
                 f'</span></a></li>'
                 for cid in cids) + "</ol></details>")
         shown.append((sid, title, c, inner))
@@ -936,7 +937,8 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
-            f'{document}{ask_ai(doc, base_url)}</div>{_panel(doc, parts, base_url, key, scores)}{nav}'
+            f'{document}{ask_ai(doc, base_url)}<div class="pv-opening">{opening}</div></div>'
+            f'{_panel(doc, parts, base_url, key, scores)}{nav}'
             f'<article class="cs-body">{"".join(body)}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
             f'{unclaimed}{_versions(listing, key, n)}{view["extra"]}</article></div>')

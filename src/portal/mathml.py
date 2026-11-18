@@ -279,7 +279,8 @@ class _Parser:
         if t in "()[]":
             return mo(t, stretchy="false")
         if t == "|":
-            return mo("|", stretchy="false")
+            # a bar is a fence (|x|, E|x|), not an operator between two terms: no space on its sides
+            return mo("|", stretchy="false", lspace="0", rspace="0")
         if t == "&":
             raise TexError("& outside an environment")
         return mo(t)

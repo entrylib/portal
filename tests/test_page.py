@@ -168,6 +168,10 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertIn("<math><semantics>", P.text("$\\epsilon_t \\sim N(0, \\sigma^2)$"))      # $…$: in the line
         self.assertIn('<math display="block">', P.text("$$y_t = w^\\top v_{t-1} + \\epsilon_t$$"))    # $$…$$: displayed
         self.assertIn("<math><semantics>", P.text("at $T$ of 100"))                       # short: in the line
+        # the punctuation after a formula in a sentence stays with it: a formula does not break across lines
+        self.assertIn('</math>.</span> Next', P.text("shrinks like $1/\\sigma$. Next"))
+        self.assertIn('<span class="cs-nw"><math>', P.text("shrinks like $1/\\sigma$. Next"))
+        self.assertNotIn("cs-nw", P.text("at $T$ of 100"))
         out = P.text("where $$\\epsilon_t \\sim N(0, \\sigma^2)$$, and so on")        # its comma goes with it
         self.assertIn("<mo>,</mo></mrow><annotation", out)
         self.assertTrue(out.endswith("</math></span> and so on"))      # in its box (below)

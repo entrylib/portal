@@ -260,8 +260,7 @@ def test_highlights_are_marked_where_they_stand_not_listed():
     c3, c1 = article(page, "C3"), article(page, "C1")
     assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[c1.index("<h3>"):]
     assert '<span class="pv-how pv-key">key term</span>' in page                    # a highlighted term, at the term
-    assert '<li class="pv-toc-key"><a href="#C3">' in page and '<li><a href="#C1">' in page
-    assert '<span class="visually-hidden">(key claim)</span>' in page               # said, not only shown in bold
+    assert "pv-toc-key" not in page and '<li><a href="#C3">' in page                # no mark in the contents
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
     assert 'id="highlights"' in record                                              # the record keeps the section
     plain = proofs()                                                                # no highlights: nothing marked

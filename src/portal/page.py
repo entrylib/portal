@@ -397,7 +397,12 @@ class _Paper:
             display = m.group(1) is not None             # the author's choice: $$…$$ (§8 rule 6)
             if display and end < len(s) and s[end] in ",.;:":   # a formula on its own line keeps its punctuation
                 tex, end = tex + s[end], end + 1
-            out.append(math(tex, display=display))
+            shown = math(tex, display=display)
+            if not display and end < len(s) and s[end] in ",.;:!?)":
+                # the punctuation after a formula in a sentence stays on its line: a formula does not break, and
+                # a full stop alone at the start of the next line reads as a mistake
+                shown, end = f'<span class="cs-nw">{shown}{esc(s[end])}</span>', end + 1
+            out.append(shown)
             last = end
         out.append(self._terms(s[last:]))
         return "".join(out)
