@@ -678,8 +678,9 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return _page(site.message_page("Confirmed", text, ("/", "Home")))
 
     @app.get("/consent/{token}", response_class=HTMLResponse, include_in_schema=False)
-    def consent_page(token: str, attached: bool = False):
-        """The page a guarantor opens from their consent link."""
+    def consent_page(token: str, attached: bool = False, view: str = "paper"):
+        """The page a guarantor opens from their consent link: the paper as it will be published, in its paper view,
+        or with `?view=record` its record (design §4.2)."""
         with pool.connection() as conn:
             ctx = consent.page_context(conn, token, settings.submissions_dir)
             preview_scores = scores.compute(conn, ctx["doc"]) if ctx and ctx.get("doc") else None
@@ -689,7 +690,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         status_url = f"{settings.base_url}/api/submissions/{ctx['submission']}"
         html_ = pages.consent(ctx, f"{settings.base_url}/consent/{token}/start", status_url,
                               attach_url=f"/consent/{token}/package", attached=attached, scores=preview_scores,
-                              base_url=settings.base_url)
+                              base_url=settings.base_url, view=view,
+                              views=(f"/consent/{token}", f"/consent/{token}?view=record"))
         # the preview is a paper page: its own script (page.js: pop-ups, contents) runs, as on a published page
         return HTMLResponse(html_, headers={"Content-Security-Policy": removal_csp + "; script-src 'self'"})
 

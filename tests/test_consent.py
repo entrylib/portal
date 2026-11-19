@@ -65,9 +65,27 @@ def test_the_consent_page_previews_the_paper(app_client):
     bar = page.index('class="preview-bar"')
     assert bar < page.index('class="cs-page entry preview"') and bar < page.index("Confirm: sign in with ORCID")
     assert "Preview, not published yet" in page[bar:bar + 300]
-    assert 'id="principal"' in page and 'class="panel"' in page              # the paper page's sections and panel
+    assert 'data-view="paper"' in page and 'id="claims"' in page and 'class="panel"' in page   # the paper view
     assert "0000.000000" not in page                                          # the placeholder ID is never shown
     assert "By confirming, you state" in page and "responsible researcher" in page
+    # the switch leads to the record of the same preview, on the consent page, and back
+    assert f'<a href="/consent/{token}" aria-current="page"' in page and f'href="/consent/{token}?view=record"' in page
+    assert 'href="/p/' not in page.split('class="cs-page')[1].split("</article>")[0].replace(
+        'href="/p/2026.', "")                                                 # nothing links to a published page
+    record = app_client.get(f"/consent/{token}", params={"view": "record"}).text
+    assert 'id="principal"' in record and 'data-view="paper"' not in record   # the record's sections
+    assert f'href="/consent/{token}?view=record" aria-current="page"' in record
+    assert "Confirm: sign in with ORCID" in record and "By confirming, you state" in record
+
+
+def test_the_preview_links_what_only_the_record_holds_to_its_record():
+    """Design §4.2: in the paper view of a preview, a link to evidence or an artefact leads to the preview's record,
+    as a published paper view's leads to /p/<id>/record."""
+    from portal import site
+    doc = example()
+    html = site.preview_page(doc, base_url="", bar="", statement="", view="paper", paper_href="/consent/t",
+                             record_href="/consent/t?view=record")
+    assert 'href="/consent/t?view=record#E1"' in html and 'href="#E1"' not in html
 
 
 def test_your_submissions_opens_after_a_sign_in(app_client):
