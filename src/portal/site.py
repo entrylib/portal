@@ -844,15 +844,15 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                  script="/page.js")
 
 
-def view_switch(key, view):
+def view_switch(key, view, paper_href=None, record_href=None):
     """The two views of a paper's current version (design §7.4, *Paper view*): the paper, to read the argument, and
-    the record, to check it. `view`: the one this page is."""
+    the record, to check it. `view`: the one this page is. A preview gives its own two addresses (design §4.2)."""
     def one(name, href, what):
         here = ' aria-current="page"' if view == name.lower() else ""
-        return f'<a href="{href}"{here} title="{what}">{name}</a>'
+        return f'<a href="{esc(href)}"{here} title="{what}">{name}</a>'
     return ('<nav class="view-switch" aria-label="Views of this paper">'
-            + one("Paper", f"/p/{key}", "The claims in reading order, each with its proof or evidence")
-            + one("Record", f"/p/{key}/record",
+            + one("Paper", paper_href or f"/p/{key}", "The claims in reading order, each with its proof or evidence")
+            + one("Record", record_href or f"/p/{key}/record",
                   "Every object of the claimset: definitions, claims, evidence, artefacts")
             + "</nav>")
 
@@ -881,21 +881,14 @@ def own_document(doc):
 PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
 
 
-def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None, scores=None):
-    """The paper view of a claimset's current version, the page at /p/<key> (design §7.4, *Paper view*): the header
-    and panel of the record page, its Summary, then the claims in reading order, each after the terms it is the
-    first to use and with what supports it (`paper.render`; the authors' highlights are marked there, not listed),
-    then the record page's Assumptions, Limitations, Open questions, References, Score, Not claimed and Versions.
-    What a program is given at this address (the published file, the reading view, the BibTeX entry: design §7.1)
-    does not depend on which view people see. A link to something only the record holds (evidence, an artefact)
-    leads to the record."""
-    p = doc["paper"]
-    key, n = ids.url_key(p["id"]), p.get("version")
-    record = f"/p/{key}/record"
-    parts = render(doc, file_url, ref_text, scores, claim_pages(doc))
-    pages = claim_pages(doc)
+def _paper_body(doc, parts, record, more, *, file_url=None, ref_text=None, scores=None, claim_url=None):
+    """The paper view's own part (design §7.4, *Paper view*), for a published paper and for a preview (§4.2):
+    (the opening: the Summary that stands with the header; the contents; the sections from the Summary on, in
+    order, as a list of HTML; `paper.render`'s result, whose `extra` the page appends). `parts`: the record's
+    `render_parts`; `record`: the address of the record of the same version; `more`: the contents' entries after
+    the sections (Score, Not claimed, Versions)."""
     view = paperview.render(doc, record, file_url=file_url, ref_text=ref_text, number=number, scores=scores,
-                            claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None)
+                            claim_url=claim_url)
     blocks = dict(parts.get("blocks") or {})
     titles = {sid: (title, c) for sid, title, c in parts.get("sections") or []}
     summary = _summary(doc)
@@ -943,15 +936,34 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
         shown.append((sid, title, c, inner))
     for sid in PAPER_KEEPS:
         keep(sid)
+    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>'
+                               + (f' <span class="count">{esc(c)}</span>' if c else "") + inner + "</li>"
+                               for sid, t, c, inner in shown) + more + "</ol></nav>")
+    return opening, nav, body, view
+
+
+def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None, scores=None):
+    """The paper view of a claimset's current version, the page at /p/<key> (design §7.4, *Paper view*): the header
+    and panel of the record page, its Summary, then the claims in reading order, each after the terms it is the
+    first to use and with what supports it (`paper.render`; the authors' highlights are marked there, not listed),
+    then the record page's Assumptions, Limitations, Open questions, References, Score, Not claimed and Versions.
+    What a program is given at this address (the published file, the reading view, the BibTeX entry: design §7.1)
+    does not depend on which view people see. A link to something only the record holds (evidence, an artefact)
+    leads to the record."""
+    p = doc["paper"]
+    key, n = ids.url_key(p["id"]), p.get("version")
+    record = f"/p/{key}/record"
+    parts = render(doc, file_url, ref_text, scores, claim_pages(doc))
+    pages = claim_pages(doc)
     unclaimed, n_unclaimed = not_claimed(doc)
     more = (('<li><a href="#score">Score</a></li>' if scores else "")
             + (f'<li><a href="#not-claimed">Not claimed</a> <span class="count">{n_unclaimed}</span></li>'
                if n_unclaimed else "")
             + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>')
-    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
-           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>'
-                               + (f' <span class="count">{esc(c)}</span>' if c else "") + inner + "</li>"
-                               for sid, t, c, inner in shown) + more + "</ol></nav>")
+    opening, nav, body, view = _paper_body(doc, parts, record, more, file_url=file_url, ref_text=ref_text,
+                                           scores=scores,
+                                           claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None)
     issues = f"/p/{key}@v{n}.issues.txt"
     top = [_status(p)] if (p.get("status") or "active") != "active" else []
     top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
@@ -987,30 +999,50 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
                  canonical=canonical, script="/page.js")
 
 
-def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a submission"):
+def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a submission", view="paper",
+                 paper_href="?", record_href="?view=record"):
     """The consent page (design §4.2): the claimset's page as it will be published, from the same parts as a published
-    one (its header, sections, panel and Score), marked as a preview. `bar` is HTML: the Confirm button, or what has
-    to come first, kept at the top while the guarantor reads; `statement` is HTML: what confirming means. A preview has
-    no identifier, version, citation or files of its own yet: it shows none, and links to no claim page."""
+    one, marked as a preview. As on a published paper, it opens on the paper view (`view` "paper": the claims in
+    reading order, each with its proof or evidence, §7.4) and its switch leads to the record (`view` "record": every
+    object by kind, with the Score), each at its own address on the consent page (`paper_href`, `record_href`). `bar`
+    is HTML: the Confirm button, or what has to come first, kept at the top while the guarantor reads; `statement` is
+    HTML: what confirming means. A preview has no identifier, version, citation or files of its own yet: it shows
+    none, and links to no claim page."""
     d = json.loads(json.dumps(doc))
     p = d.setdefault("paper", {})
     p.setdefault("id", PREVIEW_ID)                       # the renderer names claims by it; a preview links nowhere
     parts = render(d, None, None, scores, ())
-    body, sections = page_sections(parts, d)
     unclaimed, n_unclaimed = not_claimed(d)
-    nav = contents(sections, ('<li><a href="#score">Score</a></li>' if scores else "")
-                   + (f'<li><a href="#not-claimed">Not claimed</a> <span class="count">{n_unclaimed}</span></li>'
-                      if n_unclaimed else ""), d)
+    more = (('<li><a href="#score">Score</a></li>' if scores else "")
+            + (f'<li><a href="#not-claimed">Not claimed</a> <span class="count">{n_unclaimed}</span></li>'
+               if n_unclaimed else ""))
     top = ["Preview: not published yet"] + ([esc(subfield_name(d))] if subfield_name(d) else [])
     panel = (f'<aside class="panel" aria-label="About this paper">'
              f'{score_html.panel_rows(scores, parts.get("lights"))}{_interests_row(d)}'
              '<div class="panel-row"><h2>Cite</h2><p class="small">The identifier and the citation are given when '
              "it is published.</p></div></aside>")
-    main = (f'<div class="preview-bar" role="region" aria-label="Confirm this submission">{bar}</div>'
-            f'<div class="cs-page entry preview"><div class="cs-header entry-header">'
-            f'<div class="notice preview-note">{statement}</div>'
-            f'<p class="entry-top">{" · ".join(top)}</p>{parts["header"]}{_origin_line(d, parts["origin"], None)}'
-            f'</div>{panel}{nav}<article class="cs-body">{body}{score_html.section(scores)}{unclaimed}</article></div>')
+    view = "record" if view == "record" else "paper"
+    switch = view_switch("", view, paper_href, record_href)
+    header = (f'<div class="notice preview-note">{statement}</div>{switch}'
+              f'<p class="entry-top">{" · ".join(top)}</p>{parts["header"]}{_origin_line(d, parts["origin"], None)}')
+    bar_html = f'<div class="preview-bar" role="region" aria-label="Confirm this submission">{bar}</div>'
+    if view == "record":
+        body, sections = page_sections(parts, d)
+        nav = contents(sections, more, d)
+        main = (f'{bar_html}<div class="cs-page entry preview"><div class="cs-header entry-header">{header}</div>'
+                f'{panel}{nav}<article class="cs-body">{body}{score_html.section(scores)}{unclaimed}</article></div>')
+    else:
+        opening, nav, body, pv = _paper_body(d, parts, record_href, more, scores=scores)
+        main = (f'{bar_html}<div class="cs-page entry preview" data-view="paper"><div class="cs-header entry-header">'
+                f'{header}<div class="pv-opening">{opening}</div></div>'
+                f'<div class="entry-rail">{panel}{nav}</div>'
+                f'<article class="cs-body">{"".join(body)}{score_html.section(scores)}{unclaimed}{pv["extra"]}'
+                f'</article></div>')
+        # what only the record holds (evidence, an artefact): a link to it leads to the record of the preview
+        here = set(re.findall(r'\bid="([^"]+)"', main))
+        main = re.sub(r'href="#([^"]+)"',
+                      lambda m: m.group(0) if m.group(1) in here or m.group(1) == "top"
+                      else f'href="{esc(record_href)}#{m.group(1)}"', main)
     return shell(title, main, active="submissions", head='<meta name="robots" content="noindex">',
                  script="/page.js")
 

@@ -47,7 +47,8 @@ def _source_box(ctx):
             f'{escape(src.get("authorship") or "")}.</p>{more}')
 
 
-def consent(ctx, start_url, status_url, attach_url=None, attached=False, scores=None, base_url=""):
+def consent(ctx, start_url, status_url, attach_url=None, attached=False, scores=None, base_url="", view="paper",
+            views=("?", "?view=record")):
     """The page a guarantor opens from their consent link: while it is pending, a preview of the claimset's page as it
     will be published (design §4.2), with the Confirm button in a bar that stays at the top. A submission waiting for
     its package (design §4.4) asks for it first: the Confirm button comes once it is attached."""
@@ -62,7 +63,7 @@ def consent(ctx, start_url, status_url, attach_url=None, attached=False, scores=
                             "it again."}
         return message("Confirm a submission", texts.get(state, state), status_url)
     if ctx.get("doc"):
-        return _preview(ctx, start_url, attach_url, attached, scores, base_url)
+        return _preview(ctx, start_url, attach_url, attached, scores, base_url, view, views)
     principal = "".join(f"<li>{escape(s)}</li>" for s in ctx["principal"])
     correction = ""
     if ctx["kind"] == "correction":
@@ -93,8 +94,9 @@ expect this, ignore it: nothing is published without your confirmation.</p>
     return page("Confirm a submission", body)
 
 
-def _preview(ctx, start_url, attach_url, attached, scores, base_url):
-    """The pending consent page: the bar, what confirming means, and the paper as it will be published."""
+def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper", views=("?", "?view=record")):
+    """The pending consent page: the bar, what confirming means, and the paper as it will be published, in its paper
+    view or its record (`view`; `views`: the two addresses of the consent page that show them)."""
     from . import site
     expires = ctx["expires"].strftime("%d %B %Y, %H:%M UTC")
     if ctx.get("waiting_package"):
@@ -122,7 +124,8 @@ def _preview(ctx, start_url, attach_url, attached, scores, base_url):
         + f'<p class="muted">Only {escape(ctx["orcid"])} can confirm, by {escape(expires)}; after that the '
         f"submission is deleted. If you did not expect this, ignore it: nothing is published without your "
         f"confirmation.</p>")
-    return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores)
+    return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores, view=view,
+                             paper_href=views[0], record_href=views[1])
 
 
 def _confirm_button(ctx, start_url):
