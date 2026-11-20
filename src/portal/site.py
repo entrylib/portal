@@ -502,15 +502,8 @@ def origin_words(doc, origin):
 
 
 def _origin_line(doc, origin, lab):
-    if origin == "lab":
-        rec = ""
-        if lab and lab.get("copy"):
-            rec = f'<a href="{esc(lab["copy"])}">Lab record</a>'
-            if lab.get("summary"):
-                rec += f": {esc(lab['summary'])}"
-            if lab.get("verified"):                     # the registry's copy, checked before publication
-                rec += " · hash chain verified"
-        return f'<p class="origin-line">Made with <a href="/lab">claimset-lab</a>.{" " + rec if rec else ""}</p>'
+    if origin == "lab":                                 # the record itself is in the panel's row *Lab record*
+        return '<p class="origin-line">Made with <a href="/lab">claimset-lab</a>.</p>'
     if origin.startswith("lab"):
         return ('<p class="origin-line">Made with <a href="/lab">claimset-lab</a>; the record is kept for audit, '
                 "not public.</p>")
@@ -616,7 +609,25 @@ INTERESTS_NOTE = ("Competing interests and funding, as the authors declare them,
                   "the score.")
 
 
-def _panel(doc, parts, base_url, key, scores=None):
+def _lab_row(lab):
+    """The panel row *Lab record* (design §5.2): the record's reading view, its log, and where the log is kept."""
+    if not lab or not (lab.get("view") or lab.get("copy")):
+        return ""
+    links = []
+    if lab.get("view"):
+        links.append(f'<a href="{esc(lab["view"])}">Readable record</a>')
+    if lab.get("copy"):
+        links.append(f'<a href="{esc(lab["copy"])}">Log</a>')
+    about = [esc(lab["summary"])] if lab.get("summary") else []
+    if lab.get("verified"):                             # the registry's copy, checked before publication
+        about.append("hash chain verified")
+    about = f'<p class="small">{"; ".join(about)}</p>' if about else ""
+    where = (f'<p class="small">Kept in {esc(lab["where"])}</p>' if lab.get("where") else "")
+    return (f'<div class="panel-row"><h2>Lab record</h2><p class="small">{" · ".join(links)}</p>{about}{where}'
+            '</div>')
+
+
+def _panel(doc, parts, base_url, key, scores=None, lab=None):
     p = doc["paper"]
     n = p.get("version")
     original = ""
@@ -629,6 +640,7 @@ def _panel(doc, parts, base_url, key, scores=None):
             + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
                         f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
                         f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}')
+            + _lab_row(lab)
             + '<div class="panel-row"><h2>For models</h2>'
             + (f'<p class="small"><a href="/p/{key}@v{n}.issues.txt">Issues as text, for an agent</a></p>'
                if scores else "")
@@ -829,7 +841,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
             f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}'
             f'{_notice(p, published_at(listing, n))}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
-            f'{_panel(doc, parts, base_url, key, scores)}'
+            f'{_panel(doc, parts, base_url, key, scores, lab)}'
             f'{nav}<article class="cs-body">{body}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
             f'{unclaimed}{_versions(listing, key, n)}</article></div>')
@@ -980,7 +992,7 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
             f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
             # the rail (site.css): the panel, and directly under it the contents, to the right of the text
-            f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores)}{nav}</div>'
+            f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores, lab)}{nav}</div>'
             f'<article class="cs-body">{"".join(body)}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
             f'{unclaimed}{_versions(listing, key, n)}{view["extra"]}</article></div>')
@@ -1136,7 +1148,7 @@ def _claim_sections(parts):
     return "\n".join(out), shown
 
 
-def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None):
+def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None, trail=None):
     """The page of one principal claim of the current version, at /p/<key>/<cid>: the claimset's title and the claim's
     ID as its title and heading, then the claim, its Support and why, how to cite it, and what it rests on (the
     claim bundle, rendered by the claimset package). The statement itself is the page's description."""
@@ -1164,6 +1176,8 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
              + _cite_row(f'{p["id"]}@v{n}#{cid}', citation_text(doc, base_url, cid)) +
              f'<div class="panel-row"><h2>The paper</h2><p class="small"><a href="/p/{key}#{esc(cid)}">'
              f'{esc(title)}</a></p></div>'
+             + (f'<div class="panel-row"><h2>Lab record</h2><p class="small"><a href="{esc(trail)}">Its trail</a>: '
+                'what was planned, run and decided for it, in order</p></div>' if trail else "") +
              f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}/{esc(cid)}.txt">'
              f'Reading view</a> · <a href="/p/{key}/{esc(cid)}.json">JSON</a></p></div></aside>')
     origin = (f'<p class="origin-line">Principal claim {esc(cid)} of this paper ({esc(_who(doc))}, '
@@ -1761,10 +1775,12 @@ def write_claimset(published_dir, base_url, key, docs, listing, labs, ref_text=N
             _write(p / f"{key}.bib", bibtex(doc, base_url))
             _write(p / f"{key}.ris", ris(doc, base_url))
             write_claim_pages(p / key, doc, base_url=base_url, scores=(scores or {}).get(n), file_url=file_url,
-                              ref_text=ref_text, published=published_at(listing, n))
+                              ref_text=ref_text, published=published_at(listing, n),
+                              trails=(labs.get(n) or {}).get("trails"))
 
 
-def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, ref_text=None, published=None):
+def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, ref_text=None, published=None,
+                      trails=None):
     """The pages of the current version's principal claims, replacing those of the version before (whose principal
     claims may differ)."""
     directory = Path(directory)
@@ -1774,7 +1790,8 @@ def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, r
             old.unlink()
     for cid in cids:
         _write(directory / f"{cid}.html", claim_page(doc, cid, base_url=base_url, scores=scores, file_url=file_url,
-                                                     ref_text=ref_text, published=published))
+                                                     ref_text=ref_text, published=published,
+                                                     trail=(trails or {}).get(cid)))
 
 
 def write_listings(published_dir, base_url, docs, corrected=None):
