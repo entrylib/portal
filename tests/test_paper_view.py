@@ -478,3 +478,10 @@ def test_the_example_of_the_format():
     page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1}])
     assert 'class="pv-claim" id="C2"' in page and 'id="C1"' in page     # C1, an assumption, in Assumptions
     assert page.index('id="claims"') < page.index('id="assumptions"')
+
+
+def test_a_claim_from_a_lab_links_its_trail():
+    trail = "/p/2026.000001/v1/lab/C3.txt"
+    page = site.claim_page(proofs(), "C3", base_url=BASE, trail=trail)
+    assert f'<a href="{trail}">Its trail</a>' in page
+    assert "Its trail" not in site.claim_page(proofs(), "C3", base_url=BASE)

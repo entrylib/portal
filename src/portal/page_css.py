@@ -26,6 +26,9 @@ CSS = """\
 .cs-title { margin: 10px 0; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; font-weight: 700; }
 .cs-guarantor, .cs-authors, .cs-source { margin: 4px 0 0; overflow-wrap: anywhere; }
 .cs-meta { margin: 4px 0 0; font-size: 16px; color: var(--cs-muted); }
+.cs-credit { margin: 4px 0 0; font-size: 16px; color: var(--cs-muted); }
+.cs-credit summary { cursor: pointer; }
+.cs-credit ul { margin: 4px 0 0; padding-left: 20px; }
 .cs-label { color: var(--cs-muted); }
 .orcid-wrap { color: var(--cs-muted); }
 .orcid-wrap a { color: var(--cs-muted); }

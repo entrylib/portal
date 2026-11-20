@@ -10,6 +10,7 @@ from portal.db import make_pool, migrate
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 os.environ["PORTAL_CROSSREF"] = "0"           # never ask Crossref from tests; test_crossref gives a fake answer
+os.environ["PORTAL_LAB_FETCH"] = "0"          # never fetch a lab record from tests; test_labrecord fakes one
 
 
 @pytest.fixture

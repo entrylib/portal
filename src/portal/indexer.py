@@ -9,6 +9,7 @@ Static files, under the published directory:
     p/<key>@v<n>.json, p/<key>@v<n>.txt    every version
     p/<key>/versions.json                  versions, dates, status, notices, lab record links
     p/<key>/v<n>/lab.jsonl                 the registry's copy of a version's lab record
+    p/<key>/v<n>/lab.txt, lab/<claim>.txt  the record's reading view and each claim's trail (labrecord, design §5.2)
     p/<key>/<claim>.json, .txt             the claim bundles of the current version (claimset spec §2.3)
     p/<key>.html, p/<key>@v<n>.html        the page for people (site.claimset_page), current and every version
     p/<key>.read.html, p/<key>@v<n>.read.html  the reading view as a plain web page, for AI assistants (/p/<key>.read)
@@ -36,7 +37,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import crossref, history, ids, notices, reading, scores, site, source
+from . import crossref, history, ids, labrecord, notices, reading, scores, site, source
 
 
 def _write(path, text):
@@ -208,7 +209,7 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True):
             _write(p / f"{key}.read.html", reading)
             write_bundles(p / key, doc, base_url)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
-        lab = {}
+        lab, record = {}, None
         if lab_copy.exists():
             record = lab_copy.read_text(encoding="utf-8")
             _write(p / key / f"v{n}" / "lab.jsonl", record)
@@ -220,6 +221,15 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True):
             lab["artefact"] = lab_artefacts[0]
             if n not in labs and str(lab_artefacts[0]).startswith("https://"):
                 labs[n] = {"copy": lab_artefacts[0], "summary": None}
+            if n in labs and labrecord.where(lab_artefacts[0]):
+                labs[n]["where"] = labrecord.where(lab_artefacts[0])
+        if n in labs:
+            made = write_lab_views(p / key / f"v{n}", f"/p/{key}/v{n}", doc, record, lab.get("artefact"))
+            if made:
+                labs[n].update(made)
+                lab["view"] = f"{base_url}{made['view']}"
+                if made.get("trails"):
+                    lab["trails"] = {c: f"{base_url}{u}" for c, u in made["trails"].items()}
         pp = doc["paper"]
         entry = {"id": f"{pp['id']}@v{n}", "version": n, "date": pp["date"], "status": pp["status"],
                  "hash": doc_hash(raws[n]), "json": f"{base_url}/p/{key}@v{n}.json",
@@ -395,6 +405,40 @@ def tidy_legacy_files(conn, published_dir):
             f.unlink()
     with contextlib.suppress(OSError):
         (published_dir / "files").rmdir()                  # only when empty
+
+
+def write_lab_views(directory, url, doc, record, artefact):
+    """The reading view of a version's lab record and the trail of each claim exported from it (design §5.2), at
+    `directory`/lab.txt and lab/<claim>.txt; their URLs under `url`, or None when there is none. Made from the
+    registry's copy (`record`), else from the commit-pinned log `artefact`, fetched once: a marker beside them names
+    the claimset package and source they were made with, and they are made again only when either changes."""
+    directory = Path(directory)
+    marker = directory / "lab.views.json"
+    source = "registry" if record is not None else artefact
+    stamp = {"claimset": labrecord.package_version(), "source": source}
+    try:
+        old = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = None
+    if old != stamp:                                     # tried once per package version and source
+        if record is None:
+            record = labrecord.fetch(artefact)
+        made = labrecord.views(record, doc) if record is not None else None
+        if made is not None:
+            reading, trails = made
+            _write(directory / "lab.txt", reading)
+            folder = directory / "lab"
+            for f in folder.glob("C*.txt") if folder.exists() else []:
+                if f.stem not in trails:
+                    f.unlink()
+            for cid, text in trails.items():
+                _write(folder / f"{cid}.txt", text)
+        _write(marker, json.dumps(stamp) + "\n")      # a failure keeps any views made before, and is not retried
+    if not (directory / "lab.txt").exists():
+        return None
+    folder = directory / "lab"
+    trails = sorted(f.stem for f in folder.glob("C*.txt")) if folder.exists() else []
+    return {"view": f"{url}/lab.txt", "trails": {c: f"{url}/lab/{c}.txt" for c in trails}}
 
 
 def _lab_summary(record):

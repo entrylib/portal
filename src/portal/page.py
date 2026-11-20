@@ -687,11 +687,38 @@ def _header(P):
     meta = [m for m in meta if m]
     if meta:
         out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
+    credit = _contributions(people)
+    if credit:
+        out.append(credit)
     if P.corrections:
         n = len(P.corrections)
         out.append(f'<p class="cs-correction">This claimset corrects {P.against} in {n} place{"s" if n != 1 else ""}: '
                    'see <a href="#corrections">Corrections</a>.</p>')
     return "\n".join(out)
+
+
+#: CRediT roles by their names in the taxonomy (claimset spec §3.3, `credit_roles`).
+CREDIT_NAMES = {"conceptualization": "Conceptualization", "data_curation": "Data curation",
+                "formal_analysis": "Formal analysis", "funding_acquisition": "Funding acquisition",
+                "investigation": "Investigation", "methodology": "Methodology",
+                "project_administration": "Project administration", "resources": "Resources",
+                "software": "Software", "supervision": "Supervision", "validation": "Validation",
+                "visualization": "Visualization", "writing_original_draft": "Writing – original draft",
+                "writing_review_editing": "Writing – review & editing"}
+
+
+def _contributions(people):
+    """The fold *Contributions* under the names (design §5.2): each contributor's CRediT roles, as the file states
+    them; nothing when no contributor has any."""
+    rows = []
+    for c in people:
+        roles = [r for r in c.get("credit_roles") or [] if isinstance(r, str)]
+        if roles:
+            names = ", ".join(esc(CREDIT_NAMES.get(r, r.replace("_", " ").capitalize())) for r in roles)
+            rows.append(f"<li>{_author(c)}: {names}</li>")
+    if not rows:
+        return ""
+    return ('<details class="cs-credit"><summary>Contributions</summary><ul>' + "".join(rows) + "</ul></details>")
 
 
 def _support(P, c):
