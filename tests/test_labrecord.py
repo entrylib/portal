@@ -30,10 +30,9 @@ def needs_views():
 def test_only_a_log_pinned_to_a_commit_is_fetched():
     assert labrecord.raw_url(PINNED) == ("https://raw.githubusercontent.com/entrylib/study-planning/"
                                          f"{COMMIT}/claimset/smape/lab/lab.jsonl")
-    assert labrecord.where(PINNED) == "entrylib/study-planning, commit 1dffa04"
     for moving in ("https://github.com/entrylib/study-planning/blob/main/lab/lab.jsonl",
                    "https://example.org/lab.jsonl", None, 7):
-        assert labrecord.raw_url(moving) is None and labrecord.where(moving) is None
+        assert labrecord.raw_url(moving) is None
 
 
 class Answer(io.BytesIO):
@@ -95,13 +94,18 @@ def test_the_registry_copy_needs_no_fetch_and_no_record_gives_no_view(tmp_path, 
     assert indexer.write_lab_views(tmp_path / "b", "/x", DOC, None, PINNED) is None
 
 
-def test_the_panel_row_and_the_claim_link():
-    lab = {"copy": PINNED, "view": "/p/k/v1/lab.txt", "where": "entrylib/study-planning, commit 1dffa04"}
-    row = site._lab_row(lab)
+def test_the_panel_row_links_the_record_and_the_artefacts_as_a_whole():
+    lab = {"copy": PINNED, "view": "/p/k/v1/lab.txt"}
+    doc = {"artefacts": [{"id": "A1"}, {"id": "A2"}, {"id": "A3"}]}
+    row = site._lab_row(lab, doc, "k")
     assert "<h2>Lab record</h2>" in row and 'href="/p/k/v1/lab.txt">Readable record' in row
-    assert f'href="{PINNED}">Log' in row and "Kept in entrylib/study-planning, commit 1dffa04" in row
-    assert site._lab_row(None) == "" and site._lab_row({"summary": "x"}) == ""
-    assert "Readable" not in site._lab_row({"copy": "/p/k/v1/lab.jsonl"})
+    assert f'href="{PINNED}">Log' in row and '<a href="/p/k/record#artefacts">Artefacts&nbsp;(3)</a>' in row
+    assert "Kept in" not in row and row.count("<a ") == 3
+    assert site._lab_row(None, {}, "k") == "" and site._lab_row({"summary": "x"}, {}, "k") == ""
+    assert "Readable" not in site._lab_row({"copy": "/p/k/v1/lab.jsonl"}, {}, "k")
+    plain = site._lab_row(None, doc, "k")                    # a paper without a lab record
+    assert plain == ('<div class="panel-row"><h2>Artefacts</h2><p class="small">'
+                     '<a href="/p/k/record#artefacts">Artefacts&nbsp;(3)</a></p></div>')
 
 
 def test_contributions_list_credit_roles():
@@ -116,7 +120,7 @@ def test_contributions_list_credit_roles():
 
 
 def test_the_record_is_named_once_in_the_panel_not_under_the_byline():
-    row = site._lab_row({"copy": "/p/k/v1/lab.jsonl", "summary": "49 events", "verified": True})
+    row = site._lab_row({"copy": "/p/k/v1/lab.jsonl", "summary": "49 events", "verified": True}, {}, "k")
     assert "49 events; hash chain verified" in row
     line = site._origin_line({"paper": {}}, "lab", {"copy": "/p/k/v1/lab.jsonl", "summary": "49 events"})
     assert line == '<p class="origin-line">Made with <a href="/lab">claimset-lab</a>.</p>'
