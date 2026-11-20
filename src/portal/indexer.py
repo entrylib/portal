@@ -39,7 +39,7 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import chrome, crossref, history, ids, labrecord, notices, reading, scores, site, source
+from . import areas, chrome, crossref, history, ids, labrecord, notices, reading, scores, site, source
 
 log = logging.getLogger(__name__)
 
@@ -149,14 +149,18 @@ def index_version(conn, registry, folder, n, published_dir, base_url, static=Tru
         with conn.cursor() as cur:
             cur.executemany(
                 "INSERT INTO claims (concept_id, version, claim_id, role, type, novelty, is_assumption, statement,"
-                " planning, support_kinds, search) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
+                " planning, support_kinds, position, search) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
                 " setweight(to_tsvector('english', %s), 'A') || setweight(to_tsvector('english', %s), 'B')"
                 " || setweight(to_tsvector('english', %s), 'C'))",
                 [(concept, n, c["id"], c.get("role"), c.get("type"), c.get("novelty"), _is_assumption(c),
                   c.get("statement", ""), c.get("planning"),
                   sorted({s.get("kind") for s in c.get("support") or [] if isinstance(s, dict) and s.get("kind")}),
-                  plain(c.get("statement")), claim_text(c, defs), paper_c)
-                 for c in doc.get("claims") or [] if isinstance(c, dict)])
+                  i, plain(c.get("statement")), claim_text(c, defs), paper_c)
+                 for i, c in enumerate(doc.get("claims") or []) if isinstance(c, dict)])
+        domain, fld, sub = areas.area_of(doc)
+        conn.execute("UPDATE papers SET domain = %s, field = %s, subfield = %s WHERE concept_id = %s"
+                     " AND current_version = %s", (domain, fld, sub, concept, n))      # Read: 0018
+        _store_scores(conn, concept, n, _stored_score(published_dir, key, n))
         conn.execute("UPDATE claims SET is_current = (version = (SELECT current_version FROM papers"
                      " WHERE concept_id = %s)) WHERE concept_id = %s", (concept, concept))   # search: 0016
         conn.execute("UPDATE papers SET source_doi = %s WHERE concept_id = %s AND current_version = %s",
@@ -227,6 +231,36 @@ def rewrap(published_dir, key):
     return True
 
 
+def _stored_score(published_dir, key, n):
+    """Version n's score file, when it is by the rubric installed; else None."""
+    try:
+        held = json.loads((Path(published_dir) / "p" / f"{key}@v{n}.score.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return held if isinstance(held, dict) and held.get("rubric") == scores.version() else None
+
+
+def _store_scores(conn, concept, n, sc):
+    """Version n's scores in the index, for Read (design §7.7): the paper's score and band on its row while n is its
+    current version, and each claim's, with whether Read lists it (the rubric scores every claim but assumptions;
+    without a score every claim is listed)."""
+    paper = sc.get("paper") if isinstance(sc, dict) else None
+    paper = paper if isinstance(paper, dict) else {}
+    conn.execute("UPDATE papers SET score = %s, band = %s WHERE concept_id = %s AND current_version = %s",
+                 (paper.get("score"), paper.get("band"), concept, n))
+    claims = sc.get("claims") if isinstance(sc, dict) and isinstance(sc.get("claims"), dict) else None
+    if claims is None:
+        conn.execute("UPDATE claims SET listed = true, score = NULL, band = NULL WHERE concept_id = %s"
+                     " AND version = %s", (concept, n))
+        return
+    rows = conn.execute("SELECT claim_id FROM claims WHERE concept_id = %s AND version = %s", (concept, n)).fetchall()
+    with conn.cursor() as cur:
+        cur.executemany("UPDATE claims SET listed = %s, score = %s, band = %s WHERE concept_id = %s AND version = %s"
+                        " AND claim_id = %s",
+                        [(cid in claims, (claims.get(cid) or {}).get("score"), (claims.get(cid) or {}).get("band"),
+                          concept, n, cid) for (cid,) in rows])
+
+
 def _score(conn, doc, published_dir, key, n):
     """Version n's score (design §7.1): the one written when it was published, while it is by the rubric installed;
     computed (scores.compute) only when there is none or the rubric has changed. A version's file never changes (a
@@ -274,7 +308,8 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
         text = (registry.version_dir(folder, n) / "claimset.json").read_text(encoding="utf-8")
         if docs[n] is not raws[n]:                       # retracted: the file with the status the platform assigned
             text = json.dumps(docs[n], indent=1, ensure_ascii=False) + "\n"
-        scored[n] = _score(conn, doc, published_dir, key, n)    # by the rubric (design §7.6); None without it
+        scored[n] = _score(conn, doc, published_dir, key, n)
+        _store_scores(conn, doc["paper"]["id"], n, scored[n])    # by the rubric (design §7.6); None without it
         view = render(doc) + scores.text(scored[n]) + site.citation_note(doc, base_url)
         if scored[n] is not None:
             score_json = json.dumps(scored[n], indent=1, ensure_ascii=False) + "\n"
@@ -653,7 +688,8 @@ def publishing(conn):
 
 
 #: What fills the database index (index_version and what it calls): when it changes, the index is rebuilt.
-INDEXED_BY = ("index_version", "paper_texts", "claim_text", "plain", "title_key", "guarantor_ids", "_is_assumption")
+INDEXED_BY = ("index_version", "paper_texts", "claim_text", "plain", "title_key", "guarantor_ids", "_is_assumption",
+              "_store_scores", "_stored_score")
 
 
 def index_fingerprint():

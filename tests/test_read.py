@@ -59,3 +59,47 @@ def test_filters(env):
 def test_route(app_client):
     r = app_client.get("/read", params={"view": "claimsets", "sort": "newest"})
     assert r.status_code == 200 and "<h1>Read</h1>" in r.text and 'href="/read"' in r.text
+
+
+def test_the_index_gives_the_page_the_files_give(env, monkeypatch):
+    """Design §7.7: Read from the index (page_from_db) is the page Read made from every paper's file (page), for
+    every view, area, filter, sort and page; only the papers shown are read."""
+    import datetime as dt
+    import itertools
+
+    ctx, tmp = env
+    for i, (sub, day) in enumerate([("1803", 3), ("2613", 1), ("1803", 2), ("1404", 3), ("2613", 5), ("1803", 1)]):
+        d = doc_in(sub, f"Study {i}")
+        publish(write(tmp, d, f"{i}.claimset.json"), **{**ctx, "today": dt.date(2026, 11, day)})
+    conn = ctx["conn"]
+    docs = [r[0] for r in conn.execute("SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+                                       " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id")]
+    monkeypatch.setattr(read, "PAGE", 2)                                    # several pages from few papers
+    out = ctx["published_dir"]
+    bands = [""] + sorted({x.get("band") for d in docs for x in (read.scores_of(d, out) or {}).get("claims", {})
+                           .values() if x.get("band")})
+    checked = 0
+    for view, area, band, sort, everything, offset in itertools.product(
+            ("claimsets", "claims"), ("", "d2", "18", "1803", "2613", "1404", "d3"), bands, ("newest", "support"),
+            (False, True), (0, 2, 4)):
+        params = {"view": view, "area": area, "band": band, "sort": sort, "all": "1" if everything else "",
+                  "offset": str(offset)}
+        q = read.Query.parse(params)
+        assert read.page_from_db(conn, q, "https://e.test", set(), out) == read.page(docs, q, "https://e.test",
+                                                                                     set(), out), params
+        checked += 1
+    for flt in ({"type": example()["claims"][0].get("type")}, {"planning": "exploratory"},
+                {"novelty": example()["claims"][0].get("novelty") or ""}):
+        q = read.Query.parse({"view": "claims", "all": "1", **flt})
+        assert read.page_from_db(conn, q, "", set(), out) == read.page(docs, q, "", set(), out), flt
+    assert checked > 100
+
+
+def test_the_read_route_reads_only_the_papers_it_shows(app_client, monkeypatch):
+    from portal import read as read_module
+    seen = []
+    real = read_module._files
+    monkeypatch.setattr(read_module, "_files",
+                        lambda conn, concepts: seen.append(len(concepts)) or real(conn, concepts))
+    assert app_client.get("/read").status_code == 200
+    assert all(n <= read_module.PAGE for n in seen)
