@@ -74,6 +74,10 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   it: {base}/skills/ (each skill as a page, {base}/skills/<name>, and as text, {base}/skills/<name>.md), the
   specification at {base}/spec/claimset.md, and the MCP tool guide (a skill by name, or the specification or one of
   its sections).
+- Mathematics is LaTeX: a fraction is `\\frac{a}{b}`, not `a/b`, in a displayed formula, a ratio of expressions or a
+  definition; a variable's name stands inside the formula (`$\\mathrm{Asymmetry} = 1 - \\frac{4\\phi}{\\pi}$`, not
+  `Asymmetry $= 1 - \\phi/(\\pi/4)$`); a long expression stands on a line of its own (`$$…$$`). A slash may stay where
+  `\\frac` would be cramped: an exponent, a subscript such as `L_{3/2}`, or a name's plain text.
 - Planning a study: EntryLib's good practice for planning a study, which measure, test or design fits a kind of
   study and why, with references, is at {base}/study-planning/ (each guide as a page and as text,
   {base}/study-planning/<guide>.md), from the MCP tool guide (name 'study-planning', one guide

@@ -796,13 +796,16 @@ def byline(role, people):
     return None
 
 
-def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
+def render(doc, file_url=None, ref_text=None, scores=None, pages=(), claim=None):
     """The claimset package's page view of `doc`, with the site's choices: how numbers are written, how people are
     shown, how references given by DOI are written out, what marks a claim (its score and dots, and its novelty,
     design §7.6) and which claims link to a page of their own (`pages`, the current version's principal claims,
-    design §7.8)."""
+    design §7.8). `claim`: the one claim a claim's page shows, whose main evidence keeps its small tables open
+    (design §7.4, *Tables*)."""
     key = ids.url_key(doc["paper"]["id"])
     extra = {"ref_text": ref_text} if ref_text else {}
+    if claim is not None:
+        extra["claim"] = claim
     return pageview.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
                                claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, byline=byline,
                                **extra)
@@ -834,26 +837,21 @@ INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a resear
 
 
 def not_claimed(doc):
-    """The section *Not claimed* (design §7.6): the paper's planned proofs that give no claim of their own (claimset
-    §3.1.1, `exploration.not_claimed`), one line per reason, each naming where its result went. ("", 0) when none."""
-    items = (doc.get("paper") or {}).get("exploration") or {}
-    items = [x for x in items.get("not_claimed") or [] if isinstance(x, dict)] if isinstance(items, dict) else []
+    """The section *Not claimed* (design §7.6): the paper's planned proofs that give no claim of their own and went into
+    no claim (claimset §3.1.1, `exploration.not_claimed` without `into`), one item each; those with `into` are shown
+    under their claims (page.earlier_block). (html, count of what it lists); ("", 0) when it lists nothing."""
+    entries = pageview.not_claimed_entries(doc)
+    items = [x for x in entries if not x.get("into")]
     if not items:
         return "", 0
-
-    def one(x):
-        out = f" ({esc(str(x['outcome']).replace('_', ' '))})" if x.get("outcome") not in (None, "supported") else ""
-        into = (f' → <a href="#{esc(x["into"])}">{esc(x["into"])}</a>' if x.get("into") else "")
-        return (f'<span title="{esc(x.get("why") or "")}">{esc(x.get("lab_event"))}</span>{out}{into}')
-    lines = []
-    for because, label in (("reworded", "Reworded, then proved again"), ("revised", "Merged"),
-                           ("abandoned", "Dropped")):
-        group = [one(x) for x in items if x.get("because") == because]
-        if group:
-            lines.append(f"<li><strong>{label}:</strong> {', '.join(group)}</li>")
+    P = pageview._Paper(doc)
+    under = (" Earlier wordings and merged hypotheses are shown under their claims."
+             if len(items) < len(entries) else "")
     return ('<section class="cs-section" id="not-claimed"><h2>Not claimed</h2><p class="small">Planned proofs that '
-            'give no claim of their own; the lab record has each with its reason.</p><ul>'
-            + "".join(lines) + "</ul></section>", len(items))
+            f'give no claim of their own; the lab record has each with its reason.{under}</p>'
+            '<ul class="cs-not-claimed">'
+            + "".join(pageview.not_claimed_item(x, P.text, P.lab_record) for x in items) + "</ul></section>",
+            len(items))
 
 
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
@@ -935,6 +933,29 @@ def own_document(doc):
 
 #: The sections of the record page that the paper view keeps as they are, after its own.
 PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
+
+
+def paper_figures(doc, file_url=None):
+    """The paper's figures, shown first in the paper view, under the title block (design §7.4, *Figures first*): every
+    artefact of kind `figure` the page can show (a packaged image), data plots (`function: data_plot`) first, each with
+    its description as its caption, opening in the viewer, which steps through them all. "" when there is none."""
+    P = pageview._Paper(doc, file_url=file_url)
+    figs = [a for a in P.artefacts if a.get("kind") == "figure" and P.image_src(a)]
+    figs = [a for a in figs if a.get("function") == "data_plot"] + [a for a in figs if a.get("function") != "data_plot"]
+    if not figs:
+        return ""
+    gid = "gal-paper"
+    gallery = ('<ol class="pv-gallery" id="' + gid + '" hidden>' + "".join(
+        f'<li data-src="{esc(P.image_src(a))}"><span class="cs-id">{esc(a["id"])}</span> '
+        f'{P.text(a.get("description") or a["id"])}</li>' for a in figs) + "</ol>")
+    shown = "".join(
+        f'<figure class="cs-figure"><a href="{esc(P.image_src(a))}" data-gallery="{gid}" data-i="{i}">'
+        f'<img src="{esc(P.image_src(a))}" alt="{esc(pageview._first_sentence(a.get("description") or ""))}" '
+        f'loading="lazy"></a><figcaption><span class="cs-id">{esc(a["id"])}</span> '
+        f'{P.text(a.get("description") or a["id"])}</figcaption></figure>' for i, a in enumerate(figs))
+    many = " cs-figures-many" if len(figs) > 1 else ""
+    return (f'<section class="pv-paper-figures" aria-label="Figures"><div class="cs-figures{many}">{shown}</div>'
+            f'{gallery}</section>')
 
 
 def _paper_body(doc, parts, record, more, *, file_url=None, ref_text=None, scores=None, claim_url=None):
@@ -1034,7 +1055,8 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
-            f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
+            f'{ask_ai(doc, base_url, printed=True)}{document}{paper_figures(doc, file_url)}'
+            f'<div class="pv-opening">{opening}</div></div>'
             # the rail (site.css): the panel, and directly under it the contents, to the right of the text
             f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores, lab)}{nav}</div>'
             f'<article class="cs-body">{"".join(body)}'
@@ -1174,9 +1196,9 @@ CLAIM_TITLES = {"principal": ("Principal claims", "The claim"),
                 "supporting": ("Supporting claims", "Claims it rests on")}
 
 
-def _claim_sections(parts):
+def _claim_sections(parts, under_claim=""):
     """The sections of a claim bundle's page view (the package's blocks), the claim first; Summary and Highlights are
-    left out, since the page's heading is the claim."""
+    left out, since the page's heading is the claim. `under_claim`: HTML that ends the claim's own section."""
     blocks = parts.get("blocks") or {}
     titles = {sid: (title, n) for sid, title, n in parts.get("sections") or []}
     order = [sid for sid in CLAIM_SECTIONS if sid in blocks]
@@ -1187,6 +1209,9 @@ def _claim_sections(parts):
             old, title = CLAIM_TITLES[sid]
             block = block.replace(f"<h2>{old}</h2>", f"<h2>{title}</h2>", 1)
             n = 0 if sid == "principal" else n
+        if sid == "principal" and under_claim and "</section>" in block:
+            end = block.rindex("</section>")
+            block = block[:end] + under_claim + block[end:]
         out.append(block)
         shown.append((sid, title, n))
     return "\n".join(out), shown
@@ -1200,8 +1225,11 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     key, n = ids.url_key(p["id"]), p.get("version")
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
     bundle = claim_bundle(doc, cid)
-    parts = render(bundle, file_url, ref_text, scores, claim_pages(doc))
-    body, sections = _claim_sections(parts)
+    parts = render(bundle, file_url, ref_text, scores, claim_pages(doc), claim=cid)
+    # the earlier wordings and merged hypotheses that went into the claim, from the paper (design §7.6)
+    full = pageview._Paper(doc)
+    earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record)
+    body, sections = _claim_sections(parts, earlier if 'class="cs-earlier"' not in parts.get("body", "") else "")
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""
     item = (scores or {}).get("claims", {}).get(cid) if scores else None

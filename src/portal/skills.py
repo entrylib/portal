@@ -109,7 +109,7 @@ def request(base_url, cat):
         "- Ask me the skill's questions before you build anything.\n"
         "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
         "worse.\n"
-        + AUTHOR_ORDER + PAPER_ORDER + SUBFIELD +
+        + AUTHOR_ORDER + PAPER_ORDER + SUBFIELD + MATHS +
         "- Draft a plain-language summary of at most 250 words for me to approve.\n"
         "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
         f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "
@@ -143,6 +143,14 @@ PAPER_ORDER = ("- Keep the paper's order. Its sections become the claimset's sec
                "least two. And list the definitions in the order the paper introduces them, what the paper is about "
                "first and in full.\n")
 
+#: Mathematics as LaTeX that reads as mathematics (design §7.4, *Skills*): converted papers wrote fractions with
+#: slashes and a variable's name outside its formula.
+MATHS = ("- Write mathematics as LaTeX: a fraction as `\\frac{a}{b}`, not `a/b`, in a displayed formula, a ratio of "
+         "expressions or a definition; a variable's name inside the formula (`$\\mathrm{Asymmetry} = 1 - "
+         "\\frac{4\\phi}{\\pi}$`, not `Asymmetry $= 1 - \\phi/(\\pi/4)$`); and a long expression on a line of its own "
+         "(`$$…$$`). A slash may stay where `\\frac` would be cramped: an exponent, a subscript such as `L_{3/2}`, or "
+         "a name's plain text.\n")
+
 #: The subfield is proposed and shown to the author (claimset spec §3.1): EntryLib refuses a submission without one.
 SUBFIELD = ("- Propose the paper's subfield from EntryLib's list (the skills say where it is) and tell me its name, "
             "so that I can agree to it or name another.\n")
@@ -169,7 +177,7 @@ def short(base_url, cat):
         "- Ask me the skill's questions before you build anything.\n"
         "- Use only what the paper says: add nothing, drop no condition, and keep results where the method did "
         "worse.\n"
-        + AUTHOR_ORDER + PAPER_ORDER + SUBFIELD +
+        + AUTHOR_ORDER + PAPER_ORDER + SUBFIELD + MATHS +
         "- Draft a plain-language summary of at most 250 words for me to approve.\n"
         "- Before submitting, give me every claim with where it comes from in the paper, so I can check it.\n"
         f"- Validate the file (the validate tool of {base}/mcp, or I upload it at {base}/submit, which checks it), "

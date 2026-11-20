@@ -335,7 +335,8 @@ class _View:
                     out.append(f'<p class="pv-more">Table {esc(key)}: <a href="#{esc(key)}">shown above</a>.</p>')
                 else:
                     self.tables_shown.add(key)
-                    out.append(pageview._table(P, eid, t))
+                    # open only when small and of the claim's main evidence (design §7.4, *Tables*)
+                    out.append(pageview._table(P, eid, t, main=pageview.main_evidence(c) == eid))
         out.append(f'<p class="pv-more">Everything recorded for this evidence: '
                    f'<a href="{esc(self.record)}#{esc(eid)}">{esc(eid)} in the record</a>.</p>')
         return '<div class="pv-evidence"><p class="pv-label">Evidence</p>' + "".join(out) + "</div>"
@@ -543,7 +544,10 @@ class _View:
                  if isinstance(summary, str) and summary.strip() else "")
         return (f'<article class="pv-claim" id="{esc(cid)}">{self.terms_block(c)}{head}{plain}'
                 f'{self.statement(c.get("statement"))}'
-                f'{self.support(c)}{self.beside(c)}{self.remarks(c)}{self.record_fold(c)}</article>')
+                f'{self.support(c)}{self.beside(c)}{self.remarks(c)}'
+                # the earlier wordings and merged hypotheses that went into it, folded (design §7.6, *Not claimed*)
+                f'{pageview.earlier_block(self.P.not_claimed, cid, self.text, self.P.lab_record)}'
+                f'{self.record_fold(c)}</article>')
 
     # ---------- terms ----------
     def named(self, text):

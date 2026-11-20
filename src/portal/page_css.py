@@ -80,6 +80,21 @@ CSS = """\
 .cs-table td.num { text-align: right; }
 .cs-table-long.cs-folded tr.cs-more { display: none; }
 .cs-rows-toggle { margin: 6px 10px 8px; }
+/* An evidence table that starts closed: its line names it and gives its size; opened, its caption says the same, so
+   only screen readers are given it again. A table whose rows are in a file: its line, columns and download link. */
+.cs-table-fold { border: 1px solid var(--cs-rule); margin: 10px 0; }
+.cs-table-fold > summary { padding: 8px 10px; font-size: 15px; cursor: pointer; }
+.cs-table-fold > .cs-table { margin: 0; border-width: 1px 0 0; }
+.cs-table-fold > .cs-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cs-size { color: var(--cs-muted); white-space: nowrap; }
+/* The verdicts that give no claim (design §7.6): under their claim, folded; one item each, the lab record linked. */
+.cs-earlier { font-size: 15px; margin: 6px 0; }
+.cs-earlier > summary { cursor: pointer; color: var(--cs-muted); }
+.cs-earlier ul, .cs-not-claimed { margin: 4px 0; padding-left: 22px; }
+.nc-tail, .nc-lab { color: var(--cs-muted); }
+.nc-lab { font-size: 14px; }
+.cs-table-file { padding: 0 10px 8px; }
+.cs-table-file .cs-table-caption { font-size: 15px; margin: 8px 0 0; }
 .cs-results, .cs-steps { margin: 8px 0; padding-left: 22px; }
 .cs-figures { display: flex; flex-wrap: wrap; gap: 16px; margin: 10px 0; }
 .cs-figure { margin: 0; flex: 1 1 100%; max-width: 100%; }

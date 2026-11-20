@@ -441,24 +441,68 @@ def test_competing_interests_beside_the_score():
     assert '<details class="small interests"><summary>' in row and f"<p>{long}</p>" in row and "Funding" not in row
 
 
-def test_not_claimed_after_the_score():
-    """Design §7.6: the planned proofs that give no claim of their own are listed after Score, one line per reason."""
-    doc = example()
-    cid = doc["claims"][0]["id"]
+def _not_claimed(doc, lab=True):
+    """Three verdicts that give no claim: two went into the first principal claim, one was dropped."""
+    cid = next(c["id"] for c in doc["claims"] if c.get("role") == "principal")
     doc["paper"].setdefault("exploration", {})["not_claimed"] = [
         {"lab_event": "H1", "lab_plan": "PL5", "outcome": "supported", "because": "reworded", "into": cid,
-         "why": "Restated and decided again under PL8."},
+         "why": "Restated and decided again under PL8.", "statement": "Asymmetry lies in $[-1, 1]$"},
         {"lab_event": "H9", "lab_plan": "PL5", "outcome": "inconclusive", "because": "revised", "into": cid,
          "why": "Merged into H3 as its part (b)."},
-        {"lab_event": "H11", "lab_plan": "PL5", "outcome": "inconclusive", "because": "abandoned",
-         "why": "Reported by a simulation <b>instead</b>."}]
+        {"lab_event": "H11", "lab_plan": "PL6", "outcome": "not_supported", "because": "abandoned",
+         "why": "Reported by a simulation <b>instead</b>.", "statement": "The bound is <b>tight</b>"}]
+    doc["artefacts"] = [a for a in doc.get("artefacts") or [] if a.get("kind") != "lab_record"]
+    if lab:
+        doc["artefacts"].append({"id": "A90", "kind": "lab_record", "uri": "https://github.com/example/lab/log.jsonl",
+                                 "description": "The lab record."})
+    return cid
+
+
+def test_not_claimed_after_the_score():
+    """Design §7.6, *Not claimed*: only the verdicts that went into no claim are listed after Score, one item each, by
+    what they decided, with the verdict and reason and a link to the lab record whose tooltip alone names the IDs."""
+    doc = example()
+    _not_claimed(doc)
     page = _page(doc)
     section = page[page.index('id="not-claimed"'):page.index('id="versions"')]
-    assert '<a href="#not-claimed">Not claimed</a> <span class="count">3</span>' in page
-    assert f'<li><strong>Reworded, then proved again:</strong> <span title="Restated and decided again under PL8.">H1' \
-           f'</span> → <a href="#{cid}">{cid}</a></li>' in section
-    merged = '<strong>Merged:</strong> <span title="Merged into H3 as its part (b).">H9</span> (inconclusive) → '
-    assert merged in section
-    assert "<strong>Dropped:</strong>" in section and "&lt;b&gt;instead&lt;/b&gt;" in section and "<b>" not in section
+    assert '<a href="#not-claimed">Not claimed</a> <span class="count">1</span>' in page    # what it lists
+    assert section.count("<li>") == 1 and '<ul class="cs-not-claimed">' in section
+    assert ('<li><span class="nc-what">The bound is &lt;b&gt;tight&lt;/b&gt;</span> '
+            '<span class="nc-tail">— not proved; dropped</span> '
+            '<a class="nc-lab" href="https://github.com/example/lab/log.jsonl" title="H11 under PL6">'
+            'lab record</a></li>') in section
+    assert "Earlier wordings and merged hypotheses are shown under their claims." in section
+    assert "Asymmetry" not in section and "H1" not in re.sub(r'title="[^"]*"', "", section)
+    assert "<b>" not in section and "instead" not in section
+    doc["paper"]["exploration"]["not_claimed"] = doc["paper"]["exploration"]["not_claimed"][:2]
+    assert 'id="not-claimed"' not in _page(doc)                         # every entry is under its claim
     del doc["paper"]["exploration"]["not_claimed"]
     assert 'id="not-claimed"' not in _page(doc)
+
+
+def test_verdicts_that_went_into_a_claim_stand_under_it_folded():
+    """Design §7.6, *Not claimed*: an entry with `into` is shown under that claim, in a fold, on the record, the paper
+    view and the claim's own page; its text is its statement, or a phrase without the lab ID, never the ID."""
+    doc = example()
+    cid = _not_claimed(doc)
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
+    listing = [{"version": 1, "date": "2026-11-10"}]
+    pages = {"record": site.claimset_page(doc, base_url=BASE, listing=listing),
+             "paper": site.paper_page(doc, base_url=BASE, listing=listing),
+             "claim": site.claim_page(doc, cid, base_url=BASE)}
+    for name, page in pages.items():
+        fold = page[page.index('<details class="cs-earlier">'):]
+        fold = fold[:fold.index("</details>")]
+        assert page.count('<details class="cs-earlier">') == 1, name
+        assert "<summary>Earlier wordings and merged hypotheses (2)</summary>" in fold, name
+        assert fold.count("<li>") == 2 and "<math" in fold, name             # the statement's maths as a formula
+        assert '<span class="nc-tail">— proved, then reworded</span>' in fold, name
+        assert ('<span class="nc-what">A hypothesis merged into this claim</span> <span class="nc-tail">— '
+                'inconclusive; merged</span>') in fold, name                   # no statement: a phrase, not H9
+        assert 'title="H1 under PL5">lab record</a>' in fold, name
+        assert not re.search(r">[^<]*\bH(1|9)\b", fold), name                  # the IDs only in the tooltip
+    claim = pages["paper"].split(f'<article class="pv-claim" id="{cid}">')[1].split("</article>")[0]
+    assert '<details class="cs-earlier">' in claim                             # under that claim
+    _not_claimed(doc, lab=False)
+    page = site.paper_page(doc, base_url=BASE, listing=listing)
+    assert "cs-earlier" in page and "nc-lab" not in page and "lab record</a>" not in page
