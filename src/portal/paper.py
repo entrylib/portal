@@ -178,6 +178,10 @@ class _View:
         title = f' title="{esc(self.name(cid))}"' if self.name(cid) else ""
         return f'<a class="pv-xref" href="#{esc(cid)}"{title}>{esc(shown)}</a>'
 
+    def step(self, s):
+        """A proof step's statement: a formula written without $…$ as a formula (page.bare_formula), else as text."""
+        return self.P.step(s) if pageview.bare_formula(s) else self.text(s)
+
     def text(self, s, foreign=None, this=None):
         """A text of the file as the record page writes it (terms, formulae, code), with each ID of a claim of this
         paper as a link that names it: "claim C3". `foreign`: the ID, in this text, of a cited paper's claim;
@@ -283,7 +287,7 @@ class _View:
         steps = _dicts(e.get("steps"))
         end = ""
         if steps[-1].get("rule") == "conclusion" and len(steps) > 1:
-            end = (f'<p class="pv-qed">{self.text(steps[-1].get("statement", ""))} '
+            end = (f'<p class="pv-qed">{self.step(steps[-1].get("statement", ""))} '
                    f'<span class="pv-end" aria-label="end of proof">∎</span></p>')
             steps = steps[:-1]
         items = []
@@ -291,7 +295,7 @@ class _View:
             s = st.get("statement", "")
             by = [b for b in _strs(st.get("by")) if b in self.claims and not re.search(rf"\b{b}\b", str(s))]
             tail = f' <span class="pv-by">(by {", ".join(self.xref(b, cap=False) for b in by)})</span>' if by else ""
-            items.append(f"<li>{self.text(s)}{tail}</li>")
+            items.append(f"<li>{self.step(s)}{tail}</li>")
         if not end:
             items[-1] = items[-1][:-5] + ' <span class="pv-end" aria-label="end of proof">∎</span></li>'
         n = len(_dicts(e.get("steps")))

@@ -96,6 +96,8 @@ math { font-family: var(--cs-math-font); font-size: 1.05em; }
 /* A formula on its own line: its box has the line's width and scrolls when the formula is wider (the page script first
    makes a formula that is a little too wide smaller, so that it fits). */
 .cs-nw { white-space: nowrap; }
+/* A proof step that is a formula alone: on the step's line, scrolling when wider than it. */
+.cs-step-math { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; }
 .cs-eq { display: block; margin: 10px 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 .cs-eq > math[display="block"] { margin: 0; padding: 0; width: max-content; min-width: 100%; max-width: none; overflow: visible; }
 .cs-eq:focus-visible { outline: 2px solid var(--cs-link, currentColor); outline-offset: 2px; }

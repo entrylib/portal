@@ -101,6 +101,21 @@ MATH = re.compile(r"\$\$(.+?)\$\$|\$([^$\s][^$]*?)\$|\\\((.+?)\\\)", re.S)
 CODE = re.compile(r"(`+)(.+?)\1", re.S)
 
 
+#: LaTeX in a text: a command (\\mu, \\frac) or a sub- or superscript.
+TEX_MARK = re.compile(r"\\[A-Za-z]+|[_^]")
+#: Prose: two words of letters in a row, outside commands and \\text{…} (an `E` or `d` of a formula is not a word).
+PROSE = re.compile(r"(?<![\\A-Za-z])[A-Za-z]{3,}\s+[A-Za-z]{3,}(?![A-Za-z]*\})")
+
+
+def bare_formula(s):
+    """Whether a proof step's statement is a formula written without $…$ (claimset spec §3.4: a step's `statement`
+    is LaTeX): LaTeX and no delimiters, code, term marks or prose."""
+    if not isinstance(s, str) or not s.strip() or MATH.search(s) or CODE.search(s) or TERM.search(s):
+        return False
+    words = re.sub(r"\\(?:text|mathrm|operatorname|mbox)\{[^}]*\}|\\[A-Za-z]+", " ", s)
+    return bool(TEX_MARK.search(s)) and not PROSE.search(words)
+
+
 def math(tex, display=False):
     """An expression as MathML (claimset.mathml), on a line of its own when the author wrote it as $$...$$ (spec §8
     rule 6), in the sentence when written as $...$; one it cannot read is shown as written, as code."""
@@ -391,6 +406,15 @@ class _Paper:
             last = m.end()
         out.append(self._maths(s[last:]))
         return "".join(out)
+
+    def step(self, s):
+        """A proof step's statement: a bare formula as a formula (bare_formula), in a box that scrolls when it is
+        wider than the line; anything else as text."""
+        if bare_formula(s):
+            shown = to_mathml(s.strip())
+            if shown is not None:
+                return f'<span class="cs-step-math">{shown}</span>'
+        return self.text(s)
 
     def _maths(self, s):
         out, last = [], 0
@@ -1004,7 +1028,7 @@ def _evidence(P, e, source_link):
     steps = [s for s in e.get("steps") or [] if isinstance(s, dict)]
     if steps:
         out.append('<ol class="cs-steps">' + "".join(
-            f'<li id="{esc(e["id"])}.{esc(s.get("id", ""))}">{P.text(s.get("statement", ""))}'
+            f'<li id="{esc(e["id"])}.{esc(s.get("id", ""))}">{P.step(s.get("statement", ""))}'
             f' <span class="cs-tail">({P.text(s.get("rule", ""))}'
             f'{"; from " + P.ids(s["by"]) if s.get("by") else ""})</span></li>' for s in steps) + "</ol>")
     for x in e.get("records") or []:

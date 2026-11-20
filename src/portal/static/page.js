@@ -568,12 +568,13 @@ window.entrylibOpen = (function () {
   });
 })();
 
-// A formula on its own line that is wider than the line (.cs-eq): one that is a little too wide is made smaller, so
+// A formula on its own line that is wider than the line (.cs-eq, and a proof step that is a formula alone,
+// .cs-step-math): one that is a little too wide is made smaller, so
 // that it fits; a wider one keeps its size and scrolls in its box, which the keyboard can then reach. Measured again
 // when the box's width changes (a fold opens, the window is resized). Without the script every such formula scrolls.
 (function () {
   "use strict";
-  var boxes = document.querySelectorAll(".cs-eq");
+  var boxes = document.querySelectorAll(".cs-eq, .cs-step-math");
   if (!boxes.length || !("ResizeObserver" in window)) return;
   var SMALLEST = 0.8;                                    // of the formula's own size
   var widths = new WeakMap();
