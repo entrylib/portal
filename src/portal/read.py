@@ -9,6 +9,7 @@ version. Fine while the library has hundreds of claimsets; past that, the indexe
 import functools
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from . import areas, ids, score_html, site
 from . import scores as score_data
@@ -44,10 +45,32 @@ def _scores(concept, version, rubric, text):
     return score_data.compute(None, json.loads(text))
 
 
-def scores_of(doc):
+@functools.lru_cache(maxsize=4096)
+def _stored(path, mtime_ns, rubric):
+    try:
+        held = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return held if isinstance(held, dict) and held.get("rubric") == rubric else None
+
+
+def scores_of(doc, published_dir=None):
+    """A published version's scores: those written with its files (`p/<key>@v<n>.score.json`, indexer), when they
+    are by the rubric installed; else computed, once per process. Computing them for every paper made the first
+    visit to Read after each start take seconds per paper."""
     p = doc["paper"]
     if score_data.rubric is None:
         return None
+    if published_dir is not None and p.get("version") is not None:
+        path = Path(published_dir) / "p" / f"{ids.url_key(p['id'])}@v{p['version']}.score.json"
+        try:
+            mtime = path.stat().st_mtime_ns
+        except OSError:
+            mtime = None
+        if mtime is not None:
+            held = _stored(str(path), mtime, score_data.version())
+            if held is not None:
+                return held
     return _scores(p["id"], p.get("version"), score_data.version(), json.dumps(doc, sort_keys=True))
 
 
@@ -169,13 +192,13 @@ def _claim_item(doc, c, sc):
             f'{site.esc(doc["paper"]["id"])}@v{site.esc(doc["paper"].get("version"))}</p></li>')
 
 
-def claims(docs, q):
+def claims(docs, q, published_dir=None):
     """The claims shown: (doc, claim, scores, score) of every current claimset in the area, filtered."""
     out = []
     for d in docs:
         if not in_area(area_of(d), q.area):
             continue
-        sc = scores_of(d)
+        sc = scores_of(d, published_dir)
         for c in d.get("claims") or []:
             if not isinstance(c, dict) or not isinstance(c.get("id"), str):
                 continue
@@ -198,12 +221,12 @@ def claims(docs, q):
     return out
 
 
-def claimsets(docs, q):
+def claimsets(docs, q, published_dir=None):
     out = []
     for d in docs:
         if not in_area(area_of(d), q.area):
             continue
-        sc = scores_of(d)
+        sc = scores_of(d, published_dir)
         paper = sc["paper"] if sc else None
         if q.band and (not paper or paper["band"] != q.band):
             continue
@@ -215,19 +238,19 @@ def claimsets(docs, q):
     return [d for d, _ in out]
 
 
-def page(docs, q, base_url="", corrected=None):
+def page(docs, q, base_url="", corrected=None, published_dir=None):
     """The Read page. `docs`: the current version of every published claimset. Its canonical address is the area's
     own, without filters, so that search engines index one page per area."""
     tabs = "".join(f'<a href="{q.url(view=v, offset="")}"' + (' aria-current="page"' if v == q.view else "")
                    + f">{label}</a>" for v, label in (("claimsets", "Papers"), ("claims", "Claims")))
     if q.view == "claims":
-        rows = claims(docs, q)
+        rows = claims(docs, q, published_dir)
         shown = rows[q.offset:q.offset + PAGE]
         what = "claims" if q.all else "principal claims"
         body = (f'<ol class="results">{"".join(_claim_item(d, c, sc) for d, c, sc, _ in shown)}</ol>' if shown
                 else '<p class="muted">No claims here match.</p>')
     else:
-        rows = claimsets(docs, q)
+        rows = claimsets(docs, q, published_dir)
         shown = rows[q.offset:q.offset + PAGE]
         what = "papers"
         body = (f'<div class="cards">{site._cards(shown, corrected)}</div>' if shown

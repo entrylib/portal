@@ -37,7 +37,7 @@ from pathlib import Path
 from claimset.render import render
 from claimset.validate import with_verifiability
 
-from . import limits
+from . import limits, previews
 from .publish import load_submission
 from .submissions import CANCELLED, _sha256, check, duplicate, packaged_files, token_hash
 
@@ -77,28 +77,36 @@ def context_for(conn, submission, orcid, submissions_dir):
 def _context_by_hash(conn, hash_, submissions_dir):
     row = conn.execute(
         "SELECT g.submission_id, g.orcid, g.name, g.confirmed, s.state, s.kind, s.target, s.expires, s.file_name,"
-        " s.published_id, s.detail, s.waiting_package, s.report -> 'source', s.report -> 'removals'"
+        " s.published_id, s.detail, s.waiting_package, s.report -> 'source', s.report -> 'removals', s.sha256"
         " FROM submission_guarantors g"
         " JOIN submissions s ON s.id = g.submission_id WHERE g.token_hash = %s", (hash_,)).fetchone()
     if row is None:
         return None
-    sid, orcid, name, confirmed, state, kind, target, expires, file_name, published, detail, waiting, src, rem = row
+    (sid, orcid, name, confirmed, state, kind, target, expires, file_name, published, detail, waiting, src, rem,
+     sha) = row
     ctx = {"submission": sid, "orcid": orcid, "name": name, "confirmed": confirmed is not None, "state": state,
            "kind": kind, "target": target, "expires": expires, "published": published, "detail": detail,
            "waiting_package": bool(waiting), "source": src if isinstance(src, dict) else None,
-           "removals": [str(x) for x in rem] if isinstance(rem, list) else []}
+           "removals": [str(x) for x in rem] if isinstance(rem, list) else [], "sha256": sha}
     if state == "pending" and file_name:
-        with tempfile.TemporaryDirectory() as tmp:
-            doc, _ = load_submission(Path(submissions_dir) / file_name, tmp)
-        paper = doc.get("paper") or {}
-        claims = {c.get("id"): c for c in doc.get("claims") or [] if isinstance(c, dict)}
-        ctx.update(title=paper.get("title", ""), licence=paper.get("licence", ""),
-                   principal=[claims[c].get("statement", "") for c in paper.get("contributions") or [] if c in claims],
-                   n_claims=len(claims), reading_view=render(doc), subfield=_subfield_line(doc),
-                   correction_reason=paper.get("correction_reason"), based_on=paper.get("based_on"),
-                   package_files=packaged_files(doc),
-                   doc=with_verifiability(doc))              # as it will be published, for the preview
+        # made once per file (previews.py): the platform's verifiability takes a full validation
+        ctx.update(previews.kept(submissions_dir, sha, "page",
+                                 lambda: _page_parts(Path(submissions_dir) / file_name)))
     return ctx
+
+
+def _page_parts(path):
+    """What the consent page and Your submissions show of a pending submission's file."""
+    with tempfile.TemporaryDirectory() as tmp:
+        doc, _ = load_submission(path, tmp)
+    paper = doc.get("paper") or {}
+    claims = {c.get("id"): c for c in doc.get("claims") or [] if isinstance(c, dict)}
+    return dict(title=paper.get("title", ""), licence=paper.get("licence", ""),
+                principal=[claims[c].get("statement", "") for c in paper.get("contributions") or [] if c in claims],
+                n_claims=len(claims), reading_view=render(doc), subfield=_subfield_line(doc),
+                correction_reason=paper.get("correction_reason"), based_on=paper.get("based_on"),
+                package_files=packaged_files(doc),
+                doc=with_verifiability(doc))               # as it will be published, for the preview
 
 
 def start(conn, token):

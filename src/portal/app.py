@@ -33,6 +33,7 @@ from . import (
     mcp_server,
     notices,
     pages,
+    previews,
     ratelimit,
     read,
     scores,
@@ -310,7 +311,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                 "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
                 " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
             corrected = history.corrected_concepts(conn)
-        return HTMLResponse(read.page(docs, q, settings.base_url, corrected),
+        return HTMLResponse(read.page(docs, q, settings.base_url, corrected, published_dir=settings.published_dir),
                             headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
@@ -549,7 +550,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             if who is None:
                 return RedirectResponse("/submissions", status_code=303)
             ctx = consent.context_for(conn, submission, who[0], settings.submissions_dir)
-            preview_scores = scores.compute(conn, ctx["doc"]) if ctx and ctx.get("doc") else None
+            preview_scores = previews.preview_scores(conn, settings.submissions_dir, ctx)
         if ctx is None or ctx["state"] != "pending" or not ctx.get("doc"):
             return _page(site.message_page("Not waiting for you", "This submission is not waiting for your "
                                            "confirmation: it was confirmed, cancelled or expired, or it names someone "
@@ -724,7 +725,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         or with `?view=record` its record (design §4.2)."""
         with pool.connection() as conn:
             ctx = consent.page_context(conn, token, settings.submissions_dir)
-            preview_scores = scores.compute(conn, ctx["doc"]) if ctx and ctx.get("doc") else None
+            preview_scores = previews.preview_scores(conn, settings.submissions_dir, ctx)
         if ctx is None:
             return HTMLResponse(pages.message("Unknown link", "This consent link is not valid. Links expire with "
                                               "their submission, after 48 hours."), status_code=404)
