@@ -260,13 +260,18 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
                               "them as conversion guarantor; this API takes native claimsets, submitted by their "
                               "guarantor")
     people = guarantors(doc)
-    kind, target = "new", None
+    kind, target, removed = "new", None, []
     if "id" in paper:
         kind, target = "correction", paper["id"]
-        row = conn.execute("SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
-                           " AND v.version = p.current_version WHERE p.concept_id = %s", (target,)).fetchone()
+        row = conn.execute("SELECT v.file, p.current_version FROM papers p JOIN versions v ON v.concept_id ="
+                           " p.concept_id AND v.version = p.current_version WHERE p.concept_id = %s",
+                           (target,)).fetchone()
         if row is None:
             raise SubmissionError(f"the correction names {target}, which is not published on EntryLib")
+        stale = stale_base(paper, target, row[1])
+        if stale:
+            raise SubmissionError(stale, status=409, warnings=result.warnings)
+        removed = removals(row[0], doc)
         current = guarantors(row[0])
         if current and [o for o, _ in people] != [o for o, _ in current]:
             raise SubmissionError(f"a correction is submitted by the guarantor of the current version of {target} "
@@ -300,7 +305,8 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
             " VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (sub_id, now, expires, kind, target, paper.get("title"), title_key(paper.get("title")),
              bool(new_paper), stored.name, _sha256(stored), stored.stat().st_size,
-             json.dumps({**result.as_json(), **({"source": checked} if checked else {})}), client_ip, waiting, src))
+             json.dumps({**result.as_json(), **({"source": checked} if checked else {}),
+                         **({"removals": removed} if removed else {})}), client_ip, waiting, src))
         for orcid, name in people:
             token = secrets.token_urlsafe(24)
             conn.execute("INSERT INTO submission_guarantors (submission_id, orcid, name, token_hash)"
@@ -309,11 +315,61 @@ def receive(conn, upload, *, submissions_dir, base_url, client_ip=None, now=None
     out = {**status(conn, sub_id, base_url), "consent": links, "report": result.as_json()}
     if checked:
         out["source"] = checked
+    if removed:
+        out["removals"] = removed
+        out["removals_note"] = removals_note(removed, paper, target)
     if waiting:
         out["package"] = ("The guarantor attaches the package (the zip `claimset package` builds, holding "
                           f"{', '.join(packaged_files(doc))}) on the consent page, then confirms: give them the zip "
                           "with the consent link.")
     return out
+
+
+def stale_base(paper, target, current):
+    """Why a new version must be refused because it was made from an older version than the current one (claimset
+    spec §9, `paper.based_on`, from v0.44 as amended on 2026-11-21; design §4.3, *New versions*), or None."""
+    based_on = paper.get("based_on")
+    if not isinstance(based_on, str) or based_on == f"{target}@v{current}":
+        return None
+    return (f"this new version was made from {based_on}, but the current version of {target} is v{current}: "
+            f"published, it would undo what the versions after {based_on} changed. Start again from the current "
+            f"version ({target}@v{current}; `claimset correct` writes paper.based_on) and make the changes there")
+
+
+def removals(current, doc):
+    """What a new version removes from the current one, from the patch the claimset package computes: one line per
+    kind of field, with the objects it is removed from ('summary: C1, C2, …'; 'paper.sections'), so that the
+    guarantor sees it before confirming (design §4.3, *New versions*)."""
+    from claimset.revision import raw_patch
+    groups = {}
+    for op, where in raw_patch(current, doc):
+        if op.get("op") != "remove":
+            continue
+        path = op.get("path", "")
+        where, depth = str(where), path.count("/")
+        if path.startswith("/paper/"):
+            obj, field = "", path[1:].replace("/", ".")
+        elif depth == 2:
+            obj, field = where, "whole objects"                     # a claim, definition, … removed
+        elif "." in where and not where.startswith("paper."):
+            obj, field = where.split(".", 1)
+        else:
+            obj, field = "", where
+        groups.setdefault(field, []).append(obj)
+    out = []
+    for field, objs in groups.items():
+        named = [o for o in objs if o]
+        out.append(f"{field}: {', '.join(named)}" if named else field)
+    return out
+
+
+def removals_note(removed, paper, target):
+    """What the submitter and the guarantor are told about the removals of a new version."""
+    head = f"This new version removes from the current version of {target}: " + "; ".join(removed) + "."
+    if paper.get("based_on"):
+        return head
+    return (head + " It does not say which version it was made from (paper.based_on): if it was made from an older "
+            "version, these removals undo the versions after it, and it should be made again from the current one.")
 
 
 def packaged_files(doc):
