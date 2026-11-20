@@ -1697,14 +1697,13 @@ def _pending(items):
         expires = it["expires"].strftime("%d %B %Y, %H:%M UTC")
         ticket = f'<input type="hidden" name="ticket" value="{esc(it["ticket"])}">'
         sid = esc(it["submission"])
+        preview = f'<a class="button-quiet" href="/submissions/{sid}/preview">Open the preview</a>'
         rows.append(
             f'<section class="pending" id="{sid}"><h2>{esc(it.get("title"))}</h2>{kind}'
             + _pending_about(it)
             + f'<p class="muted">Submission {sid} · waits for you until {esc(expires)}</p>'
-            f'<p><a class="button-quiet" href="/submissions/{sid}/preview">Open the preview</a> '
-            f'<span class="muted">the paper as readers will see it once published</span></p>'
-            + (_attach_form(it, ticket) if it.get("waiting_package") else
-               f'<form method="post" action="/confirm" class="actions">{ticket}'
+            + (f"<p>{preview}</p>" + _attach_form(it, ticket) if it.get("waiting_package") else
+               f'<form method="post" action="/confirm" class="actions">{ticket}{preview} '
                '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>')
             + '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
             "submission and its file are deleted. To publish it later, submit it again.</p>"
