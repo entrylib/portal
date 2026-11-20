@@ -158,7 +158,9 @@ def test_a_failed_query_of_the_rubric_does_not_abort_a_rebuild(env, monkeypatch,
     publish(write(tmp, example(), "b.claimset.json"), **ctx)
     monkeypatch.setattr(scores, "_candidates", lambda conn, *a, **k: conn.execute("SELECT nonsense FROM nowhere"))
     monkeypatch.setattr(scores.rubric, "assess", lambda doc, find: find("forecast accuracy"))
-    shutil.rmtree(ctx["published_dir"] / ".rendered")                    # scored again, not kept
+    shutil.rmtree(ctx["published_dir"] / ".rendered")                    # written again, and scored again:
+    for f in (ctx["published_dir"] / "p").glob("*.score.json"):          # no score kept
+        f.unlink()
     reindex(ctx["conn"], ctx["registry"], ctx["published_dir"], BASE)
     rows = ctx["conn"].execute("SELECT concept_id, current_version FROM papers ORDER BY 1").fetchall()
     assert rows == [("entrylib:2026.000001", 1), ("entrylib:2026.000002", 1)]
@@ -227,25 +229,27 @@ def test_novelty_is_named_once(tmp_path):
     assert "extends earlier work" in plain and "novelty:" not in plain
 
 
-def test_a_change_to_the_site_alone_rewrites_pages_without_scoring_again(env, monkeypatch):
-    """Design §7.1: a version's score is kept while what it is computed from is unchanged."""
-    from portal import indexer
+def test_a_score_is_computed_once_per_version_and_rubric(env, monkeypatch):
+    """Design §7.1: only a new rubric, or a new version (a re-upload), scores again; a newer claimset package, a change
+    to the site, a notice or a cited paper's new score does not."""
+    from portal import labrecord
     from portal.indexer import reindex
     ctx, tmp = env
     publish(write(tmp, example()), **ctx)
     out = ctx["published_dir"]
-    page = out / "p" / "2026.000001.html"
-    score = (out / "p" / "2026.000001@v1.score.json").read_text()
+    page, path = out / "p" / "2026.000001.html", out / "p" / "2026.000001@v1.score.json"
+    score = path.read_text()
+    assert json.loads(score)["computed_with"] == {"claimset": labrecord.package_version()}
     computed = []
     real = scores.compute
     monkeypatch.setattr(scores, "compute", lambda conn, doc: computed.append(1) or real(conn, doc))
     page.write_text("old page")
     monkeypatch.setattr(site, "fingerprint", lambda: "a new look")
+    monkeypatch.setattr(site, "claimset_fingerprint", lambda: "a newer claimset")
+    monkeypatch.setattr(scores, "cited_scores", lambda doc: {"entrylib:2026.000009@v1#C1": 12})
     reindex(ctx["conn"], ctx["registry"], out, BASE)
-    assert page.read_text() != "old page" and computed == []           # pages written, the score kept
-    assert (out / "p" / "2026.000001@v1.score.json").read_text() == score
+    assert page.read_text() != "old page" and computed == [] and path.read_text() == score
     monkeypatch.setattr(scores, "version", lambda: "9.9")             # a new rubric scores again (and is part of
     monkeypatch.setattr(site, "fingerprint", lambda: "rubric 9.9")     # the site's fingerprint, faked here)
     reindex(ctx["conn"], ctx["registry"], out, BASE)
     assert computed == [1]
-    assert json.loads((out / indexer.DIGESTS / "2026.000001.scores.json").read_text())["1"]
