@@ -850,7 +850,8 @@ def not_claimed(doc):
     return ('<section class="cs-section" id="not-claimed"><h2>Not claimed</h2><p class="small">Planned proofs that '
             f'give no claim of their own; the lab record has each with its reason.{under}</p>'
             '<ul class="cs-not-claimed">'
-            + "".join(pageview.not_claimed_item(x, P.text, P.lab_record) for x in items) + "</ul></section>",
+            + "".join(pageview.not_claimed_item(x, P.text, P.lab_record, P.hypotheses) for x in items)
+            + "</ul></section>",
             len(items))
 
 
@@ -1228,7 +1229,8 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     parts = render(bundle, file_url, ref_text, scores, claim_pages(doc), claim=cid)
     # the earlier wordings and merged hypotheses that went into the claim, from the paper (design §7.6)
     full = pageview._Paper(doc)
-    earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record)
+    earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record, full.hypotheses,
+                                     lambda c: f"#{c}" if c == cid else f"/p/{key}#{c}")
     body, sections = _claim_sections(parts, earlier if 'class="cs-earlier"' not in parts.get("body", "") else "")
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""

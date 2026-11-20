@@ -448,7 +448,7 @@ def _not_claimed(doc, lab=True):
         {"lab_event": "H1", "lab_plan": "PL5", "outcome": "supported", "because": "reworded", "into": cid,
          "why": "Restated and decided again under PL8.", "statement": "Asymmetry lies in $[-1, 1]$"},
         {"lab_event": "H9", "lab_plan": "PL5", "outcome": "inconclusive", "because": "revised", "into": cid,
-         "why": "Merged into H3 as its part (b)."},
+         "why": ""},                                              # neither statement nor why: the phrase
         {"lab_event": "H11", "lab_plan": "PL6", "outcome": "not_supported", "because": "abandoned",
          "why": "Reported by a simulation <b>instead</b>.", "statement": "The bound is <b>tight</b>"}]
     doc["artefacts"] = [a for a in doc.get("artefacts") or [] if a.get("kind") != "lab_record"]
@@ -468,7 +468,7 @@ def test_not_claimed_after_the_score():
     assert '<a href="#not-claimed">Not claimed</a> <span class="count">1</span>' in page    # what it lists
     assert section.count("<li>") == 1 and '<ul class="cs-not-claimed">' in section
     assert ('<li><span class="nc-what">The bound is &lt;b&gt;tight&lt;/b&gt;</span> '
-            '<span class="nc-tail">— not proved; dropped</span> '
+            '<span class="nc-tail">— not proved, then dropped</span> '
             '<a class="nc-lab" href="https://github.com/example/lab/log.jsonl" title="H11 under PL6">'
             'lab record</a></li>') in section
     assert "Earlier wordings and merged hypotheses are shown under their claims." in section
@@ -498,7 +498,7 @@ def test_verdicts_that_went_into_a_claim_stand_under_it_folded():
         assert fold.count("<li>") == 2 and "<math" in fold, name             # the statement's maths as a formula
         assert '<span class="nc-tail">— proved, then reworded</span>' in fold, name
         assert ('<span class="nc-what">A hypothesis merged into this claim</span> <span class="nc-tail">— '
-                'inconclusive; merged</span>') in fold, name                   # no statement: a phrase, not H9
+                'tried by proof, inconclusive, then merged</span>') in fold, name     # no statement, no why: a phrase
         assert 'title="H1 under PL5">lab record</a>' in fold, name
         assert not re.search(r">[^<]*\bH(1|9)\b", fold), name                  # the IDs only in the tooltip
     claim = pages["paper"].split(f'<article class="pv-claim" id="{cid}">')[1].split("</article>")[0]
@@ -506,3 +506,45 @@ def test_verdicts_that_went_into_a_claim_stand_under_it_folded():
     _not_claimed(doc, lab=False)
     page = site.paper_page(doc, base_url=BASE, listing=listing)
     assert "cs-earlier" in page and "nc-lab" not in page and "lab record</a>" not in page
+
+
+def test_an_entry_without_a_statement_shows_its_why_without_lab_ids():
+    """Design §7.6, *Not claimed*: without `statement` an entry reads its `why`, its lab IDs taken out on display: a
+    hypothesis of this paper as a link to its claim, another as "another hypothesis", every other ID dropped and put
+    in the lab record link's tooltip; a long why is cut, the whole cleaned text its tooltip."""
+    doc = example()
+    cid = _not_claimed(doc)
+    claim = next(c for c in doc["claims"] if c["id"] == cid)
+    claim["hypothesis"] = {"lab_event": "AC2.H4.R2", "outcome": "supported"}
+    dropped = ("Dropped by decision DC5: it applied a standard large-sample theorem; the efficiency of the sMAPE "
+               "minimiser against the sample median is reported from the simulation PL2 instead, and part (iii) of "
+               "H14 is dropped with it.")
+    merged = ("Merged into H4 by the supervisor's decision DC5: its direction result is now a corollary of AC2.H4.R1; "
+              "see RN3, RN4 (DV2).")
+    entries = doc["paper"]["exploration"]["not_claimed"]
+    entries[1]["why"] = merged
+    entries[2].update(why=dropped, statement=None, lab_event="H11", outcome="inconclusive")
+    del entries[2]["statement"]
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1, "date": "2026-11-10", "status": "active"})
+    page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-10"}])
+    items = re.findall(r'<li><span class="nc-what".*?</li>', page)
+    assert len(items) == 3                                                   # one item per entry
+    shown = next(x for x in items if "large-sample" in x)
+    assert ('<span class="nc-what">Dropped by decision: it applied a standard large-sample theorem; the efficiency of '
+            "the sMAPE minimiser against the sample median is reported from the simulation instead, and part (iii) of "
+            'another hypothesis is dropped with it.</span> <span class="nc-tail">— tried by proof, inconclusive, then '
+            'dropped</span>') in shown
+    assert 'title="H11 under PL6; DC5, PL2, H14">lab record</a>' in shown        # the IDs taken out, in the tooltip
+    into = next(x for x in items if "corollary" in x)
+    assert (f'Merged into <a href="#{cid}">{cid}</a> by the supervisor&#x27;s decision: its direction result is now a '
+            f'corollary of <a href="#{cid}">{cid}</a>.</span>') in into           # this paper's hypothesis: its claim
+    assert 'title="H9 under PL5; DC5, RN3, RN4, DV2"' in into
+    for x in items:
+        assert not re.search(r">[^<]*\b(?:H|DC|PL|RN|DV)\d", x), x             # no lab ID as text
+    assert "Asymmetry lies in" in next(x for x in items if "reworded" in x)    # a statement: as before
+    entries[2]["why"] = dropped + " " + "The theorem needs more moments than the measure has. " * 4
+    page = site.claimset_page(doc, base_url=BASE, listing=[])
+    long = re.search(r'<li><span class="nc-what" title="([^"]*)">(.*?)</span>', page)
+    assert long.group(2).endswith("dropped with it. …") and "more moments" not in long.group(2)
+    assert long.group(1).startswith("Dropped by decision: it applied") and long.group(1).count("more moments") == 4
+    assert "DC5" not in long.group(1)
