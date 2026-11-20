@@ -128,6 +128,26 @@ def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper
                              paper_href=views[0], record_href=views[1])
 
 
+def session_preview(ctx, scores=None, base_url="", view="paper", views=("?", "?view=record")):
+    """The preview Your submissions opens for a guarantor signed in (design §4.2): the consent page's, with a bar that
+    leads back to Your submissions, where the Confirm button is."""
+    from . import site
+    expires = ctx["expires"].strftime("%d %B %Y, %H:%M UTC")
+    back = f"/submissions#{ctx['submission']}"
+    bar = (f'<p class="preview-bar-text"><strong>Preview, not published yet.</strong> <span class="preview-more">'
+           f'This is how the paper will look once published. Confirm or cancel it in Your submissions, by '
+           f'{escape(expires)}.</span></p><a class="button" href="{escape(back)}">Back to Your submissions</a>')
+    correction = ""
+    if ctx["kind"] == "correction":
+        correction = (f"<p><strong>A new version of {escape(ctx['target'])}.</strong> Reason given: "
+                      f"{escape(ctx.get('correction_reason') or '')}</p>")
+    statement = (f"<p>The paper as readers will see it once published, under the licence {escape(ctx['licence'])}. "
+                 f"Nothing is published until you confirm it in Your submissions.</p>{correction}"
+                 f"{_source_box(ctx)}")
+    return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores, view=view,
+                             paper_href=views[0], record_href=views[1])
+
+
 def _confirm_button(ctx, start_url):
     """The Confirm button, once nothing waits: a submission waiting for its package shows the package form instead."""
     if ctx.get("waiting_package"):

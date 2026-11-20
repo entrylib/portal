@@ -121,3 +121,45 @@ def test_a_guarantors_page(app_client):
     assert 'href="/p/2026.000001"' in r.text
     assert app_client.get("/people/0000-0002-1825-0097").status_code == 404
     assert app_client.get("/people/not-an-id").status_code == 404
+
+
+def signed_in(c, as_orcid=GUARANTOR):
+    """Sign in at Your submissions and keep the session (the test client is http, so the cookie is set by hand)."""
+    r = sign_in_at(c, "submissions", as_orcid)
+    c.cookies.set("entrylib_session", r.headers["set-cookie"].split(";")[0].split("=", 1)[1])
+    return r
+
+
+def test_a_waiting_submission_reads_as_a_paper(app_client):
+    """Design §4.2: its authors, size, summary and claims by name, then Open the preview before Confirm and publish."""
+    from publishing import example
+    doc = example()
+    doc["paper"]["summary"] = "Retail sales are seasonal, and method M forecasts them better than N."
+    doc["claims"][2]["name"] = "Method M improves accuracy"
+    out, _ = submit(app_client, doc)
+    page = signed_in(app_client).text
+    card = page[page.index('<section class="pending"'):page.index("</section>")]
+    for part in ("A. Researcher · with Example research agent (AI)", "3 claims, 1 principal", "<h3>Summary</h3>",
+                 "Retail sales are seasonal", "<h3>Claims</h3>", "Method M improves accuracy",
+                 "· principal", "Monthly retail sales series exhibit"):
+        assert part in card, part
+    assert "Principal claims:" not in card and "as models will read it" not in card
+    assert card.index("Open the preview") < card.index("Confirm and publish")
+    assert f'href="/submissions/{out["id"]}/preview"' in card and f'id="{out["id"]}"' in card
+
+
+def test_the_preview_opens_with_the_session(app_client):
+    out, _ = submit(app_client)
+    url = f"/submissions/{out['id']}/preview"
+    r = app_client.get(url, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/submissions"            # not signed in
+    signed_in(app_client)
+    r = app_client.get(url)
+    assert r.status_code == 200 and "Preview, not published yet." in r.text and 'data-view="paper"' in r.text
+    assert f'href="/submissions#{out["id"]}">Back to Your submissions' in r.text
+    assert "Confirm: sign in with ORCID" not in r.text                               # confirming is on the list
+    assert f'href="{url}?view=record"' in r.text
+    assert 'id="principal"' in app_client.get(f"{url}?view=record").text            # the record
+    app_client.post("/signout")
+    signed_in(app_client, as_orcid="0000-0002-1825-0097")                            # someone else
+    assert app_client.get(url).status_code == 404

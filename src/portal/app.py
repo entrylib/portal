@@ -540,6 +540,25 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             past = consent.history(conn, who[0])
         return _page(site.submissions_list(items, past, who[0], who[1], session=True))
 
+    @app.get("/submissions/{submission}/preview", response_class=HTMLResponse, include_in_schema=False)
+    def submission_preview(request: Request, submission: str, view: str = "paper"):
+        """The preview of a submission waiting for the guarantor signed in (design §4.2): the consent page's, opened
+        from Your submissions with the sign-in session; its bar leads back there, where the Confirm button is."""
+        with pool.connection() as conn:
+            who = consent.session(conn, request.cookies.get(SESSION_COOKIE))
+            if who is None:
+                return RedirectResponse("/submissions", status_code=303)
+            ctx = consent.context_for(conn, submission, who[0], settings.submissions_dir)
+            preview_scores = scores.compute(conn, ctx["doc"]) if ctx and ctx.get("doc") else None
+        if ctx is None or ctx["state"] != "pending" or not ctx.get("doc"):
+            return _page(site.message_page("Not waiting for you", "This submission is not waiting for your "
+                                           "confirmation: it was confirmed, cancelled or expired, or it names someone "
+                                           "else.", ("/submissions", "Your submissions")), 404)
+        base = f"/submissions/{submission}/preview"
+        html_ = pages.session_preview(ctx, scores=preview_scores, base_url=settings.base_url, view=view,
+                                      views=(base, f"{base}?view=record"))
+        return HTMLResponse(html_, headers={"Content-Security-Policy": removal_csp + "; script-src 'self'"})
+
     @app.post("/signout", include_in_schema=False)
     def signout(request: Request):
         """End the sign-in session: Your submissions asks for ORCID again."""

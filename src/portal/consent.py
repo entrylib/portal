@@ -66,6 +66,14 @@ def page_context(conn, token, submissions_dir):
     return _context_by_hash(conn, token_hash(token), submissions_dir)
 
 
+def context_for(conn, submission, orcid, submissions_dir):
+    """What the consent page shows, for a guarantor signed in (a live session) whom `submission` names and who has not
+    confirmed it: the preview Your submissions links to (design §4.2). None otherwise."""
+    row = conn.execute("SELECT token_hash FROM submission_guarantors WHERE submission_id = %s AND orcid = %s"
+                       " AND confirmed IS NULL", (submission, orcid)).fetchone()
+    return _context_by_hash(conn, row[0], submissions_dir) if row else None
+
+
 def _context_by_hash(conn, hash_, submissions_dir):
     row = conn.execute(
         "SELECT g.submission_id, g.orcid, g.name, g.confirmed, s.state, s.kind, s.target, s.expires, s.file_name,"
