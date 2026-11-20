@@ -156,3 +156,18 @@ def test_the_requests_keep_the_papers_order_and_propose_its_subfield(tmp_path):
         assert "at most 250 words" in text and "150 words" not in text
     llms = reading.llms_txt(BASE)
     assert "`paper.sections`" in llms and "what the paper is about first, defined in full" in llms
+
+
+def test_the_texts_for_agents_ask_for_mathematics_as_latex():
+    """Design §7.4, *Skills*: where the portal tells agents how to write a claimset (llms.txt, the MCP server's
+    instructions, the messages of /convert), mathematics is LaTeX: \\frac, a variable's name inside its formula."""
+    from portal import mcp_server
+    cat = skills.catalogue()
+    for text in (skills.short(BASE, cat), skills.request(BASE, cat), skills.message(BASE, cat),
+                 reading.llms_txt(BASE), mcp_server.INSTRUCTIONS):
+        text = " ".join(text.split())
+        assert "LaTeX" in text and "\\frac{a}{b}" in text and "a variable's name" in text
+        assert "on a line of its own" in text
+    assert "`$\\mathrm{Asymmetry} = 1 - \\frac{4\\phi}{\\pi}$`, not `Asymmetry $= 1 - \\phi/(\\pi/4)$`" in skills.MATHS
+    assert "`L_{3/2}`" in reading.llms_txt(BASE)
+    assert len(skills.short(BASE, cat)) < 3000                          # still short: it copies in every browser

@@ -796,13 +796,16 @@ def byline(role, people):
     return None
 
 
-def render(doc, file_url=None, ref_text=None, scores=None, pages=()):
+def render(doc, file_url=None, ref_text=None, scores=None, pages=(), claim=None):
     """The claimset package's page view of `doc`, with the site's choices: how numbers are written, how people are
     shown, how references given by DOI are written out, what marks a claim (its score and dots, and its novelty,
     design §7.6) and which claims link to a page of their own (`pages`, the current version's principal claims,
-    design §7.8)."""
+    design §7.8). `claim`: the one claim a claim's page shows, whose main evidence keeps its small tables open
+    (design §7.4, *Tables*)."""
     key = ids.url_key(doc["paper"]["id"])
     extra = {"ref_text": ref_text} if ref_text else {}
+    if claim is not None:
+        extra["claim"] = claim
     return pageview.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
                                claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, byline=byline,
                                **extra)
@@ -937,6 +940,29 @@ def own_document(doc):
 PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
 
 
+def paper_figures(doc, file_url=None):
+    """The paper's figures, shown first in the paper view, under the title block (design §7.4, *Figures first*): every
+    artefact of kind `figure` the page can show (a packaged image), data plots (`function: data_plot`) first, each with
+    its description as its caption, opening in the viewer, which steps through them all. "" when there is none."""
+    P = pageview._Paper(doc, file_url=file_url)
+    figs = [a for a in P.artefacts if a.get("kind") == "figure" and P.image_src(a)]
+    figs = [a for a in figs if a.get("function") == "data_plot"] + [a for a in figs if a.get("function") != "data_plot"]
+    if not figs:
+        return ""
+    gid = "gal-paper"
+    gallery = ('<ol class="pv-gallery" id="' + gid + '" hidden>' + "".join(
+        f'<li data-src="{esc(P.image_src(a))}"><span class="cs-id">{esc(a["id"])}</span> '
+        f'{P.text(a.get("description") or a["id"])}</li>' for a in figs) + "</ol>")
+    shown = "".join(
+        f'<figure class="cs-figure"><a href="{esc(P.image_src(a))}" data-gallery="{gid}" data-i="{i}">'
+        f'<img src="{esc(P.image_src(a))}" alt="{esc(pageview._first_sentence(a.get("description") or ""))}" '
+        f'loading="lazy"></a><figcaption><span class="cs-id">{esc(a["id"])}</span> '
+        f'{P.text(a.get("description") or a["id"])}</figcaption></figure>' for i, a in enumerate(figs))
+    many = " cs-figures-many" if len(figs) > 1 else ""
+    return (f'<section class="pv-paper-figures" aria-label="Figures"><div class="cs-figures{many}">{shown}</div>'
+            f'{gallery}</section>')
+
+
 def _paper_body(doc, parts, record, more, *, file_url=None, ref_text=None, scores=None, claim_url=None):
     """The paper view's own part (design §7.4, *Paper view*), for a published paper and for a preview (§4.2):
     (the opening: the Summary that stands with the header; the contents; the sections from the Summary on, in
@@ -1034,7 +1060,8 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
-            f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
+            f'{ask_ai(doc, base_url, printed=True)}{document}{paper_figures(doc, file_url)}'
+            f'<div class="pv-opening">{opening}</div></div>'
             # the rail (site.css): the panel, and directly under it the contents, to the right of the text
             f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores, lab)}{nav}</div>'
             f'<article class="cs-body">{"".join(body)}'
@@ -1200,7 +1227,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     key, n = ids.url_key(p["id"]), p.get("version")
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
     bundle = claim_bundle(doc, cid)
-    parts = render(bundle, file_url, ref_text, scores, claim_pages(doc))
+    parts = render(bundle, file_url, ref_text, scores, claim_pages(doc), claim=cid)
     body, sections = _claim_sections(parts)
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""

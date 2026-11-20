@@ -163,6 +163,49 @@ def test_evidence_under_a_computed_claim():
     assert 'id="gal-E4"' in out["extra"] and out["extra"].count('id="gal-E4"') == 1
 
 
+def test_a_table_is_open_only_when_small_and_of_the_claims_main_evidence():
+    """Design §7.4, *Tables*: under a claim, a table of its main evidence (its first support entry's) with fewer than
+    10 rows stays open; a longer one, or one of other evidence, starts closed under a line with its ID, description
+    and size."""
+    c4 = article(site.paper_page(proofs(), base_url=BASE, listing=[{"version": 1}]), "C4")
+    assert '<div class="cs-table" id="E4.T1">' in c4 and "cs-table-fold" not in c4
+    doc = proofs()
+    doc["evidence"][3]["tables"][0]["rows"] = [{"id": f"r{i}", "label": [f"case {i}"], "values": [i]}
+                                               for i in range(1, 17)]
+    c4 = article(site.paper_page(doc, base_url=BASE, listing=[{"version": 1}]), "C4")
+    assert ('<details class="cs-table-fold"><summary>E4.T1 · The target by case <span class="cs-size">'
+            '(16 rows × 1 column)</span></summary><div class="cs-table cs-table-long" id="E4.T1">') in c4
+    doc = proofs()                                  # the same small table, of evidence that is not the claim's main
+    doc["claims"][3]["support"].insert(0, {"kind": "cited", "target": "Earlier work, 2020."})
+    c4 = article(site.paper_page(doc, base_url=BASE, listing=[{"version": 1}]), "C4")
+    assert '<details class="cs-table-fold"><summary>E4.T1 · The target by case' in c4
+    js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
+    assert 'el.closest("details.cs-table-fold")' in js              # opening the page at a row opens its table
+    assert 'querySelectorAll("details.pv-proof, details.cs-table-fold")' in js      # and the page prints them open
+
+
+def test_the_papers_figures_come_first():
+    """Design §7.4, *Figures first*: under the title block and before the Summary, every figure the page can show,
+    data plots first, each with its description as its caption; the record has no such block."""
+    doc = proofs()
+    doc["artefacts"].insert(0, {"id": "A0", "kind": "figure", "function": "schematic", "uri": "files/design.png",
+                                "description": "The study's design."})
+    doc["artefacts"].append({"id": "A9", "kind": "data", "uri": "files/data.csv", "description": "The data."})
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    page = site.paper_page(doc, base_url=BASE, listing=listing)
+    figures = page[page.index('<section class="pv-paper-figures"'):page.index("</section>",
+                                                                              page.index("pv-paper-figures"))]
+    assert page.index("pv-paper-figures") < page.index('class="pv-opening"') < page.index('id="claims"')
+    assert page.index('class="cs-title"') < page.index("pv-paper-figures")
+    assert re.findall(r'<figure class="cs-figure"><a href="files/(\w+)\.png" data-gallery="gal-paper"', figures) == \
+        ["first", "third", "design"]                                    # data plots first, then the others
+    assert '<figcaption><span class="cs-id">A0</span> The study&#x27;s design.</figcaption>' in figures
+    assert "data.csv" not in figures and '<ol class="pv-gallery" id="gal-paper" hidden>' in figures
+    assert "pv-paper-figures" not in site.claimset_page(doc, base_url=BASE, listing=listing)
+    doc["artefacts"] = [a for a in doc["artefacts"] if a.get("kind") != "figure"]
+    assert "pv-paper-figures" not in site.paper_page(doc, base_url=BASE, listing=listing)
+
+
 def test_a_term_stands_before_the_claim_that_first_uses_it():
     doc = proofs()
     doc["definitions"].append({"id": "D3", "term": "the ratio", "kind": "variable", "symbol": "$r$",

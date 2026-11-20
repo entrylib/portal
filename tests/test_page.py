@@ -313,6 +313,68 @@ class TestImages(unittest.TestCase):
         self.assertIn('<img src="images/gel.jpg"', H.render_parts(doc)["body"])
 
 
+class TestTables(unittest.TestCase):
+    """Design §7.4, *Tables*: an evidence table starts closed, under a line with its ID, description and size, except a
+    small table (fewer than 10 rows) of the main evidence of the claim shown, the evidence of its first support entry;
+    a table whose rows are in a file shows its columns and links to the file."""
+
+    def doc(self, n_rows=3, first=True):
+        doc = example()
+        e = doc["evidence"][0]
+        e["tables"] = [{"id": "T1", "description": "Errors by case", "row_labels": ["case"], "columns": ["MAE", "RMSE"],
+                        "rows": [{"id": f"r{i}", "label": [f"case {i}"], "values": [i, i]} for i in range(1, n_rows + 1)]}]
+        for c in doc["claims"]:                         # no claim has this evidence first, but the one shown
+            c["support"] = [s for s in c.get("support") or [] if s.get("evidence") != e["id"]] or [{"kind": "argument"}]
+        entry = {"kind": "empirical_quant", "evidence": e["id"]}
+        c = doc["claims"][0]
+        c["support"] = [entry] + c["support"] if first else c["support"] + [entry]
+        return doc, e["id"], c["id"]
+
+    def test_a_small_table_of_the_main_evidence_stays_open(self):
+        doc, eid, _ = self.doc()
+        body = H.render_parts(doc)["body"]
+        self.assertIn(f'<div class="cs-table" id="{eid}.T1"><table><caption>{eid}.T1 · Errors by case</caption>', body)
+        self.assertNotIn("cs-table-fold", body)
+
+    def test_a_large_table_starts_closed(self):
+        doc, eid, _ = self.doc(n_rows=10)
+        body = H.render_parts(doc)["body"]
+        self.assertIn(f'<details class="cs-table-fold"><summary>{eid}.T1 · Errors by case <span class="cs-size">'
+                      f'(10 rows × 2 columns)</span></summary><div class="cs-table" id="{eid}.T1">', body)
+        self.assertIn(f'<tr id="{eid}.T1.r10">', body)               # every row is in the page, behind the fold
+        self.assertNotIn("<details class=\"cs-table-fold\" open", body)
+
+    def test_a_table_of_other_evidence_starts_closed(self):
+        doc, eid, _ = self.doc(first=False)
+        body = H.render_parts(doc)["body"]
+        self.assertIn(f'<details class="cs-table-fold"><summary>{eid}.T1 · Errors by case <span class="cs-size">'
+                      "(3 rows × 2 columns)", body)
+
+    def test_a_claims_page_keeps_open_only_its_own_main_evidence(self):
+        doc, eid, cid = self.doc()
+        other = next(c["id"] for c in doc["claims"] if c["id"] != cid)
+        self.assertNotIn("cs-table-fold", H.render_parts(doc, claim=cid)["body"])
+        self.assertIn(f'<details class="cs-table-fold"><summary>{eid}.T1', H.render_parts(doc, claim=other)["body"])
+
+    def test_a_table_whose_rows_are_in_a_file_links_to_it(self):
+        doc, eid, _ = self.doc()
+        csv = "https://entrylib.test/p/2026.000099/v1/files/data/forecasts.csv"
+        doc["artefacts"].append({"id": "A20", "kind": "data", "uri": csv, "description": "Every forecast."})
+        doc["evidence"][0]["tables"] = [{"id": "T2", "description": "Every forecast", "row_labels": ["series"],
+                                         "columns": ["horizon", "forecast"], "artefact": "A20", "n_rows": 5000}]
+        body = H.render_parts(doc)["body"]
+        table = body[body.index(f'id="{eid}.T2"'):]
+        self.assertIn(f'<div class="cs-table cs-table-file" id="{eid}.T2"><p class="cs-table-caption">{eid}.T2 · '
+                      'Every forecast <span class="cs-size">(5000 rows × 2 columns)</span></p>', body)
+        self.assertIn("<span class=\"k\">Columns:</span> series · horizon · forecast", table)
+        self.assertIn(f'<a class="cs-download" href="{csv}" download>Download the rows (CSV)</a>', table)
+        self.assertNotIn("<table", table[:table.index("</div>")])
+        doc["artefacts"][-1]["uri"] = "data/forecasts.csv"            # a preview: no file served, the artefact named
+        body = H.render_parts(doc)["body"]
+        self.assertIn('In the package\'s file <a href="#A20">A20</a>', body)
+        self.assertNotIn("cs-download", body)
+
+
 class TestPlannedEstimates(unittest.TestCase):
     def test_a_planned_estimate_is_shown_as_planned(self):
         doc = example()

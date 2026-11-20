@@ -206,6 +206,7 @@ details.notice[open] summary { margin-bottom: 4px; }
    On a narrow screen the rail is no box at all: the panel, the contents and their bar (page.js) are items of the one
    column, placed as on the record, and the bar stays at the top of the whole page. */
 .pv-opening { margin-top: 24px; }
+.pv-paper-figures { margin-top: 20px; }                  /* the paper's figures, first (design §7.4) */
 .pv-opening > .cs-section:first-child { margin-top: 0; }
 .entry-rail { display: contents; }
 .entry-rail > .panel { grid-area: panel; margin-bottom: 28px; }

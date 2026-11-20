@@ -238,6 +238,9 @@ class _Paper:
         # table rows a claim cites: a long table keeps them in view when it is folded (design §7.1)
         self.cited_rows = {x for c in self.claims for sp in c.get("support") or [] if isinstance(sp, dict)
                            for x in sp.get("results") or [] if isinstance(x, str)}
+        # the main evidence of the claims shown, whose small tables stay open (design §7.4, *Tables*): every claim's,
+        # unless the page shows one claim (render_parts' `claim`)
+        self.main = {main_evidence(c) for c in self.claims} - {None}
 
     # ---------- references ----------
     def _reference_labels(self):
@@ -929,9 +932,46 @@ def _definitions(P):
 #: A table longer than this many rows starts folded on the page, showing its first SHOWN_ROWS rows and the rows a claim
 #: cites (page.js; without the script every row shows). The file and the reading view for models keep every row.
 LONG_TABLE, SHOWN_ROWS = 12, 8
+#: An evidence table starts closed, under a line with its ID, description and size, except a table of fewer than this
+#: many rows in the main evidence of the claim shown (design §7.4, *Tables*).
+SMALL_TABLE = 10
 
 
-def _table(P, eid, t):
+def main_evidence(c):
+    """The ID of a claim's main evidence, the evidence of its first support entry, or None."""
+    support = c.get("support") if isinstance(c, dict) else None
+    first = support[0] if isinstance(support, list) and support else None
+    ev = first.get("evidence") if isinstance(first, dict) else None
+    return ev if isinstance(ev, str) else None
+
+
+def _plural(n, word):
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def _file_table(P, eid, t, head, caption):
+    """A table whose rows are held in a file of the package (its `artefact`, a CSV file, and `n_rows`): its
+    description, its columns and a link that downloads the file. The page never reads the file."""
+    a = P.by_id.get(t.get("artefact")) if isinstance(t.get("artefact"), str) else None
+    n = t.get("n_rows")
+    size = [_plural(n, "row")] if isinstance(n, int) and not isinstance(n, bool) else []
+    size.append(_plural(len(t.get("columns") or []), "column"))
+    uri = a.get("uri") if a in P.artefacts else None
+    if _href(uri):
+        where = (f'<a class="cs-download" href="{esc(uri)}" download>Download the rows (CSV)</a> '
+                 f'<span class="cs-id">{esc(t["artefact"])}</span>')
+    else:                                               # a preview, which serves no files: the artefact by its ID
+        where = "In the package's file " + (P.ids([t["artefact"]]) if isinstance(t.get("artefact"), str) else "")
+    return (f'<div class="cs-table cs-table-file" id="{esc(eid)}.{esc(t.get("id", ""))}">'
+            f'<p class="cs-table-caption">{caption} <span class="cs-size">({" × ".join(size)})</span></p>'
+            f'<p class="cs-links"><span class="k">Columns:</span> {" · ".join(head)}</p>'
+            f'<p class="cs-links">{where}</p></div>')
+
+
+def _table(P, eid, t, main=None):
+    """An evidence table. It starts closed (a <details> whose line names it and its size), except a small table of
+    the main evidence of the claim shown: `main` says whether `eid` is that evidence (by default, whether it is the
+    main evidence of a claim the page shows, P.main). A table whose rows are in a file links to the file."""
     cols = [P.column(c) for c in t.get("columns") or []]
     units = t.get("units")
     if isinstance(units, list):
@@ -939,6 +979,8 @@ def _table(P, eid, t):
     head = ["Row"] + [P.term(x) for x in t.get("row_labels") or []] + cols
     caption = (f"{esc(eid)}.{esc(t.get('id'))} · {P.text(t.get('description', ''))}"
                + (f" {P.conditions(t.get('conditions'))}" if t.get("conditions") else ""))
+    if not isinstance(t.get("rows"), list) and isinstance(t.get("artefact"), str):
+        return _file_table(P, eid, t, head[1:], caption)
     rows = []
     all_rows = [r for r in t.get("rows") or [] if isinstance(r, dict)]
     long = len(all_rows) > LONG_TABLE
@@ -958,9 +1000,14 @@ def _table(P, eid, t):
         toggle = (f'<button type="button" class="button-quiet cs-rows-toggle" hidden '
                   f'data-all="Show all {len(all_rows)} rows" data-fewer="Show fewer rows">Show all {len(all_rows)} rows'
                   f'</button>')
-    return (f'<div class="{cls}" id="{esc(eid)}.{esc(t.get("id", ""))}"><table><caption>{caption}</caption>'
-            "<thead><tr>" + "".join(f'<th scope="col">{h}</th>' for h in head) + "</tr></thead>"
-            "<tbody>" + "".join(rows) + f"</tbody></table>{toggle}</div>")
+    table = (f'<div class="{cls}" id="{esc(eid)}.{esc(t.get("id", ""))}"><table><caption>{caption}</caption>'
+             "<thead><tr>" + "".join(f'<th scope="col">{h}</th>' for h in head) + "</tr></thead>"
+             "<tbody>" + "".join(rows) + f"</tbody></table>{toggle}</div>")
+    if (eid in P.main if main is None else main) and len(all_rows) < SMALL_TABLE:
+        return table
+    size = f"{_plural(len(all_rows), 'row')} × {_plural(len(t.get('columns') or []), 'column')}"
+    return (f'<details class="cs-table-fold"><summary>{caption} <span class="cs-size">({size})</span></summary>'
+            f"{table}</details>")
 
 
 def _result(P, e, r, ids=True):
@@ -1061,7 +1108,7 @@ def _section(sid, title, items, intro=""):
 
 
 def render_parts(doc, file_url=None, ref_text=None, digits=None, number=None, person=None, marker=None,
-                 claim_url=None, byline=None):
+                 claim_url=None, byline=None, claim=None):
     """The page view of a claimset in parts, each HTML: `header` (title, guarantor, authors, source, licence and
     keywords), `nav` (the sections with their counts), `body` (the sections), plus `title`, `origin` (lab, converted,
     native), `brief` (the IDs shown under Highlights, and whether they were selected automatically) and `lights` (claims per
@@ -1082,7 +1129,8 @@ def render_parts(doc, file_url=None, ref_text=None, digits=None, number=None, pe
     marks a claim (`where`: `claim`, before its meta line, or `brief`, before its statement under Highlights): HTML, or a pair
     (before, after the meta line), or None for its support light. `claim_url(id)` gives the address of a claim's own
     page, which its ID then links to, or None. `blocks` holds each section's HTML by its id, for a site that arranges
-    the sections itself."""
+    the sections itself. `claim`: the ID of the one claim a page shows (a claim's page), whose main evidence alone
+    keeps its small tables open; by default every claim's does."""
     if callable(number):
         rounding = number
     elif isinstance(digits, int) and not isinstance(digits, bool) and digits > 0:
@@ -1091,13 +1139,15 @@ def render_parts(doc, file_url=None, ref_text=None, digits=None, number=None, pe
         rounding = None
     token = DIGITS.set(rounding)
     try:
-        return _render_parts(doc, file_url, ref_text, person, marker, claim_url, byline)
+        return _render_parts(doc, file_url, ref_text, person, marker, claim_url, byline, claim)
     finally:
         DIGITS.reset(token)
 
 
-def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=None, byline=None):
+def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=None, byline=None, claim=None):
     P = _Paper(doc, file_url, ref_text)
+    if claim is not None:
+        P.main = {main_evidence(c) for c in P.claims if c["id"] == claim} - {None}
     P.byline = byline if callable(byline) else None
     P.person = person if callable(person) else None
     P.marker = marker if callable(marker) else None

@@ -235,14 +235,14 @@ window.entrylibPopup = function (className, label) {
       all.textContent = all.getAttribute(open ? "data-close" : "data-open");
     });
   }
-  // Printing (the button, or the browser's own command): the page prints whole, with every proof open, and is as
-  // it was afterwards. The Record folds and the notices stay shut: they are for checking, not for reading.
+  // Printing (the button, or the browser's own command): the page prints whole, with every proof and table open, and
+  // is as it was afterwards. The Record folds and the notices stay shut: they are for checking, not for reading.
   var paper = document.querySelector('.entry[data-view="paper"]');
   if (!paper) return;
   var opened = [];
   function openAll() {
     if (opened.length) return;
-    paper.querySelectorAll("details.pv-proof").forEach(function (d) {
+    paper.querySelectorAll("details.pv-proof, details.cs-table-fold").forEach(function (d) {
       if (!d.open) { d.open = true; opened.push(d); }
     });
     paper.querySelectorAll('img[loading="lazy"]').forEach(function (i) { i.loading = "eager"; });
@@ -287,6 +287,8 @@ window.entrylibOpen = (function () {
   function reveal(el) {                       // opens the section that holds `el`, and its folded table
     if (!el) return;
     setOpen(el.closest("section.cs-section.fold"), true);
+    var closed = el.closest("details.cs-table-fold");      // a table that starts closed (design §7.4, *Tables*)
+    if (closed) closed.open = true;
     var t = el.closest(".cs-table-long");
     if (t && el.classList.contains("cs-more")) foldRows(t, false);
   }
@@ -443,6 +445,9 @@ window.entrylibOpen = (function () {
     copy.querySelectorAll("[id]").forEach(function (n) {
       if (t.row && n.id === t.row.id) n.classList.add("peek-hit");
       n.removeAttribute("id");
+    });
+    copy.querySelectorAll("details.cs-table-fold").forEach(function (d) {   // the table of the row shown is open
+      if (d.querySelector(".peek-hit")) d.open = true;
     });
     var section = t.el.closest("section.cs-section");
     var name = /^score-/.test(t.el.id) ? t.el.id.slice(6) : t.el.id;
