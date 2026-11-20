@@ -399,6 +399,15 @@ dialog.peek .score-claim { border-top: 0; padding-top: 0; }
 /* Your submissions: what waits for confirmation */
 .pending { border: 1px solid var(--rule-light); border-radius: 6px; padding: 4px 20px 8px; margin: 20px 0; }
 .pending h2 { border-top: 0 !important; padding-top: 0 !important; margin-top: 16px !important; font-size: 22px !important; }
+.pending h3 { font-size: 17px; margin: 18px 0 6px; }
+.pending-by { margin: 4px 0; }
+.pending .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+/* Open the preview beside Confirm and publish: the same size, quiet in colour only. */
+.pending .actions .button-quiet { min-height: 44px; padding: 0 16px; font-size: inherit; font-weight: 600;
+  border-color: var(--accent); }
+.pending-claims { list-style: none; padding-left: 0; }
+.pending-claims li { margin: 4px 0; padding-left: 3.2em; text-indent: -3.2em; }
+.pending-cid { display: inline-block; min-width: 3em; text-indent: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pending pre { white-space: pre-wrap; background: var(--panel); padding: 12px; font-size: 14px; max-height: 60vh;
   overflow-y: auto; }
 

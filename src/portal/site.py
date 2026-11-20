@@ -1646,26 +1646,66 @@ def _who_signed_in(orcid, name):
     return f"{esc(name)} (ORCID {esc(orcid)})" if name else f"ORCID {esc(orcid)}"
 
 
+def _claim_label(c):
+    """A claim as a person scans a list of them: its name, or else the first sentence of its statement."""
+    if isinstance(c.get("name"), str) and c["name"].strip():
+        return c["name"].strip()
+    text = plain(c.get("statement") or "")
+    first = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+    return first if len(first) <= 160 else first[:157].rstrip() + "…"
+
+
+def _pending_about(it):
+    """What a person reads of a submission before opening its preview (design §4.2): who wrote it, its subfield,
+    licence and size, its summary and its claims by name, the principal ones marked."""
+    doc = it.get("doc") or {}
+    paper = doc.get("paper") if isinstance(doc.get("paper"), dict) else {}
+    people = [c for c in doc.get("contributors") or [] if isinstance(c, dict) and c.get("name")]
+    humans = [esc(c["name"]) for c in people if c.get("type") != "agent"]
+    agents = [esc(c["name"]) for c in people if c.get("type") == "agent"]
+    byline = ", ".join(humans) + (f" · with {', '.join(agents)} (AI)" if agents else "")
+    refs = len([b for b in doc.get("references") or [] if isinstance(b, dict)])
+    claims = [c for c in doc.get("claims") or [] if isinstance(c, dict) and isinstance(c.get("id"), str)]
+    principal = set(paper.get("contributions") or [])
+    n_principal = len(principal & {c["id"] for c in claims})
+    facts = [f"{len(claims)} claim{'s' if len(claims) != 1 else ''}" + (f", {n_principal} principal" if n_principal
+                                                                          else ""),
+             f"{refs} reference{'s' if refs != 1 else ''}", f"licence {esc(it.get('licence'))}"]
+    out = []
+    if byline:
+        out.append(f'<p class="pending-by">{byline}</p>')
+    if it.get("subfield"):
+        out.append(f'<p class="muted">{esc(it["subfield"])}</p>')
+    out.append(f'<p class="muted">{" · ".join(facts)}</p>')
+    summary = paper.get("summary") if isinstance(paper.get("summary"), str) and paper["summary"].strip() else None
+    if summary:
+        out.append(f'<h3>Summary</h3><p>{pageview._Paper(doc).text(summary)}</p>')
+    if claims:
+        items = "".join(f'<li><span class="pending-cid">{esc(c["id"])}</span> {esc(_claim_label(c))}'
+                        + (' <span class="muted">· principal</span>' if c["id"] in principal else "") + "</li>"
+                        for c in claims)
+        out.append(f'<h3>Claims</h3><ul class="pending-claims">{items}</ul>')
+    return "".join(out)
+
+
 def _pending(items):
-    """The submissions waiting for the guarantor who signed in: each with its claims, a Confirm button, and a Cancel
-    button behind a second step."""
+    """The submissions waiting for the guarantor who signed in (design §4.2): each as a person reads a paper (its
+    authors, subfield, size, summary and claims by name), a link to its preview, a Confirm button, and a Cancel button
+    behind a second step."""
     rows = []
     for it in items:
-        principal = "".join(f"<li>{esc(plain(s))}</li>" for s in it.get("principal") or [])
         kind = (f"<p><strong>A new version of {esc(it['target'])}.</strong> Reason given: "
                 f"{esc(it.get('correction_reason') or '')}</p>") if it.get("kind") == "correction" else ""
         expires = it["expires"].strftime("%d %B %Y, %H:%M UTC")
         ticket = f'<input type="hidden" name="ticket" value="{esc(it["ticket"])}">'
+        sid = esc(it["submission"])
+        preview = f'<a class="button-quiet" href="/submissions/{sid}/preview">Open the preview</a>'
         rows.append(
-            f'<section class="pending"><h2>{esc(it.get("title"))}</h2>{kind}'
-            f'<p class="muted">{esc(it["submission"])} · {esc(it.get("n_claims"))} claims · licence '
-            f'{esc(it.get("licence"))} · waits until {esc(expires)}</p>'
-            f'<p class="muted">Subfield: {esc(it.get("subfield"))}</p>'
-            f"<p>Principal claims:</p><ul>{principal}</ul>"
-            f"<details><summary>The whole claimset, as models will read it</summary><pre>"
-            f"{esc(it.get('reading_view'))}</pre></details>"
-            + (_attach_form(it, ticket) if it.get("waiting_package") else
-               f'<form method="post" action="/confirm" class="actions">{ticket}'
+            f'<section class="pending" id="{sid}"><h2>{esc(it.get("title"))}</h2>{kind}'
+            + _pending_about(it)
+            + f'<p class="muted">Submission {sid} · waits for you until {esc(expires)}</p>'
+            + (f"<p>{preview}</p>" + _attach_form(it, ticket) if it.get("waiting_package") else
+               f'<form method="post" action="/confirm" class="actions">{ticket}{preview} '
                '<button type="submit" name="action" value="confirm">Confirm and publish</button></form>')
             + '<details class="cancel"><summary>Cancel this submission</summary><p>Nothing is published; the '
             "submission and its file are deleted. To publish it later, submit it again.</p>"
