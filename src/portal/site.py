@@ -1673,6 +1673,9 @@ def _pending(items):
     for it in items:
         kind = (f"<p><strong>A new version of {esc(it['target'])}.</strong> Reason given: "
                 f"{esc(it.get('correction_reason') or '')}</p>") if it.get("kind") == "correction" else ""
+        if it.get("kind") == "correction" and it.get("removals"):
+            from .pages import _removals_box
+            kind += _removals_box(it)
         expires = it["expires"].strftime("%d %B %Y, %H:%M UTC")
         ticket = f'<input type="hidden" name="ticket" value="{esc(it["ticket"])}">'
         sid = esc(it["submission"])
