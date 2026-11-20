@@ -544,7 +544,10 @@ class _View:
                  if isinstance(summary, str) and summary.strip() else "")
         return (f'<article class="pv-claim" id="{esc(cid)}">{self.terms_block(c)}{head}{plain}'
                 f'{self.statement(c.get("statement"))}'
-                f'{self.support(c)}{self.beside(c)}{self.remarks(c)}{self.record_fold(c)}</article>')
+                f'{self.support(c)}{self.beside(c)}{self.remarks(c)}'
+                # the earlier wordings and merged hypotheses that went into it, folded (design §7.6, *Not claimed*)
+                f'{pageview.earlier_block(self.P.not_claimed, cid, self.text, self.P.lab_record)}'
+                f'{self.record_fold(c)}</article>')
 
     # ---------- terms ----------
     def named(self, text):

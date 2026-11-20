@@ -837,26 +837,21 @@ INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a resear
 
 
 def not_claimed(doc):
-    """The section *Not claimed* (design §7.6): the paper's planned proofs that give no claim of their own (claimset
-    §3.1.1, `exploration.not_claimed`), one line per reason, each naming where its result went. ("", 0) when none."""
-    items = (doc.get("paper") or {}).get("exploration") or {}
-    items = [x for x in items.get("not_claimed") or [] if isinstance(x, dict)] if isinstance(items, dict) else []
+    """The section *Not claimed* (design §7.6): the paper's planned proofs that give no claim of their own and went into
+    no claim (claimset §3.1.1, `exploration.not_claimed` without `into`), one item each; those with `into` are shown
+    under their claims (page.earlier_block). (html, count of what it lists); ("", 0) when it lists nothing."""
+    entries = pageview.not_claimed_entries(doc)
+    items = [x for x in entries if not x.get("into")]
     if not items:
         return "", 0
-
-    def one(x):
-        out = f" ({esc(str(x['outcome']).replace('_', ' '))})" if x.get("outcome") not in (None, "supported") else ""
-        into = (f' → <a href="#{esc(x["into"])}">{esc(x["into"])}</a>' if x.get("into") else "")
-        return (f'<span title="{esc(x.get("why") or "")}">{esc(x.get("lab_event"))}</span>{out}{into}')
-    lines = []
-    for because, label in (("reworded", "Reworded, then proved again"), ("revised", "Merged"),
-                           ("abandoned", "Dropped")):
-        group = [one(x) for x in items if x.get("because") == because]
-        if group:
-            lines.append(f"<li><strong>{label}:</strong> {', '.join(group)}</li>")
+    P = pageview._Paper(doc)
+    under = (" Earlier wordings and merged hypotheses are shown under their claims."
+             if len(items) < len(entries) else "")
     return ('<section class="cs-section" id="not-claimed"><h2>Not claimed</h2><p class="small">Planned proofs that '
-            'give no claim of their own; the lab record has each with its reason.</p><ul>'
-            + "".join(lines) + "</ul></section>", len(items))
+            f'give no claim of their own; the lab record has each with its reason.{under}</p>'
+            '<ul class="cs-not-claimed">'
+            + "".join(pageview.not_claimed_item(x, P.text, P.lab_record) for x in items) + "</ul></section>",
+            len(items))
 
 
 def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=None, ref_text=None, scores=None):
@@ -1201,9 +1196,9 @@ CLAIM_TITLES = {"principal": ("Principal claims", "The claim"),
                 "supporting": ("Supporting claims", "Claims it rests on")}
 
 
-def _claim_sections(parts):
+def _claim_sections(parts, under_claim=""):
     """The sections of a claim bundle's page view (the package's blocks), the claim first; Summary and Highlights are
-    left out, since the page's heading is the claim."""
+    left out, since the page's heading is the claim. `under_claim`: HTML that ends the claim's own section."""
     blocks = parts.get("blocks") or {}
     titles = {sid: (title, n) for sid, title, n in parts.get("sections") or []}
     order = [sid for sid in CLAIM_SECTIONS if sid in blocks]
@@ -1214,6 +1209,9 @@ def _claim_sections(parts):
             old, title = CLAIM_TITLES[sid]
             block = block.replace(f"<h2>{old}</h2>", f"<h2>{title}</h2>", 1)
             n = 0 if sid == "principal" else n
+        if sid == "principal" and under_claim and "</section>" in block:
+            end = block.rindex("</section>")
+            block = block[:end] + under_claim + block[end:]
         out.append(block)
         shown.append((sid, title, n))
     return "\n".join(out), shown
@@ -1228,7 +1226,10 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
     bundle = claim_bundle(doc, cid)
     parts = render(bundle, file_url, ref_text, scores, claim_pages(doc), claim=cid)
-    body, sections = _claim_sections(parts)
+    # the earlier wordings and merged hypotheses that went into the claim, from the paper (design §7.6)
+    full = pageview._Paper(doc)
+    earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record)
+    body, sections = _claim_sections(parts, earlier if 'class="cs-earlier"' not in parts.get("body", "") else "")
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""
     item = (scores or {}).get("claims", {}).get(cid) if scores else None

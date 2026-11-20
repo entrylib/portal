@@ -241,6 +241,9 @@ class _Paper:
         # the main evidence of the claims shown, whose small tables stay open (design §7.4, *Tables*): every claim's,
         # unless the page shows one claim (render_parts' `claim`)
         self.main = {main_evidence(c) for c in self.claims} - {None}
+        # the formal verdicts that give no claim (claimset §3.1.1), and the lab record a reader follows for them
+        self.not_claimed = not_claimed_entries(doc)
+        self.lab_record = lab_record_uri(doc)
 
     # ---------- references ----------
     def _reference_labels(self):
@@ -868,6 +871,7 @@ def _claim(P, c, principal=False):
             links.append(f'<span class="k">Used by:</span> {used}')
     if links:
         lines.append('<p class="cs-links">' + " · ".join(links) + "</p>")
+    lines.append(earlier_block(P.not_claimed, c["id"], P.text, P.lab_record))   # what went into it (design §7.6)
     return f'<div class="cs-item cs-claim" id="{esc(c["id"])}">' + "".join(lines) + "</div>"
 
 
@@ -943,6 +947,62 @@ def main_evidence(c):
     first = support[0] if isinstance(support, list) and support else None
     ev = first.get("evidence") if isinstance(first, dict) else None
     return ev if isinstance(ev, str) else None
+
+
+#: The verdicts that give no claim (claimset §3.1.1, `exploration.not_claimed`), in words: each is formal, so a
+#: supported one is proved (design §7.6, *Not claimed*).
+NOT_CLAIMED_VERDICT = {"supported": "proved", "not_supported": "not proved", "inconclusive": "inconclusive"}
+NOT_CLAIMED_BECAUSE = {"reworded": ", then reworded", "revised": "; merged", "abandoned": "; dropped"}
+#: What an entry without `statement` (a file before claimset v0.44 as amended on 2026-11-20) reads: never its lab ID.
+NOT_CLAIMED_FALLBACK = {"reworded": "An earlier wording of this claim", "revised": "A hypothesis merged into this claim",
+                        "abandoned": "A dropped hypothesis"}
+
+
+def not_claimed_entries(doc):
+    """The entries of `paper.exploration.not_claimed` (claimset §3.1.1), [] when there are none."""
+    p = doc.get("paper") if isinstance(doc.get("paper"), dict) else {}
+    ex = p.get("exploration") if isinstance(p.get("exploration"), dict) else {}
+    items = ex.get("not_claimed")
+    return [x for x in items if isinstance(x, dict)] if isinstance(items, list) else []
+
+
+def lab_record_uri(doc):
+    """The address of the paper's lab record (its first artefact of kind `lab_record` at an http(s) address), or None."""
+    for a in doc.get("artefacts") or []:
+        if isinstance(a, dict) and a.get("kind") == "lab_record" and _href(a.get("uri")):
+            return a["uri"]
+    return None
+
+
+def not_claimed_item(x, text, lab=None):
+    """One entry of `not_claimed` as a list item (design §7.6, *Not claimed*): what its verdict decided (`statement`,
+    written by `text`, maths as formulae), the verdict and the reason, and a link to the lab record whose tooltip alone
+    names the lab IDs."""
+    because = x.get("because")
+    st = x.get("statement")
+    if isinstance(st, str) and st.strip():
+        what = text(st)
+    elif because == "revised" and not x.get("into"):
+        what = "A hypothesis merged into another"
+    else:
+        what = esc(NOT_CLAIMED_FALLBACK.get(because, "A planned proof"))
+    tail = (NOT_CLAIMED_VERDICT.get(x.get("outcome"), _words(x.get("outcome") or "")) +
+            NOT_CLAIMED_BECAUSE.get(because, ""))
+    ids = " under ".join(esc(x[k]) for k in ("lab_event", "lab_plan") if isinstance(x.get(k), str) and x[k])
+    link = (f' <a class="nc-lab" href="{esc(lab)}" title="{ids}">lab record</a>' if lab else "")
+    return f'<li><span class="nc-what">{what}</span> <span class="nc-tail">— {esc(tail)}</span>{link}</li>'
+
+
+def earlier_block(entries, cid, text, lab=None):
+    """Under a claim, the entries of `not_claimed` that went into it, folded: "Earlier wordings (2)". "" when none."""
+    mine = [x for x in entries if x.get("into") == cid]
+    if not mine:
+        return ""
+    kinds = {x.get("because") for x in mine}
+    title = ("Earlier wordings" if kinds == {"reworded"} else "Merged hypotheses" if kinds == {"revised"}
+             else "Earlier wordings and merged hypotheses")
+    return (f'<details class="cs-earlier"><summary>{title} ({len(mine)})</summary><ul>'
+            + "".join(not_claimed_item(x, text, lab) for x in mine) + "</ul></details>")
 
 
 def _plural(n, word):

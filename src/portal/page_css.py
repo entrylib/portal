@@ -87,6 +87,12 @@ CSS = """\
 .cs-table-fold > .cs-table { margin: 0; border-width: 1px 0 0; }
 .cs-table-fold > .cs-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .cs-size { color: var(--cs-muted); white-space: nowrap; }
+/* The verdicts that give no claim (design §7.6): under their claim, folded; one item each, the lab record linked. */
+.cs-earlier { font-size: 15px; margin: 6px 0; }
+.cs-earlier > summary { cursor: pointer; color: var(--cs-muted); }
+.cs-earlier ul, .cs-not-claimed { margin: 4px 0; padding-left: 22px; }
+.nc-tail, .nc-lab { color: var(--cs-muted); }
+.nc-lab { font-size: 14px; }
 .cs-table-file { padding: 0 10px 8px; }
 .cs-table-file .cs-table-caption { font-size: 15px; margin: 8px 0 0; }
 .cs-results, .cs-steps { margin: 8px 0; padding-left: 22px; }
