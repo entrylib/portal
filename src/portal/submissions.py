@@ -363,4 +363,6 @@ def expire(conn, submissions_dir, now=None):
             f.unlink(missing_ok=True)
     conn.execute("DELETE FROM submissions WHERE state IN ('expired', 'refused') AND expires <= %s",
                  (now - KEEP_CLOSED,))
+    from . import previews  # here: previews imports site, which imports this lazily
+    previews.prune(submissions_dir)
     return expired
