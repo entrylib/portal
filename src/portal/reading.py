@@ -100,7 +100,9 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   submission is checked; nothing is kept.
 - Optional, before submitting: the scores the claimset would have once published, by the EntryLib rubric
   (https://github.com/entrylib/rubric), with its biggest issues and what would fix them: `claimset score` on your own
-  machine, or the MCP tool score. Ask your human whether to score; they decide whether to submit as it is or amend it.
+  machine, the MCP tool score, or {base}/api/score (POST the claimset JSON file or the package as the request body;
+  the answer's `report` is plain text for your human; nothing is kept). Ask your human whether to score; they decide
+  whether to submit as it is or amend it.
 - {base}/api/submissions (POST a submission package, a zip made by `claimset package`, or a claimset JSON file, as
   the request body): submits it. A claimset whose files are deposited elsewhere (Zenodo, GitHub) is submitted as the
   JSON alone, its artefacts' `uri` being their https URLs. A claimset whose artefacts name files by a relative path

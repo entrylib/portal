@@ -13,7 +13,6 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-from claimset import score as claimset_score
 from claimset.claim import claim_bundle, render_claim
 from claimset.package import PackageError, build_from
 from mcp.server.mcpserver import Context, MCPServer
@@ -335,23 +334,12 @@ def build(portal):
         issue and every claim's score; `scores` holds the same as data. A file with errors is not scored: `valid` is
         false and `errors` lists them. The scores check the record, not the science. Ask your human before scoring, and
         let them decide whether to submit as it is or amend it and score again. With a terminal, `claimset score` does
-        the same."""
+        the same; so does POST /api/score."""
         path = _source(ctx, claimset, files, package_url, "validate", upload_id)
         try:
             with portal.pool.connection() as conn:
-                find = scores.finder(conn, None)
-                if hasattr(claimset_score, "published_scores"):     # cited claims, by their scores here (rubric 0.5)
-                    out = claimset_score.score(path, find, claimset_score.published_scores(
-                        folder=portal.settings.published_dir))
-                else:                                               # a claimset older than 0.42.7
-                    out = claimset_score.score(path, find)
-                by = "by EntryLib, on the file sent to it; nothing was kept"
-                try:
-                    out["report"] = claimset_score.describe(out, by=by, name=scores.NAME)
-                except TypeError:                       # a claimset older than describe's `name`
-                    out["report"] = claimset_score.describe(out, by=by)
-            return out
-        except claimset_score.ScoreError as exc:
+                return scores.score_file(conn, path, portal.settings.published_dir)
+        except scores.ScoreError as exc:
             raise ToolError(str(exc)) from None
         finally:
             path.unlink(missing_ok=True)

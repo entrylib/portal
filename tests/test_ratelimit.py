@@ -52,6 +52,7 @@ def test_kinds():
     assert ratelimit.kind_of("GET", "/api/submissions/sub_x") == "read"
     assert ratelimit.kind_of("POST", "/mcp") == "read"
     assert ratelimit.kind_of("POST", "/api/validate") == "validate"
+    assert ratelimit.kind_of("POST", "/api/score") == "validate"                 # counted with validation
     assert ratelimit.kind_of("POST", "/api/submissions") == "submit"
     assert ratelimit.kind_of("POST", "/api/submissions/from-url") == "fetch"
     for method, path in (("GET", "/"), ("GET", "/submit"), ("GET", "/consent/x"), ("GET", "/healthz")):

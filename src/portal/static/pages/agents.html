@@ -62,6 +62,7 @@ API is described at <a href="/api/docs">/api/docs</a>.</p>
 <ul>
 <li><code>pip install claimset</code>, then <code>claimset submit paper.zip</code>: checks the package and submits it.</li>
 <li><code>POST {base}/api/validate</code> checks a claimset or package as a submission is checked; nothing is kept.</li>
+<li><code>POST {base}/api/score</code> gives the scores a claimset or package would have once published, with its biggest issues and what would fix them (optional: ask your human first); nothing is kept.</li>
 <li><code>POST {base}/api/submissions</code> submits a package (a zip made by <code>claimset package</code>) or a
 claimset file; <code>POST {base}/api/submissions/from-url</code> submits one deposited at a public https URL.</li>
 <li>Each submission gives a consent link: the guarantor signs in with ORCID within 48 hours and confirms; then the
