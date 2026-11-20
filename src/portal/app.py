@@ -308,13 +308,10 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             q = read.Query.parse(params)
             return RedirectResponse(q.url().replace("&amp;", "&"), status_code=301)
         q = read.Query.parse(params)
-        with pool.connection() as conn:
-            docs = [r[0] for r in conn.execute(
-                "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
-                " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
+        with pool.connection() as conn:                     # from the index: the papers shown alone are read
             corrected = history.corrected_concepts(conn)
-        return HTMLResponse(read.page(docs, q, settings.base_url, corrected, published_dir=settings.published_dir),
-                            headers={"Content-Security-Policy": PAGE_CSP})
+            html_ = read.page_from_db(conn, q, settings.base_url, corrected, published_dir=settings.published_dir)
+        return HTMLResponse(html_, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():

@@ -292,7 +292,7 @@ Scores follow EntryLib's scoring rubric (github.com/entrylib/rubric, `RUBRIC.md`
 
 ### 7.7 Read
 
-`/read` (the menu's Read) shows what EntryLib holds. Rendered by the app, without scripts:
+`/read` (the menu's Read) shows what EntryLib holds. Rendered by the app, without scripts, from the index (decided 20 November 2026, the maintainer: "For Read, don't change how it looks"): the tree's counts, the filters, the sorts and the pages come from columns the indexer keeps (each paper's domain, field, subfield, score and band; each claim's position, score and band, and whether it is listed; migration 0018), and only the files of the papers a page shows are read. Until then every visit read every paper's file, which does not scale past a few thousand papers. `read.page`, from the files, stays as the reference the index must match, page for page (tests/test_read.py):
 
 - **A tree** of OpenAlex domains, fields and subfields (`data/fields.json`, `data/subfields.json`), only the parts that have claimsets, each with how many. A claimset is in the subfield of its classification.
 - **For the part chosen** (or everything): its **claimsets** as cards by default, or its **principal claims**, or all claims (a switch). Each claim shows its Support, dots and novelty, and links to its claimset.
