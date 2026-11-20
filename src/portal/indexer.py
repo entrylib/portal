@@ -26,6 +26,7 @@ Each version's claims and paper get the weighted text full-text search runs on (
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -38,15 +39,14 @@ from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
 
-from . import crossref, history, ids, labrecord, notices, reading, scores, site, source
+from . import chrome, crossref, history, ids, labrecord, notices, reading, scores, site, source
+
+log = logging.getLogger(__name__)
 
 
 def _write(path, text):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    """site._write: written only when it changes."""
+    return site._write(path, text)
 
 
 def _is_assumption(claim):
@@ -192,6 +192,41 @@ def inputs_digest(conn, registry, folder, docs):
     return h.hexdigest()
 
 
+def _record(path):
+    """A claimset's record of what its files were made from: {content, chrome}; {} when there is none, or one written
+    before 20 November 2026 (a bare digest), which is then written again."""
+    try:
+        held = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return held if isinstance(held, dict) else {}
+
+
+def _pages_kept(published_dir, key):
+    """The kept parts of a claimset's pages (site.PARTS): [(parts file, page)]."""
+    root = Path(published_dir) / site.PARTS / "p"
+    found = list(root.glob(f"{key}.html.json")) + list(root.glob(f"{key}@v*.html.json"))
+    if (root / key).is_dir():
+        found += sorted((root / key).rglob("*.html.json"))
+    base = Path(published_dir) / site.PARTS
+    return [(f, Path(published_dir) / f.relative_to(base).with_suffix("")) for f in found]
+
+
+def rewrap(published_dir, key):
+    """Wrap a claimset's pages again in the chrome that runs, from their kept parts (design §7.1): no paper is drawn.
+    False when a page has no parts kept (written before they were), so that the caller draws it."""
+    kept = _pages_kept(published_dir, key)
+    if not kept:
+        return False
+    for parts, page in kept:
+        try:
+            args = json.loads(parts.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        _write(page, chrome.shell(**args))
+    return True
+
+
 def _score(conn, doc, published_dir, key, n):
     """Version n's score (design §7.1): the one written when it was published, while it is by the rubric installed;
     computed (scores.compute) only when there is none or the rubric has changed. A version's file never changes (a
@@ -226,11 +261,13 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
     digest = inputs_digest(conn, registry, folder, docs)
     main = [f"{key}{v}.{ext}" for v in ["", *(f"@v{n}" for n in versions)] for ext in ("json", "txt", "html")]
     if not force and all((published_dir / "p" / name).exists() for name in main):
-        try:
-            if digest_file.read_text(encoding="utf-8").strip() == digest:
-                return False
-        except FileNotFoundError:
-            pass
+        held = _record(digest_file)
+        if held.get("content") == digest:
+            if held.get("chrome") == chrome.fingerprint():
+                return False                             # nothing it is made from has changed
+            if rewrap(published_dir, key):              # only the chrome: the same content, wrapped again
+                _write(digest_file, json.dumps({"content": digest, "chrome": chrome.fingerprint()}) + "\n")
+                return "rewrapped"
     p = published_dir / "p"
     listing, labs, scored = [], {}, {}
     for n, doc in docs.items():
@@ -306,7 +343,7 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
                         ref_text=lambda b: (cited.get(b.get("target")) if b.get("id_type") == "claimset"
                                             else written.get(crossref.normalise(b.get("target")))), legacy=legacy,
                         scores=scored)
-    _write(digest_file, digest + "\n")
+    _write(digest_file, json.dumps({"content": digest, "chrome": chrome.fingerprint()}) + "\n")
     if index:
         write_index(conn, published_dir, base_url)
     return True
@@ -537,9 +574,9 @@ def write_index(conn, published_dir, base_url):
     site.write_listings(published_dir, base_url, [r[0] for r in reversed(rows)], history.corrected_concepts(conn))
 
 
-def reindex(conn, registry, published_dir, base_url):
-    """Rebuild the database index, the identifier counters and the static files from the registry alone, in one
-    transaction: a rebuild that fails leaves the index as it was."""
+def reindex_rows(conn, registry, published_dir, base_url):
+    """Rebuild the database index and the identifier counters from the registry alone, in one transaction: a rebuild
+    that fails leaves the index as it was. No file is written."""
     with conn.transaction():
         conn.execute("DELETE FROM papers")
         conn.execute("DELETE FROM removed")
@@ -557,19 +594,38 @@ def reindex(conn, registry, published_dir, base_url):
         for year, last in counters.items():
             conn.execute("INSERT INTO id_counters (year, last) VALUES (%s, %s) ON CONFLICT (year)"
                          " DO UPDATE SET last = GREATEST(id_counters.last, EXCLUDED.last)", (year, last))
-        # A claimset's rows version by version, then its files once, and the index once at the end: the files
-        # were written at every version (for all of its versions) and the index with them, which made a rebuild
-        # take minutes, during which the app was not yet answering.
-        folders = registry.folders()
-        for folder in folders:
+        for folder in registry.folders():
             for n in registry.versions(folder):
                 index_version(conn, registry, folder, n, published_dir, base_url, static=False)
-            write_static(conn, registry, folder, published_dir, base_url, index=False, force=False)
         for folder in registry.removed_folders():
             write_removed(conn, registry.notices(folder), published_dir, base_url)
+
+
+def write_all(conn, registry, published_dir, base_url, lock=None, progress=None):
+    """Each claimset's files, newest first, as write_static(force=False) decides: left as they are, wrapped again in
+    a new chrome, or drawn again (design §7.1); then the lists once. `lock()`: held for each claimset alone, so that
+    the publisher runs between them. Returns {kept, rewrapped, drawn}."""
+    lock = lock or contextlib.nullcontext
+    counts = {"kept": 0, "rewrapped": 0, "drawn": 0}
+    folders = list(reversed(registry.folders()))
+    for i, folder in enumerate(folders):
+        with lock():
+            done = write_static(conn, registry, folder, published_dir, base_url, index=False, force=False)
+        counts["drawn" if done is True else "rewrapped" if done == "rewrapped" else "kept"] += 1
+        if progress is not None:
+            progress(i + 1, len(folders))
+    with lock():
         write_index(conn, published_dir, base_url)
         tidy_legacy_files(conn, published_dir)
-        return folders
+    return counts
+
+
+def reindex(conn, registry, published_dir, base_url):
+    """Rebuild the database index from the registry, then write each claimset's files that need it (write_all):
+    `portal reindex`, and the start of an app that finds no record of what wrote its files."""
+    reindex_rows(conn, registry, published_dir, base_url)
+    write_all(conn, registry, published_dir, base_url)
+    return registry.folders()
 
 
 #: In the published directory: which claimset rendered the static files.
@@ -581,6 +637,8 @@ PUBLISH_LOCK = 4_242_001
 
 #: Set while the app rebuilds the index and the pages behind its back (design §10); /healthz says so.
 REBUILDING = threading.Event()
+#: How far the update of the pages has gone: {done, total} claimsets (/healthz).
+PROGRESS = {}
 
 
 @contextlib.contextmanager
@@ -594,20 +652,47 @@ def publishing(conn):
         conn.execute("SELECT pg_advisory_unlock(%s)", (PUBLISH_LOCK,))
 
 
+#: What fills the database index (index_version and what it calls): when it changes, the index is rebuilt.
+INDEXED_BY = ("index_version", "paper_texts", "claim_text", "plain", "title_key", "guarantor_ids", "_is_assumption")
+
+
+def index_fingerprint():
+    """A hash of the code that fills the database index and of the migrations: the index is rebuilt only when it
+    changes (design §7.1), not at every update of the pages."""
+    import inspect
+    h = hashlib.sha256()
+    for name in INDEXED_BY:
+        h.update(inspect.getsource(globals()[name]).encode())
+    folder = Path(__file__).parent / "migrations"
+    for f in sorted(folder.glob("*.sql")):
+        h.update(f.name.encode())
+    return h.hexdigest()[:16]
+
+
+def _fingerprints():
+    return {"claimset": site.claimset_fingerprint(), "site": site.fingerprint(), "chrome": chrome.fingerprint(),
+            "index": index_fingerprint()}
+
+
 def _rendered_by(version):
     """The marker: the claimset release, for people, then what decides a rebuild (rebuild_due)."""
-    return f"{version} claimset {site.claimset_fingerprint()} site {site.fingerprint()}"
+    return f"{version} " + " ".join(f"{k} {v}" for k, v in _fingerprints().items())
+
+
+def _marker(published_dir):
+    """{part: fingerprint} of the marker written last, or None without one."""
+    try:
+        words = (Path(published_dir) / RENDERED_BY).read_text(encoding="utf-8").split()
+    except FileNotFoundError:
+        return None
+    return dict(zip(words[1::2], words[2::2], strict=False))
 
 
 def rebuild_due(published_dir, version):
-    """Whether the static files were written by a claimset package that renders differently or by another state of
-    the site's code than the ones running (design §7.1), or by none. A claimset release that changes nothing a page
-    shows is not a reason: only the fingerprints are compared, not `version`."""
-    try:
-        written = (Path(published_dir) / RENDERED_BY).read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        return True
-    return written.split(" ", 1)[-1] != _rendered_by(version).split(" ", 1)[-1]
+    """Whether something that makes the files or the index has changed since the marker was written (design §7.1):
+    the claimset package's rendering, the site's drawing of papers, the chrome, or the index's code; or there is no
+    marker. A claimset release that changes nothing a page shows is not a reason: `version` is not compared."""
+    return _marker(published_dir) != _fingerprints()
 
 
 def write_site(conn, published_dir, base_url):
@@ -617,15 +702,21 @@ def write_site(conn, published_dir, base_url):
     write_index(conn, published_dir, base_url)
 
 
-def refresh_if_claimset_changed(conn, registry, published_dir, base_url, version):
-    """After the app installed the newest claimset: write the fixed pages, /llms.txt and /index.jsonl, and rebuild
-    the index and the static files when claimset `version` is not the one that wrote them (design §7.1: reading views
-    are regenerated when the renderer changes, and the pages when the site's look changes). Returns True if it
-    rebuilt."""
+def refresh_if_claimset_changed(conn, registry, published_dir, base_url, version, lock=None, progress=None):
+    """After an update: write the fixed pages, /llms.txt and /index.jsonl; then, when something that makes the files
+    or the index has changed (rebuild_due), rebuild the database index only if its own code changed (or there is no
+    marker), and bring each claimset's files up to date one at a time, holding `lock()` for each (write_all), so
+    that the app answers and the publisher runs throughout (design §7.1). Returns True if anything was due."""
     write_site(conn, published_dir, base_url)
     if not rebuild_due(published_dir, version):
         return False
+    held = _marker(published_dir)
     if registry is not None:
-        reindex(conn, registry, published_dir, base_url)
+        lock = lock or contextlib.nullcontext
+        if held is None or held.get("index") != index_fingerprint():
+            with lock():
+                reindex_rows(conn, registry, published_dir, base_url)
+        counts = write_all(conn, registry, published_dir, base_url, lock=lock, progress=progress)
+        log.info("pages after the update: %s", counts)
     _write(Path(published_dir) / RENDERED_BY, _rendered_by(version) + "\n")
     return True

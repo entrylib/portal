@@ -230,6 +230,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         body = {"portal": __version__, "claimset": claimset.__version__, "spec": claimset.SPEC_VERSION}
         if indexer.REBUILDING.is_set():                 # after an update: the pages are being written again
             body["rebuilding"] = True
+            if indexer.PROGRESS.get("total"):
+                body["pages_updated"] = f"{indexer.PROGRESS.get('done', 0)} of {indexer.PROGRESS['total']}"
         try:
             with pool.connection(timeout=2) as conn:
                 conn.execute("SELECT 1")
