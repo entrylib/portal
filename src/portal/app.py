@@ -338,6 +338,28 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             path.unlink(missing_ok=True)
         return result.as_json()
 
+    @app.post("/api/score", tags=["submissions"])
+    async def score(request: Request):
+        """Optional, before submitting: the scores a claimset (JSON) or a submission package (BagIt zip), sent as the
+        request body, would have once published, by EntryLib's rubric (https://github.com/entrylib/rubric), as the MCP
+        tool score gives them. Nothing is kept. `report` is plain text for the author's human: the paper's score, the
+        biggest issues with what would fix them, every issue and every claim's score; `scores` holds the same as data.
+        A file with errors is not scored: `valid` is false and `errors` lists them. 422 when it cannot be scored."""
+        try:
+            path, _ = await _save_body(request, uploads)
+        except UploadTooLarge:
+            return _error(413, f"larger than {submissions.MAX_UPLOAD_BYTES} bytes")
+
+        def run():
+            with pool.connection() as conn:
+                return scores.score_file(conn, path, settings.published_dir)
+        try:
+            return await run_in_threadpool(run)
+        except scores.ScoreError as exc:
+            return _error(422, str(exc))
+        finally:
+            path.unlink(missing_ok=True)
+
     async def _receive(path, request, new_paper, package_with_consent=False):
         try:
             return await run_in_threadpool(receive, path, _client_ip(request), new_paper, package_with_consent)

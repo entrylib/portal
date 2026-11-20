@@ -77,6 +77,33 @@ def test_validate_reports_unreadable_input(client):
     assert r.status_code == 200 and r.json()["valid"] is False
 
 
+def test_score_endpoint_scores_as_the_mcp_tool_and_keeps_nothing(client, settings):
+    """Design §4.4: POST /api/score, for agents without a terminal or MCP."""
+    rubric = pytest.importorskip("rubric")
+    if not hasattr(rubric, "assess"):
+        pytest.skip("the installed rubric is older than rubric.assess")
+    r = client.post("/api/score", content=body(example()), headers=JSON)
+    out = r.json()
+    assert r.status_code == 200 and out["valid"] is True and out["novelty_checked"] is True
+    assert out["scores"]["rubric"] == rubric.VERSION and out["scores"]["paper"]["score"] is not None
+    assert out["report"].startswith("Scores by the EntryLib rubric")
+    bad = example()
+    del bad["paper"]["title"]
+    out = client.post("/api/score", content=body(bad), headers=JSON).json()
+    assert out["valid"] is False and "scores" not in out and out["report"].startswith("Not scored")
+    assert not list((settings.submissions_dir / "incoming").glob("*"))
+
+
+def test_a_file_that_cannot_be_scored_is_a_422(client, monkeypatch):
+    from portal import scores
+
+    def refuse(conn, path, published_dir):
+        raise scores.ScoreError("the rubric is not installed")
+    monkeypatch.setattr(scores, "score_file", refuse)
+    r = client.post("/api/score", content=body(example()), headers=JSON)
+    assert r.status_code == 422 and "rubric is not installed" in r.json()["error"]
+
+
 # ----- submit -----
 
 def test_submit_a_claimset_file(client, settings):

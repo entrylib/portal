@@ -246,3 +246,30 @@ def issues_text(scores, concept, n, base_url):
         rubric_error(f"writing the issues of {concept}@v{n} (rubric {version()})", f"{type(exc).__name__}: {exc}")
         return ""
     return "\n".join(out) + "\n" + text_
+
+
+class ScoreError(Exception):
+    """A file the rubric cannot score (not a claimset, the rubric missing): the message says why."""
+
+
+def score_file(conn, path, published_dir):
+    """The scores the claimset at `path` (a JSON file or a package) would have once published (design §7.6): the
+    rubric's assessment with the close-match check against the claims published here, the claims it cites that are
+    published here scored by their scores here, and `report`, plain text for the author's human. A file with errors is
+    not scored (`valid` false, `errors`). Nothing is kept. Shared by the MCP tool score and POST /api/score."""
+    from claimset import score as claimset_score
+    try:
+        find = finder(conn, None)
+        if hasattr(claimset_score, "published_scores"):     # cited claims, by their scores here (rubric 0.5)
+            out = claimset_score.score(path, find, claimset_score.published_scores(folder=published_dir))
+        else:                                               # a claimset older than 0.42.7
+            out = claimset_score.score(path, find)
+        by = "by EntryLib, on the file sent to it; nothing was kept"
+        try:
+            out["report"] = claimset_score.describe(out, by=by, name=NAME)
+        except TypeError:                                   # a claimset older than describe's `name`
+            out["report"] = claimset_score.describe(out, by=by)
+    except claimset_score.ScoreError as exc:
+        raise ScoreError(str(exc)) from None
+    return out
+
