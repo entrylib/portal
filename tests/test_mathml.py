@@ -116,7 +116,7 @@ class TestLongFormulae(unittest.TestCase):
                       "max-width: none; overflow: visible; }", css)
         self.assertIn("overflow-wrap: break-word; }", css)            # a long path or identifier breaks
         js = (Path(page.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
-        self.assertIn('document.querySelectorAll(".cs-eq")', js)
+        self.assertIn('document.querySelectorAll(".cs-eq, .cs-step-math")', js)
         self.assertIn("var SMALLEST = 0.8;", js)                       # never smaller than this to make it fit
         self.assertIn("@media (max-width: 640px) { math { max-width: 100%; overflow-x: auto;", css)
         self.assertIn(".cs-brief li > span:last-child { min-width: 0; }", css)
