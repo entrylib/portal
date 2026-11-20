@@ -497,6 +497,20 @@ def test_a_claim_that_checks_others_by_computation_is_a_numerical_check():
     assert "Numerical check" not in view(doc)[0]["claims"]                 # a principal result of the paper: a claim
 
 
+
+def test_a_relation_from_a_claim_argued_before_its_evidence():
+    """A claim whose first support is an argument (no evidence) and whose relation names no observations: the paper
+    view lists it as a line beside its target. It raised a KeyError on the consent page of two corrections."""
+    doc = proofs()
+    doc["warrants"] = [{"id": "W1", "reasoning": "abductive", "premises": ["C3"], "text": "Why C3 holds in practice."}]
+    doc["claims"].append({"id": "C6", "type": "interpretive", "role": "secondary", "novelty": "no_prior_found",
+                          "statement": "The bound is tight in practice.", "provenance": "author_stated",
+                          "support": [{"kind": "argument", "warrant": "W1"},
+                                      {"kind": "empirical_quant", "evidence": "E4"}],
+                          "relations": [{"type": "explains", "target": "C3", "id_type": "local", "note": "Why."}]})
+    claims = view(doc)[0]["claims"]
+    assert "C6" in claims and "Why." in claims
+
 def test_written_with_the_claimset(tmp_path):
     doc = proofs()
     site.write_claimset(tmp_path, BASE, "2026.000099", {1: doc}, [{"version": 1, "date": "2026-11-17"}], {})

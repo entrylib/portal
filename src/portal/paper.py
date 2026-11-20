@@ -380,7 +380,7 @@ class _View:
             named = _strs(r.get("results"))
             # the evidence the named observations are of: the claim's own, by the first one's ID (claimset rule 104)
             first = named[0].split(".")[0] if named else None
-            sp = next((x for x in _dicts(by.get("support")) if x.get("evidence") == first), None) or next(
+            sp = next((x for x in _dicts(by.get("support")) if first and x.get("evidence") == first), None) or next(
                 (x for x in _dicts(by.get("support")) if x.get("evidence") in self.evidence), None)
             e = self.evidence.get(sp["evidence"]) if sp else None
             figs = self.figures(e, named) if e is not None and named else []
