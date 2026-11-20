@@ -24,6 +24,7 @@ Each version's claims and paper get the weighted text full-text search runs on (
 """
 
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -170,9 +171,62 @@ def index_version(conn, registry, folder, n, published_dir, base_url, static=Tru
         write_static(conn, registry, folder, published_dir, base_url)
 
 
-def write_static(conn, registry, folder, published_dir, base_url, index=True):
+#: Under the published directory: each claimset's digest of what its files were made from (design §7.1).
+DIGESTS = ".rendered"
+
+
+def inputs_digest(conn, registry, folder, docs):
+    """A hash of everything a claimset's files are made from (design §7.1): its registry files and publication times,
+    the claimset package's and the site's fingerprints (with the rubric's version), and what its pages show of other
+    claimsets: the titles and scores of those it cites. Call after scores.use_published."""
+    h = hashlib.sha256(f"claimset {site.claimset_fingerprint()} site {site.fingerprint()}".encode())
+    root = registry.path / folder
+    for f in sorted(p for p in root.rglob("*") if p.is_file()):
+        h.update(f.relative_to(root).as_posix().encode() + b"\0" + f.read_bytes())
+    for n in docs:
+        h.update(f"v{n} {registry.published_at(folder, n)}".encode())
+    targets = sorted({b.get("target") for d in docs.values() for b in d.get("references") or []
+                      if isinstance(b, dict) and b.get("id_type") == "claimset" and isinstance(b.get("target"), str)})
+    if targets:
+        h.update(json.dumps(claimset_texts(conn, targets), sort_keys=True).encode())
+        h.update(json.dumps([scores.cited_scores(d) for d in docs.values()], sort_keys=True, default=str).encode())
+    return h.hexdigest()
+
+
+def _kept_scores(published_dir, key):
+    """{str(version): digest of what its score was computed from} for a claimset's scores on disk."""
+    try:
+        return json.loads((Path(published_dir) / DIGESTS / f"{key}.scores.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _score(conn, doc, published_dir, key, n, kept):
+    """Version n's score (scores.compute), or the one written before when it was computed from what it would be now
+    (design §7.1): the file as readers see it, the claimset package's fingerprint (the validator's warnings), the
+    rubric's version and the scores of the claims it cites. `kept` is updated with the digest."""
+    h = hashlib.sha256(f"claimset {site.claimset_fingerprint()} rubric {scores.version()}".encode())
+    h.update(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode())
+    h.update(json.dumps(scores.cited_scores(doc), sort_keys=True, default=str).encode())
+    digest = h.hexdigest()
+    path = Path(published_dir) / "p" / f"{key}@v{n}.score.json"
+    if kept.get(str(n)) == digest and path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            pass
+    result = scores.compute(conn, doc)
+    if result is not None:
+        kept[str(n)] = digest
+    else:
+        kept.pop(str(n), None)
+    return result
+
+
+def write_static(conn, registry, folder, published_dir, base_url, index=True, force=True):
     """The static files of one claimset, from its registry folder, and the index (`index=False`: the caller writes
-    the index once, after the last claimset)."""
+    the index once, after the last claimset). With `force=False` (a rebuild), a claimset whose files were made from
+    what they would be made from now is left as it is (inputs_digest). Returns whether the files were written."""
     published_dir = Path(published_dir)
     scores.use_published(published_dir)                  # cited claims, by their scores here (rubric 0.5)
     versions = registry.versions(folder)
@@ -181,13 +235,23 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True):
     docs = {n: notices.overlay(raw, notes) for n, raw in raws.items()}
     current = docs[versions[-1]]
     key = ids.url_key(current["paper"]["id"])
+    digest_file = published_dir / DIGESTS / key
+    digest = inputs_digest(conn, registry, folder, docs)
+    main = [f"{key}{v}.{ext}" for v in ["", *(f"@v{n}" for n in versions)] for ext in ("json", "txt", "html")]
+    if not force and all((published_dir / "p" / name).exists() for name in main):
+        try:
+            if digest_file.read_text(encoding="utf-8").strip() == digest:
+                return False
+        except FileNotFoundError:
+            pass
     p = published_dir / "p"
     listing, labs, scored = [], {}, {}
+    kept = _kept_scores(published_dir, key)
     for n, doc in docs.items():
         text = (registry.version_dir(folder, n) / "claimset.json").read_text(encoding="utf-8")
         if docs[n] is not raws[n]:                       # retracted: the file with the status the platform assigned
             text = json.dumps(docs[n], indent=1, ensure_ascii=False) + "\n"
-        scored[n] = scores.compute(conn, doc)             # by the rubric (design §7.6); None without it
+        scored[n] = _score(conn, doc, published_dir, key, n, kept)    # by the rubric (design §7.6); None without it
         view = render(doc) + scores.text(scored[n]) + site.citation_note(doc, base_url)
         if scored[n] is not None:
             score_json = json.dumps(scored[n], indent=1, ensure_ascii=False) + "\n"
@@ -258,8 +322,11 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True):
                         ref_text=lambda b: (cited.get(b.get("target")) if b.get("id_type") == "claimset"
                                             else written.get(crossref.normalise(b.get("target")))), legacy=legacy,
                         scores=scored)
+    _write(digest_file, digest + "\n")
+    _write(published_dir / DIGESTS / f"{key}.scores.json", json.dumps(kept, indent=1, sort_keys=True) + "\n")
     if index:
         write_index(conn, published_dir, base_url)
+    return True
 
 
 def claimset_texts(conn, targets):
@@ -514,7 +581,7 @@ def reindex(conn, registry, published_dir, base_url):
         for folder in folders:
             for n in registry.versions(folder):
                 index_version(conn, registry, folder, n, published_dir, base_url, static=False)
-            write_static(conn, registry, folder, published_dir, base_url, index=False)
+            write_static(conn, registry, folder, published_dir, base_url, index=False, force=False)
         for folder in registry.removed_folders():
             write_removed(conn, registry.notices(folder), published_dir, base_url)
         write_index(conn, published_dir, base_url)
@@ -545,16 +612,19 @@ def publishing(conn):
 
 
 def _rendered_by(version):
-    return f"{version} site {site.fingerprint()}"
+    """The marker: the claimset release, for people, then what decides a rebuild (rebuild_due)."""
+    return f"{version} claimset {site.claimset_fingerprint()} site {site.fingerprint()}"
 
 
 def rebuild_due(published_dir, version):
-    """Whether the static files were written by another claimset `version` or another state of the site's code than
-    the ones running (design §7.1), or by none."""
+    """Whether the static files were written by a claimset package that renders differently or by another state of
+    the site's code than the ones running (design §7.1), or by none. A claimset release that changes nothing a page
+    shows is not a reason: only the fingerprints are compared, not `version`."""
     try:
-        return (Path(published_dir) / RENDERED_BY).read_text(encoding="utf-8").strip() != _rendered_by(version)
+        written = (Path(published_dir) / RENDERED_BY).read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         return True
+    return written.split(" ", 1)[-1] != _rendered_by(version).split(" ", 1)[-1]
 
 
 def write_site(conn, published_dir, base_url):

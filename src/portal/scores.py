@@ -110,6 +110,11 @@ def use_published(folder):
     _cited = published_scores(folder=folder)
 
 
+def cited_scores(doc):
+    """{global claim ID: score} of the published claims `doc` cites, as the rubric is given them, or None."""
+    return _cited_scores(doc)
+
+
 def _cited_scores(doc):
     """{global claim ID: score} of the published claims `doc` cites, or None."""
     if _cited is None:

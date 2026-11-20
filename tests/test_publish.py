@@ -1,6 +1,7 @@
 import copy
 import datetime as dt
 import json
+import shutil
 
 import pytest
 from claimset.package import build
@@ -192,7 +193,10 @@ def test_reindex_writes_each_claimset_once(env, monkeypatch):
     monkeypatch.setattr(site, "write_claimset", count_claimset)
     monkeypatch.setattr(indexer, "write_index", count_index)
     reindex(ctx["conn"], ctx["registry"], out, BASE)
-    assert calls == {"claimsets": 2, "index": 1}                         # two claimsets, three versions
+    assert calls == {"claimsets": 0, "index": 1}                         # nothing they are made from has changed
+    shutil.rmtree(out / indexer.DIGESTS)                                # as if it had: each is written once
+    reindex(ctx["conn"], ctx["registry"], out, BASE)
+    assert calls == {"claimsets": 2, "index": 2}                         # two claimsets, three versions
     assert ctx["conn"].execute("SELECT concept_id, version FROM versions ORDER BY 1, 2").fetchall() == rows
     after = files()
     assert sorted(after) == sorted(before)

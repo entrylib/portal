@@ -8,21 +8,53 @@ import psycopg
 from fastapi.testclient import TestClient
 from publishing import BASE, example, write
 
-from portal import cli, indexer, worker
+from portal import cli, indexer, site, worker
 from portal.app import create_app
 from portal.db import make_pool, migrate
 from portal.publish import publish
 
 
-def test_a_rebuild_is_due_when_the_claimset_or_the_site_changed(env):
+def test_a_rebuild_is_due_when_the_claimset_or_the_site_changed(env, monkeypatch):
     ctx, tmp = env
     out = ctx["published_dir"]
     assert indexer.rebuild_due(out, "0.44.5")                              # written by none
     assert indexer.refresh_if_claimset_changed(ctx["conn"], ctx["registry"], out, BASE, "0.44.5")
     assert not indexer.rebuild_due(out, "0.44.5")
-    assert indexer.rebuild_due(out, "0.44.6")                              # another claimset
-    (out / indexer.RENDERED_BY).write_text("0.44.5 site other\n")
+    assert not indexer.rebuild_due(out, "0.44.6")                          # a release that renders the same
+    monkeypatch.setattr(site, "claimset_fingerprint", lambda: "other")
+    assert indexer.rebuild_due(out, "0.44.5")                              # one that renders differently
+    monkeypatch.undo()
+    assert not indexer.rebuild_due(out, "0.44.5")
+    monkeypatch.setattr(site, "fingerprint", lambda: "other")
     assert indexer.rebuild_due(out, "0.44.5")                              # another state of the site's code
+
+
+def test_the_fingerprints_leave_out_what_shapes_no_page(monkeypatch, tmp_path):
+    import claimset
+
+    before = site.claimset_fingerprint()
+    assert before != "none" and site.fingerprint()
+    assert {"app.py", "worker.py", "submissions.py"} <= site.NOT_RENDERING
+    assert "page.py" not in site.NOT_RENDERING and "paper.py" not in site.NOT_RENDERING
+    assert {"cli.py", "submit.py", "lab/cli.py", "lab/run.py"} <= site.CLAIMSET_NOT_RENDERING
+    assert not {"render.py", "validate.py", "claim.py", "lab/view.py"} & site.CLAIMSET_NOT_RENDERING
+    root = tmp_path / "claimset"                                        # a copy of the package, to change
+    import shutil
+    from pathlib import Path
+    shutil.copytree(Path(claimset.__file__).parent, root, ignore=shutil.ignore_patterns("__pycache__", "data"))
+    monkeypatch.setattr(claimset, "__file__", str(root / "__init__.py"))
+
+    def fp():
+        site.claimset_fingerprint.cache_clear()
+        return site.claimset_fingerprint()
+    assert fp() == before
+    init = root / "__init__.py"
+    init.write_text(init.read_text().replace(claimset.__version__, "9.9.9"))
+    (root / "cli.py").write_text((root / "cli.py").read_text() + "\n# a new command\n")
+    assert fp() == before                                                # a new version, a new command: the same
+    (root / "render.py").write_text((root / "render.py").read_text() + "\n# rendering changed\n")
+    assert fp() != before
+    site.claimset_fingerprint.cache_clear()
 
 
 def test_the_fixed_pages_do_not_wait_for_the_rebuild(env):
