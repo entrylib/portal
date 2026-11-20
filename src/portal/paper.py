@@ -546,7 +546,7 @@ class _View:
                 f'{self.statement(c.get("statement"))}'
                 f'{self.support(c)}{self.beside(c)}{self.remarks(c)}'
                 # the earlier wordings and merged hypotheses that went into it, folded (design §7.6, *Not claimed*)
-                f'{pageview.earlier_block(self.P.not_claimed, cid, self.text, self.P.lab_record)}'
+                f'{pageview.earlier_block(self.P.not_claimed, cid, self.P.text, self.P.lab_record, self.P.hypotheses)}'
                 f'{self.record_fold(c)}</article>')
 
     # ---------- terms ----------

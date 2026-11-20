@@ -244,6 +244,7 @@ class _Paper:
         # the formal verdicts that give no claim (claimset §3.1.1), and the lab record a reader follows for them
         self.not_claimed = not_claimed_entries(doc)
         self.lab_record = lab_record_uri(doc)
+        self.hypotheses = hypothesis_claims(self.claims)
 
     # ---------- references ----------
     def _reference_labels(self):
@@ -871,7 +872,8 @@ def _claim(P, c, principal=False):
             links.append(f'<span class="k">Used by:</span> {used}')
     if links:
         lines.append('<p class="cs-links">' + " · ".join(links) + "</p>")
-    lines.append(earlier_block(P.not_claimed, c["id"], P.text, P.lab_record))   # what went into it (design §7.6)
+    # what went into it (design §7.6)
+    lines.append(earlier_block(P.not_claimed, c["id"], P.text, P.lab_record, P.hypotheses))
     return f'<div class="cs-item cs-claim" id="{esc(c["id"])}">' + "".join(lines) + "</div>"
 
 
@@ -949,13 +951,100 @@ def main_evidence(c):
     return ev if isinstance(ev, str) else None
 
 
-#: The verdicts that give no claim (claimset §3.1.1, `exploration.not_claimed`), in words: each is formal, so a
-#: supported one is proved (design §7.6, *Not claimed*).
-NOT_CLAIMED_VERDICT = {"supported": "proved", "not_supported": "not proved", "inconclusive": "inconclusive"}
-NOT_CLAIMED_BECAUSE = {"reworded": ", then reworded", "revised": "; merged", "abandoned": "; dropped"}
-#: What an entry without `statement` (a file before claimset v0.44 as amended on 2026-11-20) reads: never its lab ID.
+#: The verdicts that give no claim (claimset §3.1.1, `exploration.not_claimed`), in plain words (design §7.6, *Not
+#: claimed*): a formal verdict's supported is proved; a void plan (`because: defective`) is named so, whatever its verdict.
+NOT_CLAIMED_VERDICT = {"supported": "proved", "not_supported": "not proved",
+                       "inconclusive": "tried by proof, inconclusive"}
+NOT_CLAIMED_BECAUSE = {"reworded": "then reworded", "revised": "then merged", "abandoned": "then dropped",
+                       "defective": "repeated"}
+#: What an entry with neither `statement` nor `why` reads: never its lab ID.
 NOT_CLAIMED_FALLBACK = {"reworded": "An earlier wording of this claim", "revised": "A hypothesis merged into this claim",
-                        "abandoned": "A dropped hypothesis"}
+                        "abandoned": "A dropped hypothesis", "defective": "A void plan"}
+#: A lab record's event ID (lab record §4.2, §5): a writer's prefix (an agent's `AC2.`, a contributor's ORCID iD or
+#: `github-<account>.`), the event's type prefix and number, and a revision suffix (`.R2`, §4.3). A list of them
+#: ("H1, H2 and RN3") is taken as one.
+_LAB_ONE = (r"(?:(?:AC\d+|\d{4}-\d{4}-\d{4}-\d{3}[\dX]|github-[a-z0-9-]+)\.)?"
+            r"(?:AC|AP|AR|AS|CD|CK|DC|DV|EX|H|MG|MV|NT|PA|PL|Q|RN|RS|SR|ST|TM)\d+(?:\.R\d+)?")
+LAB_ID = re.compile(_LAB_ONE)
+LAB_IDS = re.compile(rf"(?<![\w.-])(?P<word>(?i:hypothes[ie]s)\s+)?(?P<ids>{_LAB_ONE}"
+                     rf"(?:(?:\s*,\s*|\s+(?:and|or)\s+|\s*&\s*){_LAB_ONE})*)(?![\w])")
+#: A word that only introduced an ID taken out at the end of a clause ("decided again under PL8."): it goes too.
+_LEFT_BARE = re.compile(r"\s*\b(?:see|under|per|in|by|from|as|at|with|via|of|to|cf\.)\s*\x03[\s\x03]*(?=[,.;:)]|$)",
+                        re.I)
+#: The longest `why` shown whole; a longer one is cut at the first sentence end after this many characters.
+WHY_SHOWN = 200
+
+
+def _lab_root(i):
+    """A lab ID without its revision suffix: `AC2.H4.R2` → `AC2.H4`."""
+    return re.sub(r"\.R\d+$", "", i)
+
+
+def hypothesis_claims(claims):
+    """{lab hypothesis ID → claim ID} of a paper's claims (`hypothesis.lab_event`, claimset §3.3.3), by the root ID
+    and, without a writer's prefix, by the bare ID too."""
+    found = {}
+    for c in claims:
+        h = c.get("hypothesis") if isinstance(c.get("hypothesis"), dict) else {}
+        ev = h.get("lab_event")
+        if isinstance(ev, str) and isinstance(c.get("id"), str):
+            root = _lab_root(ev)
+            found.setdefault(root, c["id"])
+            found.setdefault(root.rsplit(".", 1)[-1], c["id"])
+    return found
+
+
+def clean_why(why, hyps):
+    """A `why` without its lab IDs, for display (design §7.6, *Not claimed*): (text, IDs taken out). A hypothesis of
+    this paper becomes its claim's ID, marked "\x01C4\x02" for the caller to link; another hypothesis becomes "another
+    hypothesis" (nothing after the word *hypothesis*); every other ID is dropped, with the spaces and punctuation it
+    leaves."""
+    removed = []
+
+    def one(m):
+        claims, others = [], 0
+        for i in LAB_ID.findall(m.group("ids")):
+            root = _lab_root(i)
+            cid = hyps.get(root) or hyps.get(root.rsplit(".", 1)[-1])
+            if cid:
+                if cid not in claims:
+                    claims.append(cid)
+                continue
+            removed.append(i)
+            others += re.sub(r"\d.*", "", root.rsplit(".", 1)[-1]) == "H"
+        words = [f"\x01{c}\x02" for c in claims]
+        if others:
+            words.append("another hypothesis" if others == 1 else "other hypotheses")
+        elif m.group("word") and not claims:
+            words.append(m.group("word").strip())                   # "hypothesis" of a dropped non-hypothesis ID
+        return " and ".join(words) or "\x03"
+
+    text = LAB_IDS.sub(one, why)
+    text = re.sub(r"\s*\([\s,;:\x03]*\)", "\x03", text)                    # brackets left empty
+    text = _LEFT_BARE.sub("", text).replace("\x03", "")
+    text = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", text)                    # punctuation doubled
+    text = re.sub(r"[,;:]+(?=\s*[.)])", "", text)
+    text = re.sub(r"\(\s+", "(", text)
+    text = re.sub(r"\s+([,.;:)])", r"\1", text)
+    text = re.sub(r"[ \t]{2,}", " ", text).strip()
+    text = re.sub(r"^[,;:.]\s*", "", text)
+    text = re.sub(r"[,;:]+(?=\.?$)", "", text)
+    text = text[:1].upper() + text[1:]                                    # a clause that lost its opening ID
+    out = []
+    for i in removed:
+        if i not in out:
+            out.append(i)
+    return text, out
+
+
+def _cut(text, limit=WHY_SHOWN):
+    """The text cut at the first sentence end after `limit` characters (or, with none soon after, at a word), with
+    "…"; whole when it is not longer."""
+    if len(text) <= limit:
+        return text
+    m = re.compile(r"[.!?](?=\s|$)").search(text, limit)
+    cut = text[:m.end()] if m and m.end() <= limit + 150 else text[:limit].rsplit(" ", 1)[0].rstrip(",;:")
+    return cut + " …" if len(cut) < len(text) else text
 
 
 def not_claimed_entries(doc):
@@ -974,26 +1063,40 @@ def lab_record_uri(doc):
     return None
 
 
-def not_claimed_item(x, text, lab=None):
+def not_claimed_item(x, text, lab=None, hyps=None, claim_href=None):
     """One entry of `not_claimed` as a list item (design §7.6, *Not claimed*): what its verdict decided (`statement`,
-    written by `text`, maths as formulae), the verdict and the reason, and a link to the lab record whose tooltip alone
-    names the lab IDs."""
+    written by `text`, maths as formulae; or else its `why` cleaned of lab IDs, a hypothesis of this paper as a link to
+    its claim, `hyps` {lab ID → claim ID}, at `claim_href(cid)`), the verdict and the reason, and a link to the lab
+    record whose tooltip alone names the lab IDs."""
     because = x.get("because")
-    st = x.get("statement")
+    st, why = x.get("statement"), x.get("why")
+    href = claim_href or (lambda cid: f"#{cid}")
+    removed, title = [], ""
     if isinstance(st, str) and st.strip():
         what = text(st)
+    elif isinstance(why, str) and why.strip():
+        full, removed = clean_why(why.strip(), hyps or {})
+        shown = _cut(full)
+        if shown != full:
+            title = f' title="{esc(full.replace(chr(1), "").replace(chr(2), ""))}"'
+        what = "".join(text(part) if i % 2 == 0 else f'<a href="{esc(href(part))}">{esc(part)}</a>'
+                       for i, part in enumerate(re.split("\x01(C\\d+)\x02", shown)) if part)
     elif because == "revised" and not x.get("into"):
         what = "A hypothesis merged into another"
     else:
-        what = esc(NOT_CLAIMED_FALLBACK.get(because, "A planned proof"))
-    tail = (NOT_CLAIMED_VERDICT.get(x.get("outcome"), _words(x.get("outcome") or "")) +
-            NOT_CLAIMED_BECAUSE.get(because, ""))
-    ids = " under ".join(esc(x[k]) for k in ("lab_event", "lab_plan") if isinstance(x.get(k), str) and x[k])
-    link = (f' <a class="nc-lab" href="{esc(lab)}" title="{ids}">lab record</a>' if lab else "")
-    return f'<li><span class="nc-what">{what}</span> <span class="nc-tail">— {esc(tail)}</span>{link}</li>'
+        what = esc(NOT_CLAIMED_FALLBACK.get(because, "A planned test"))
+    verdict = ("void plan" if because == "defective"
+               else NOT_CLAIMED_VERDICT.get(x.get("outcome"), _words(x.get("outcome") or "")))
+    tail = ", ".join(w for w in (verdict, NOT_CLAIMED_BECAUSE.get(because, "")) if w)
+    ids = " under ".join(x[k] for k in ("lab_event", "lab_plan") if isinstance(x.get(k), str) and x[k])
+    more = [i for i in removed if i not in (x.get("lab_event"), x.get("lab_plan"))]
+    ids = "; ".join(t for t in (ids, ", ".join(more)) if t)
+    link = (f' <a class="nc-lab" href="{esc(lab)}" title="{esc(ids)}">lab record</a>' if lab else "")
+    return (f'<li><span class="nc-what"{title}>{what}</span> <span class="nc-tail">— {esc(tail)}</span>{link}'
+            "</li>")
 
 
-def earlier_block(entries, cid, text, lab=None):
+def earlier_block(entries, cid, text, lab=None, hyps=None, claim_href=None):
     """Under a claim, the entries of `not_claimed` that went into it, folded: "Earlier wordings (2)". "" when none."""
     mine = [x for x in entries if x.get("into") == cid]
     if not mine:
@@ -1002,7 +1105,7 @@ def earlier_block(entries, cid, text, lab=None):
     title = ("Earlier wordings" if kinds == {"reworded"} else "Merged hypotheses" if kinds == {"revised"}
              else "Earlier wordings and merged hypotheses")
     return (f'<details class="cs-earlier"><summary>{title} ({len(mine)})</summary><ul>'
-            + "".join(not_claimed_item(x, text, lab) for x in mine) + "</ul></details>")
+            + "".join(not_claimed_item(x, text, lab, hyps, claim_href) for x in mine) + "</ul></details>")
 
 
 def _plural(n, word):
