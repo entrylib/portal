@@ -113,3 +113,10 @@ def test_contributions_list_credit_roles():
     assert "A &lt;b&gt;: Conceptualization, Writing – original draft" in fold
     assert "Claude Code" in fold and "Formal analysis" in fold and ">B" not in fold
     assert _contributions([{"name": "B"}]) == ""
+
+
+def test_the_record_is_named_once_in_the_panel_not_under_the_byline():
+    row = site._lab_row({"copy": "/p/k/v1/lab.jsonl", "summary": "49 events", "verified": True})
+    assert "49 events; hash chain verified" in row
+    line = site._origin_line({"paper": {}}, "lab", {"copy": "/p/k/v1/lab.jsonl", "summary": "49 events"})
+    assert line == '<p class="origin-line">Made with <a href="/lab">claimset-lab</a>.</p>'

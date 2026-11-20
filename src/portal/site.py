@@ -502,15 +502,8 @@ def origin_words(doc, origin):
 
 
 def _origin_line(doc, origin, lab):
-    if origin == "lab":
-        rec = ""
-        if lab and lab.get("copy"):
-            rec = f'<a href="{esc(lab["copy"])}">Lab record</a>'
-            if lab.get("summary"):
-                rec += f": {esc(lab['summary'])}"
-            if lab.get("verified"):                     # the registry's copy, checked before publication
-                rec += " · hash chain verified"
-        return f'<p class="origin-line">Made with <a href="/lab">claimset-lab</a>.{" " + rec if rec else ""}</p>'
+    if origin == "lab":                                 # the record itself is in the panel's row *Lab record*
+        return '<p class="origin-line">Made with <a href="/lab">claimset-lab</a>.</p>'
     if origin.startswith("lab"):
         return ('<p class="origin-line">Made with <a href="/lab">claimset-lab</a>; the record is kept for audit, '
                 "not public.</p>")
@@ -625,8 +618,13 @@ def _lab_row(lab):
         links.append(f'<a href="{esc(lab["view"])}">Readable record</a>')
     if lab.get("copy"):
         links.append(f'<a href="{esc(lab["copy"])}">Log</a>')
+    about = [esc(lab["summary"])] if lab.get("summary") else []
+    if lab.get("verified"):                             # the registry's copy, checked before publication
+        about.append("hash chain verified")
+    about = f'<p class="small">{"; ".join(about)}</p>' if about else ""
     where = (f'<p class="small">Kept in {esc(lab["where"])}</p>' if lab.get("where") else "")
-    return f'<div class="panel-row"><h2>Lab record</h2><p class="small">{" · ".join(links)}</p>{where}</div>'
+    return (f'<div class="panel-row"><h2>Lab record</h2><p class="small">{" · ".join(links)}</p>{about}{where}'
+            '</div>')
 
 
 def _panel(doc, parts, base_url, key, scores=None, lab=None):
