@@ -184,26 +184,20 @@ def test_a_table_is_open_only_when_small_and_of_the_claims_main_evidence():
     assert 'querySelectorAll("details.pv-proof, details.cs-table-fold")' in js      # and the page prints them open
 
 
-def test_the_papers_figures_come_first():
-    """Design §7.4, *Figures first*: under the title block and before the Summary, every figure the page can show,
-    data plots first, each with its description as its caption; the record has no such block."""
-    doc = proofs()
-    doc["artefacts"].insert(0, {"id": "A0", "kind": "figure", "function": "schematic", "uri": "files/design.png",
-                                "description": "The study's design."})
-    doc["artefacts"].append({"id": "A9", "kind": "data", "uri": "files/data.csv", "description": "The data."})
+def test_figures_belong_to_their_evidence_before_its_tables():
+    """Design §7.4: a figure stands in its evidence, before the evidence's tables, under a claim as on the record;
+    the paper view has no block of the paper's figures at its top (removed 20 November 2026)."""
     listing = [{"version": 1, "date": "2026-11-17"}]
-    page = site.paper_page(doc, base_url=BASE, listing=listing)
-    figures = page[page.index('<section class="pv-paper-figures"'):page.index("</section>",
-                                                                              page.index("pv-paper-figures"))]
-    assert page.index("pv-paper-figures") < page.index('class="pv-opening"') < page.index('id="claims"')
-    assert page.index('class="cs-title"') < page.index("pv-paper-figures")
-    assert re.findall(r'<figure class="cs-figure"><a href="files/(\w+)\.png" data-gallery="gal-paper"', figures) == \
-        ["first", "third", "design"]                                    # data plots first, then the others
-    assert '<figcaption><span class="cs-id">A0</span> The study&#x27;s design.</figcaption>' in figures
-    assert "data.csv" not in figures and '<ol class="pv-gallery" id="gal-paper" hidden>' in figures
-    assert "pv-paper-figures" not in site.claimset_page(doc, base_url=BASE, listing=listing)
-    doc["artefacts"] = [a for a in doc["artefacts"] if a.get("kind") != "figure"]
-    assert "pv-paper-figures" not in site.paper_page(doc, base_url=BASE, listing=listing)
+    page = site.paper_page(proofs(), base_url=BASE, listing=listing)
+    assert "pv-paper-figures" not in page and 'id="gal-paper"' not in page
+    head = page[:page.index('class="pv-opening"')]
+    assert "<img" not in head and "<figure" not in head                  # the page opens with its header, no images
+    c4 = article(page, "C4")
+    assert "first.png" in c4 and c4.index("<figure") < c4.index('id="E4.T1"')     # the figure, then the table
+    record = site.claimset_page(proofs(), base_url=BASE, listing=listing)
+    e4 = record[record.index('<div class="cs-item cs-evidence" id="E4">'):]
+    assert e4.index("<figure") < e4.index('id="E4.T1"')
+    assert record.count('src="files/first.png"') == 1                   # once, in its evidence
 
 
 def test_a_term_stands_before_the_claim_that_first_uses_it():

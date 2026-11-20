@@ -936,28 +936,6 @@ def own_document(doc):
 PAPER_KEEPS = ("assumptions", "limitations", "questions", "references")
 
 
-def paper_figures(doc, file_url=None):
-    """The paper's figures, shown first in the paper view, under the title block (design §7.4, *Figures first*): every
-    artefact of kind `figure` the page can show (a packaged image), data plots (`function: data_plot`) first, each with
-    its description as its caption, opening in the viewer, which steps through them all. "" when there is none."""
-    P = pageview._Paper(doc, file_url=file_url)
-    figs = [a for a in P.artefacts if a.get("kind") == "figure" and P.image_src(a)]
-    figs = [a for a in figs if a.get("function") == "data_plot"] + [a for a in figs if a.get("function") != "data_plot"]
-    if not figs:
-        return ""
-    gid = "gal-paper"
-    gallery = ('<ol class="pv-gallery" id="' + gid + '" hidden>' + "".join(
-        f'<li data-src="{esc(P.image_src(a))}"><span class="cs-id">{esc(a["id"])}</span> '
-        f'{P.text(a.get("description") or a["id"])}</li>' for a in figs) + "</ol>")
-    shown = "".join(
-        f'<figure class="cs-figure"><a href="{esc(P.image_src(a))}" data-gallery="{gid}" data-i="{i}">'
-        f'<img src="{esc(P.image_src(a))}" alt="{esc(pageview._first_sentence(a.get("description") or ""))}" '
-        f'loading="lazy"></a><figcaption><span class="cs-id">{esc(a["id"])}</span> '
-        f'{P.text(a.get("description") or a["id"])}</figcaption></figure>' for i, a in enumerate(figs))
-    many = " cs-figures-many" if len(figs) > 1 else ""
-    return (f'<section class="pv-paper-figures" aria-label="Figures"><div class="cs-figures{many}">{shown}</div>'
-            f'{gallery}</section>')
-
 
 def _paper_body(doc, parts, record, more, *, file_url=None, ref_text=None, scores=None, claim_url=None):
     """The paper view's own part (design §7.4, *Paper view*), for a published paper and for a preview (§4.2):
@@ -1056,8 +1034,7 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
-            f'{ask_ai(doc, base_url, printed=True)}{document}{paper_figures(doc, file_url)}'
-            f'<div class="pv-opening">{opening}</div></div>'
+            f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
             # the rail (site.css): the panel, and directly under it the contents, to the right of the text
             f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores, lab)}{nav}</div>'
             f'<article class="cs-body">{"".join(body)}'
