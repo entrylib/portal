@@ -159,12 +159,15 @@ def test_reading_views_follow_claimset_updates(env, monkeypatch):
     out = ctx["published_dir"]
     args = (ctx["conn"], ctx["registry"], out, BASE)
     assert indexer.refresh_if_claimset_changed(*args, "0.39.2")              # no marker yet: rebuilt
-    assert (out / indexer.RENDERED_BY).read_text().startswith("0.39.2 site ")
+    assert (out / indexer.RENDERED_BY).read_text().startswith("0.39.2 claimset ")
     (out / "p" / f"{KEY}.txt").write_text("stale rendering")
     assert not indexer.refresh_if_claimset_changed(*args, "0.39.2")          # same claimset: left alone
+    assert not indexer.refresh_if_claimset_changed(*args, "0.40.0")          # a release that renders the same
     assert (out / "p" / f"{KEY}.txt").read_text() == "stale rendering"
-    assert indexer.refresh_if_claimset_changed(*args, "0.40.0")              # a new claimset: rebuilt
+    monkeypatch.setattr(indexer.site, "claimset_fingerprint", lambda: "renders differently")
+    assert indexer.refresh_if_claimset_changed(*args, "0.40.0")              # one that does not: rebuilt
     assert (out / "p" / f"{KEY}.txt").read_text().startswith("CLAIMSET")
+    monkeypatch.setattr(indexer.site, "claimset_fingerprint", lambda: "and again")
     assert indexer.refresh_if_claimset_changed(ctx["conn"], None, out, BASE, "0.40.1")   # no registry yet
 
 

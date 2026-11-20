@@ -121,15 +121,55 @@ def _write(path, text):
     os.replace(tmp, path)
 
 
+#: The portal's modules that only serve requests, publish, check or configure: they shape no page, so a change to them
+#: rebuilds nothing (design §7.1). Every other module, a new one included, is part of the site's fingerprint.
+NOT_RENDERING = {"__init__.py", "__main__.py", "app.py", "archive.py", "check.py", "classify.py", "cli.py",
+                 "config.py", "consent.py", "db.py", "fetch.py", "github.py", "indexnow.py", "mcp_server.py",
+                 "orcid.py", "publish.py", "ratelimit.py", "screening.py", "search.py", "storage.py",
+                 "submissions.py", "uploads.py", "worker.py"}
+
+
 def fingerprint():
-    """A hash of everything here that shapes a page: when it changes, the pages are written again."""
-    h = hashlib.sha256(Path(__file__).read_bytes())
-    h.update(Path(score_html.__file__).read_bytes())
+    """A hash of everything here that shapes a page: the portal's modules but those of NOT_RENDERING, the rubric's
+    version, and the templates, styles, scripts and fixed pages. When it changes, the pages are written again."""
+    h = hashlib.sha256()
+    for f in sorted(Path(__file__).parent.glob("*.py")):
+        if f.name not in NOT_RENDERING:
+            h.update(f.name.encode() + b"\0" + f.read_bytes())
     h.update(f"rubric {score_data.version()}".encode())        # pages follow the rubric (design §7.6)
     for name in ("site.css", "page.js", "fonts/fonts.css"):
         h.update(_static(name).read_bytes())
     for f in sorted((Path(str(_static("pages")))).glob("*.html")):
         h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+#: The claimset package's parts that shape no page: its command line, packaging, submission and migration, the lab's
+#: commands, and the specifications, skills and templates it carries (design §7.1). A release that changes only
+#: these rebuilds nothing; any other module, a new one included, is part of claimset_fingerprint.
+CLAIMSET_NOT_RENDERING = {"__main__.py", "agents.py", "cli.py", "html.py", "html_css.py", "migrate.py",
+                          "package.py", "renumber.py", "submit.py", "lab/cli.py", "lab/draft.py", "lab/guard.py",
+                          "lab/nextstep.py", "lab/protect.py", "lab/run.py"}
+
+
+@functools.cache
+def claimset_fingerprint():
+    """A hash of the installed claimset package's modules that write what a page shows (all but
+    CLAIMSET_NOT_RENDERING; `__init__.py` without its version line), or "none" without the package."""
+    try:
+        import claimset
+    except ImportError:
+        return "none"
+    root = Path(claimset.__file__).parent
+    h = hashlib.sha256()
+    for f in sorted(root.rglob("*.py")):
+        rel = f.relative_to(root).as_posix()
+        if rel in CLAIMSET_NOT_RENDERING or rel.startswith("data/"):
+            continue
+        text = f.read_bytes()
+        if rel == "__init__.py":
+            text = re.sub(rb"(?m)^__version__\s*=.*$", b"", text)
+        h.update(rel.encode() + b"\0" + text)
     return h.hexdigest()[:16]
 
 
