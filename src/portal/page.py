@@ -950,18 +950,19 @@ def _plural(n, word):
 
 
 def _file_table(P, eid, t, head, caption):
-    """A table whose rows are held in a file of the package (its `artefact`, a CSV file, and `n_rows`): its
-    description, its columns and a link that downloads the file. The page never reads the file."""
-    a = P.by_id.get(t.get("artefact")) if isinstance(t.get("artefact"), str) else None
+    """A table whose rows are held in a file of the package (claimset §3.4, *Tables held in a file*: `rows_file`, the
+    data artefact whose CSV file holds them, and `n_rows`): its description, its columns and a link that downloads
+    the file. The page never reads the file. (`artefact` keeps its own meaning, the source of the full table.)"""
+    a = P.by_id.get(t["rows_file"])
     n = t.get("n_rows")
     size = [_plural(n, "row")] if isinstance(n, int) and not isinstance(n, bool) else []
     size.append(_plural(len(t.get("columns") or []), "column"))
     uri = a.get("uri") if a in P.artefacts else None
     if _href(uri):
         where = (f'<a class="cs-download" href="{esc(uri)}" download>Download the rows (CSV)</a> '
-                 f'<span class="cs-id">{esc(t["artefact"])}</span>')
+                 f'<span class="cs-id">{esc(t["rows_file"])}</span>')
     else:                                               # a preview, which serves no files: the artefact by its ID
-        where = "In the package's file " + (P.ids([t["artefact"]]) if isinstance(t.get("artefact"), str) else "")
+        where = "In the package's file " + P.ids([t["rows_file"]])
     return (f'<div class="cs-table cs-table-file" id="{esc(eid)}.{esc(t.get("id", ""))}">'
             f'<p class="cs-table-caption">{caption} <span class="cs-size">({" × ".join(size)})</span></p>'
             f'<p class="cs-links"><span class="k">Columns:</span> {" · ".join(head)}</p>'
@@ -979,7 +980,7 @@ def _table(P, eid, t, main=None):
     head = ["Row"] + [P.term(x) for x in t.get("row_labels") or []] + cols
     caption = (f"{esc(eid)}.{esc(t.get('id'))} · {P.text(t.get('description', ''))}"
                + (f" {P.conditions(t.get('conditions'))}" if t.get("conditions") else ""))
-    if not isinstance(t.get("rows"), list) and isinstance(t.get("artefact"), str):
+    if not isinstance(t.get("rows"), list) and isinstance(t.get("rows_file"), str):
         return _file_table(P, eid, t, head[1:], caption)
     rows = []
     all_rows = [r for r in t.get("rows") or [] if isinstance(r, dict)]

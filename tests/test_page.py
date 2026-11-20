@@ -360,8 +360,11 @@ class TestTables(unittest.TestCase):
         doc, eid, _ = self.doc()
         csv = "https://entrylib.test/p/2026.000099/v1/files/data/forecasts.csv"
         doc["artefacts"].append({"id": "A20", "kind": "data", "uri": csv, "description": "Every forecast."})
+        doc["artefacts"].append({"id": "A21", "kind": "data", "uri": "https://example.org/results.csv",
+                                 "description": "The paper's results."})
         doc["evidence"][0]["tables"] = [{"id": "T2", "description": "Every forecast", "row_labels": ["series"],
-                                         "columns": ["horizon", "forecast"], "artefact": "A20", "n_rows": 5000}]
+                                         "columns": ["horizon", "forecast"], "rows_file": "A20", "n_rows": 5000,
+                                         "artefact": "A21"}]               # the full table's source, not the rows
         body = H.render_parts(doc)["body"]
         table = body[body.index(f'id="{eid}.T2"'):]
         self.assertIn(f'<div class="cs-table cs-table-file" id="{eid}.T2"><p class="cs-table-caption">{eid}.T2 · '
@@ -369,7 +372,14 @@ class TestTables(unittest.TestCase):
         self.assertIn("<span class=\"k\">Columns:</span> series · horizon · forecast", table)
         self.assertIn(f'<a class="cs-download" href="{csv}" download>Download the rows (CSV)</a>', table)
         self.assertNotIn("<table", table[:table.index("</div>")])
-        doc["artefacts"][-1]["uri"] = "data/forecasts.csv"            # a preview: no file served, the artefact named
+        self.assertNotIn("example.org", table[:table.index("</div>")])
+        doc["evidence"][0]["tables"][0].update(rows=[{"id": "r1", "label": ["s"], "values": [1, 2]}])
+        del doc["evidence"][0]["tables"][0]["rows_file"]               # `artefact` alone: an inline table as before
+        self.assertNotIn("cs-table-file", H.render_parts(doc)["body"])
+        doc["evidence"][0]["tables"][0].update(rows_file="A20")
+        del doc["evidence"][0]["tables"][0]["rows"]
+        # a preview: no file served, the artefact named
+        next(a for a in doc["artefacts"] if a["id"] == "A20")["uri"] = "data/forecasts.csv"
         body = H.render_parts(doc)["body"]
         self.assertIn('In the package\'s file <a href="#A20">A20</a>', body)
         self.assertNotIn("cs-download", body)
