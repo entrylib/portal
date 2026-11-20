@@ -178,7 +178,7 @@ DIGESTS = ".rendered"
 def inputs_digest(conn, registry, folder, docs):
     """A hash of everything a claimset's files are made from (design §7.1): its registry files and publication times,
     the claimset package's and the site's fingerprints (with the rubric's version), and what its pages show of other
-    claimsets: the titles and scores of those it cites. Call after scores.use_published."""
+    claimsets: the titles of those it cites. Scores are kept apart (_score)."""
     h = hashlib.sha256(f"claimset {site.claimset_fingerprint()} site {site.fingerprint()}".encode())
     root = registry.path / folder
     for f in sorted(p for p in root.rglob("*") if p.is_file()):
@@ -189,37 +189,24 @@ def inputs_digest(conn, registry, folder, docs):
                       if isinstance(b, dict) and b.get("id_type") == "claimset" and isinstance(b.get("target"), str)})
     if targets:
         h.update(json.dumps(claimset_texts(conn, targets), sort_keys=True).encode())
-        h.update(json.dumps([scores.cited_scores(d) for d in docs.values()], sort_keys=True, default=str).encode())
     return h.hexdigest()
 
 
-def _kept_scores(published_dir, key):
-    """{str(version): digest of what its score was computed from} for a claimset's scores on disk."""
-    try:
-        return json.loads((Path(published_dir) / DIGESTS / f"{key}.scores.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-
-
-def _score(conn, doc, published_dir, key, n, kept):
-    """Version n's score (scores.compute), or the one written before when it was computed from what it would be now
-    (design §7.1): the file as readers see it, the claimset package's fingerprint (the validator's warnings), the
-    rubric's version and the scores of the claims it cites. `kept` is updated with the digest."""
-    h = hashlib.sha256(f"claimset {site.claimset_fingerprint()} rubric {scores.version()}".encode())
-    h.update(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode())
-    h.update(json.dumps(scores.cited_scores(doc), sort_keys=True, default=str).encode())
-    digest = h.hexdigest()
+def _score(conn, doc, published_dir, key, n):
+    """Version n's score (design §7.1): the one written when it was published, while it is by the rubric installed;
+    computed (scores.compute) only when there is none or the rubric has changed. A version's file never changes (a
+    re-upload is a new version), so nothing else rescores it: not a newer claimset package, not a cited paper's new
+    score, not a notice. A score computed here records the claimset version it was computed with."""
     path = Path(published_dir) / "p" / f"{key}@v{n}.score.json"
-    if kept.get(str(n)) == digest and path.exists():
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except ValueError:
-            pass
+    try:
+        held = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        held = None
+    if isinstance(held, dict) and held.get("rubric") == scores.version():
+        return held
     result = scores.compute(conn, doc)
-    if result is not None:
-        kept[str(n)] = digest
-    else:
-        kept.pop(str(n), None)
+    if isinstance(result, dict):
+        result["computed_with"] = {"claimset": labrecord.package_version()}
     return result
 
 
@@ -246,12 +233,11 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
             pass
     p = published_dir / "p"
     listing, labs, scored = [], {}, {}
-    kept = _kept_scores(published_dir, key)
     for n, doc in docs.items():
         text = (registry.version_dir(folder, n) / "claimset.json").read_text(encoding="utf-8")
         if docs[n] is not raws[n]:                       # retracted: the file with the status the platform assigned
             text = json.dumps(docs[n], indent=1, ensure_ascii=False) + "\n"
-        scored[n] = _score(conn, doc, published_dir, key, n, kept)    # by the rubric (design §7.6); None without it
+        scored[n] = _score(conn, doc, published_dir, key, n)    # by the rubric (design §7.6); None without it
         view = render(doc) + scores.text(scored[n]) + site.citation_note(doc, base_url)
         if scored[n] is not None:
             score_json = json.dumps(scored[n], indent=1, ensure_ascii=False) + "\n"
@@ -321,7 +307,6 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
                                             else written.get(crossref.normalise(b.get("target")))), legacy=legacy,
                         scores=scored)
     _write(digest_file, digest + "\n")
-    _write(published_dir / DIGESTS / f"{key}.scores.json", json.dumps(kept, indent=1, sort_keys=True) + "\n")
     if index:
         write_index(conn, published_dir, base_url)
     return True
