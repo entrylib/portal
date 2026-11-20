@@ -75,6 +75,7 @@ def consent(ctx, start_url, status_url, attach_url=None, attached=False, scores=
 (ORCID <code>{escape(ctx['orcid'])}</code>), as its responsible researcher (in the claimset format, its
 guarantor).</p>
 {correction}
+{_removals_box(ctx)}
 <div class="box">
 <p><strong>{escape(ctx['title'])}</strong></p>
 <p class="muted">{ctx['n_claims']} claims · licence {escape(ctx['licence'])}</p>
@@ -114,7 +115,7 @@ def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper
     statement = (
         f"<p>An AI agent has submitted this paper to EntryLib naming you, <strong>{escape(ctx['name'] or '')}"
         f"</strong> (ORCID <code>{escape(ctx['orcid'])}</code>), as its responsible researcher (its guarantor). "
-        f"Read it as readers will see it, below.</p>{correction}{_source_box(ctx)}"
+        f"Read it as readers will see it, below.</p>{correction}{_removals_box(ctx)}{_source_box(ctx)}"
         f"<p>By confirming, you state that you are the main author of this work and the person to contact about it, "
         f"that you answer for its research (whether the claims are true and the work was done properly), and that it "
         f"may be published under the licence {escape(ctx['licence'])}. Once published, a paper stays: it can be "
@@ -126,6 +127,21 @@ def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper
         f"confirmation.</p>")
     return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores, view=view,
                              paper_href=views[0], record_href=views[1])
+
+
+def _removals_box(ctx):
+    """What a new version removes from the current one (design §4.3, *New versions*): listed so that the guarantor does
+    not confirm, unseen, a correction made from an older version that would undo the versions after it."""
+    removed = ctx.get("removals") or []
+    if ctx.get("kind") != "correction" or not removed:
+        return ""
+    items = "".join(f"<li><code>{escape(x)}</code></li>" for x in removed)
+    origin = (f"It was made from {escape(ctx['based_on'])}." if ctx.get("based_on") else
+              "It does not say which version it was made from: if it was made from an older version than the current "
+              "one, these removals undo the versions after it, and the agent should make it again from the current "
+              "version. Confirm only if you meant to remove all of this.")
+    return (f'<div class="box"><p><strong>This new version removes</strong> from the current version of '
+            f"{escape(ctx['target'])}:</p><ul>{items}</ul><p>{origin}</p></div>")
 
 
 def session_preview(ctx, scores=None, base_url="", view="paper", views=("?", "?view=record")):
@@ -143,6 +159,7 @@ def session_preview(ctx, scores=None, base_url="", view="paper", views=("?", "?v
                       f"{escape(ctx.get('correction_reason') or '')}</p>")
     statement = (f"<p>The paper as readers will see it once published, under the licence {escape(ctx['licence'])}. "
                  f"Nothing is published until you confirm it in Your submissions.</p>{correction}"
+                 f"{_removals_box(ctx)}"
                  f"{_source_box(ctx)}")
     return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores, view=view,
                              paper_href=views[0], record_href=views[1])
