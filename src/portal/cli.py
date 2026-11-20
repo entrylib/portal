@@ -185,15 +185,21 @@ def _refresh(settings, version, locked=False):
 
     from . import indexer
     try:
-        with psycopg.connect(settings.database_url, autocommit=True) as conn, (
-                indexer.publishing(conn) if locked else contextlib.nullcontext()):
+        with psycopg.connect(settings.database_url, autocommit=True) as conn:
+            def lock():
+                return indexer.publishing(conn) if locked else contextlib.nullcontext()
             started = time.monotonic()
-            registry = _rebuild_registry(settings)
+            with lock():                                    # the publisher writes the registry this reads
+                registry = _rebuild_registry(settings)
             fetched = time.monotonic()
             # what each step took, so that a slow start says where the time went
             print(f"portal: registry ready in {fetched - started:.0f} s", flush=True)
+
+            def progress(done, total):
+                indexer.PROGRESS.update(done=done, total=total)
+            # each claimset under the lock alone: the publisher runs between them (design §7.1)
             if indexer.refresh_if_claimset_changed(conn, registry, settings.published_dir, settings.base_url,
-                                                   version):
+                                                   version, lock=lock, progress=progress):
                 print(f"reading views rebuilt with claimset {version} in {time.monotonic() - fetched:.0f} s",
                       flush=True)
             else:
