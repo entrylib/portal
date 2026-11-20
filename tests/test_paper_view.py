@@ -485,3 +485,24 @@ def test_a_claim_from_a_lab_links_its_trail():
     page = site.claim_page(proofs(), "C3", base_url=BASE, trail=trail)
     assert f'<a href="{trail}">Its trail</a>' in page
     assert "Its trail" not in site.claim_page(proofs(), "C3", base_url=BASE)
+
+
+def test_a_step_written_as_bare_latex_is_a_formula():
+    """Claimset spec §3.4: a proof step's statement is LaTeX, with or without $…$."""
+    from portal.page import bare_formula
+    first = r"y - \mu_1 \overset{d}{=} \mu_1 - y"
+    second = (r"\mathcal{R}(\mu_{0.5}) = \mathrm{E}[(y-\mu_1)_+^{0.5}] = \mathrm{E}[(\mu_1-y)_+^{0.5}]"
+              r" = \mathcal{I}(\mu_{0.5})")
+    assert bare_formula(first) and bare_formula(second) and bare_formula(r"x_1 = \text{the first value}")
+    for text in ("By symmetry, $y - \\mu_1$ and $\\mu_1 - y$ have one law.", "Substitute step 1 into step 2.",
+                 r"Since \mu_1 is the mean of the variable", "`a_b`", "[[D1:term]] with x_1", "", None):
+        assert not bare_formula(text)
+    doc = proofs()
+    e = next(x for x in doc["evidence"] if x.get("steps"))
+    e["steps"][0]["statement"] = first
+    e["steps"][1]["statement"] = second
+    listing = [{"version": 1, "date": "2026-11-17"}]
+    for page in (site.paper_page(doc, base_url=BASE, listing=listing),
+                 site.claimset_page(doc, base_url=BASE, listing=listing)):
+        shown = re.sub(r"<annotation.*?</annotation>", "", page, flags=re.S)   # the TeX kept in the MathML
+        assert "\\mu_1" not in shown and page.count('<span class="cs-step-math"><math') >= 2
