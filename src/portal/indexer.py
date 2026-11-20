@@ -285,8 +285,6 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
             lab["artefact"] = lab_artefacts[0]
             if n not in labs and str(lab_artefacts[0]).startswith("https://"):
                 labs[n] = {"copy": lab_artefacts[0], "summary": None}
-            if n in labs and labrecord.where(lab_artefacts[0]):
-                labs[n]["where"] = labrecord.where(lab_artefacts[0])
         if n in labs:
             made = write_lab_views(p / key / f"v{n}", f"/p/{key}/v{n}", doc, record, lab.get("artefact"))
             if made:

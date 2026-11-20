@@ -649,22 +649,26 @@ INTERESTS_NOTE = ("Competing interests and funding, as the authors declare them,
                   "the score.")
 
 
-def _lab_row(lab):
-    """The panel row *Lab record* (design §5.2): the record's reading view, its log, and where the log is kept."""
+def _lab_row(lab, doc, key):
+    """The panel row of what is behind the paper (design §5.2): for a lab paper, *Lab record* with the record's
+    reading view, its log and the paper's artefacts; for another paper with artefacts, *Artefacts* with the link
+    alone. The artefacts are linked as a whole, to the record's list, which says where each is kept."""
+    arts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
+    files = f'<a href="/p/{key}/record#artefacts">Artefacts&nbsp;({len(arts)})</a>' if arts else ""
     if not lab or not (lab.get("view") or lab.get("copy")):
-        return ""
+        return f'<div class="panel-row"><h2>Artefacts</h2><p class="small">{files}</p></div>' if files else ""
     links = []
     if lab.get("view"):
         links.append(f'<a href="{esc(lab["view"])}">Readable record</a>')
     if lab.get("copy"):
         links.append(f'<a href="{esc(lab["copy"])}">Log</a>')
+    if files:
+        links.append(files)
     about = [esc(lab["summary"])] if lab.get("summary") else []
     if lab.get("verified"):                             # the registry's copy, checked before publication
         about.append("hash chain verified")
     about = f'<p class="small">{"; ".join(about)}</p>' if about else ""
-    where = (f'<p class="small">Kept in {esc(lab["where"])}</p>' if lab.get("where") else "")
-    return (f'<div class="panel-row"><h2>Lab record</h2><p class="small">{" · ".join(links)}</p>{about}{where}'
-            '</div>')
+    return f'<div class="panel-row"><h2>Lab record</h2><p class="small">{" · ".join(links)}</p>{about}</div>'
 
 
 def _panel(doc, parts, base_url, key, scores=None, lab=None):
@@ -680,7 +684,7 @@ def _panel(doc, parts, base_url, key, scores=None, lab=None):
             + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
                         f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
                         f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}')
-            + _lab_row(lab)
+            + _lab_row(lab, doc, key)
             + '<div class="panel-row"><h2>For models</h2>'
             + (f'<p class="small"><a href="/p/{key}@v{n}.issues.txt">Issues as text, for an agent</a></p>'
                if scores else "")

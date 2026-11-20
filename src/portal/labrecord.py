@@ -29,12 +29,6 @@ def enabled():
     return os.environ.get("PORTAL_LAB_FETCH", "1") != "0"
 
 
-def where(uri):
-    """`entrylib/study-planning, commit 1dffa04` for a commit-pinned log on GitHub, else None."""
-    m = GITHUB_BLOB.match(str(uri or ""))
-    return f"{m.group(1)}/{m.group(2)}, commit {m.group(3)[:7]}" if m else None
-
-
 def raw_url(uri):
     """The raw file address of a commit-pinned log on GitHub, or None: only a log fixed at a commit is fetched, so
     its view never changes under the version it belongs to."""
