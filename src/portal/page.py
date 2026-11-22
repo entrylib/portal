@@ -625,20 +625,25 @@ def model_names(c, models):
 
 
 def agent_name(c, models):
-    """An agent contributor as the site names it (design §7.4): its model and the harness it ran in, "Claude Opus
-    5.5 in Claude Code"; an agent named otherwise than its harness keeps its name, "Review agent (Claude Opus 5.5)";
-    without a known model, its name alone. Plain text, to be escaped."""
-    name = c.get("name") if isinstance(c.get("name"), str) and c["name"].strip() else ""
+    """An agent contributor as the site names it (design §7.4): by the model it ran on, "Claude Opus 5.5" (several:
+    "Claude Opus 5.5 and GPT-6"); without a known model, by its own name. The harness it ran in is a detail of how
+    the paper was made (harness). Plain text, to be escaped."""
     names = model_names(c, models)
-    if not names:
-        return name or "an AI agent"
-    shown = " and ".join(names)
-    system = c.get("system").get("name") if isinstance(c.get("system"), dict) else None
-    if not name:
-        return shown
-    if isinstance(system, str) and system.strip() == name.strip():
-        return f"{shown} in {name.strip()}"
-    return f"{name.strip()} ({shown})"
+    if names:
+        return " and ".join(names)
+    return c["name"].strip() if isinstance(c.get("name"), str) and c["name"].strip() else "an AI agent"
+
+
+def harness(c):
+    """The harness an agent ran in, with its version when recorded ("Claude Code 2.1"): its `system` (claimset
+    §3.11), else its name when a model names it; None when unknown. Plain text."""
+    system = c.get("system") if isinstance(c.get("system"), dict) else {}
+    name = system.get("name") if isinstance(system.get("name"), str) and system["name"].strip() else None
+    if name is None:
+        return None
+    version = system.get("version")
+    version = str(version).strip() if isinstance(version, (str, int, float)) else ""
+    return f"{name.strip()} {version}" if version and not name.strip().endswith(version) else name.strip()
 
 
 def _person(c, verified=False):
@@ -665,8 +670,10 @@ def _author(c, P=None, where="author", models=None):
         return _person(c, True)
     if c.get("type") == "agent":
         label = c.get("label") if isinstance(c.get("label"), str) and c.get("label").strip() else None
+        ran = harness(c) if where == "credit" and model_names(c, models) else None
         return (f'{esc(agent_name(c, models))}'
                 + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "")
+                + (f' <span class="cs-label">in {esc(ran)}</span>' if ran else "")
                 + ("" if model_names(c, models) else " (AI agent)"))
     return _person(c)
 

@@ -560,15 +560,15 @@ def test_a_step_written_as_bare_latex_is_a_formula():
 
 
 def test_an_agent_is_named_with_its_model():
-    """Design §7.4: "Claude Opus 5.5 in Claude Code", from the agent's models and the claimset's models list."""
-    from portal.page import agent_name, model_names
+    """Design §7.4 (option C): the model, "Claude Opus 5.5"; the harness on hover and in the Contributions fold."""
+    from portal.page import agent_name, harness, model_names
     models = [{"id": "M1", "name": "Claude Opus", "version": "5.5"}, {"id": "M2", "name": "GPT-6", "version": "6"},
               {"id": "M3", "name": "Model <b>", "version": None}]
-    code = {"type": "agent", "name": "Claude Code", "system": {"name": "Claude Code"}, "models": [{"model": "M1"}]}
-    assert agent_name(code, models) == "Claude Opus 5.5 in Claude Code"
-    two = {"type": "agent", "name": "Review agent", "system": {"name": "Codex CLI"},
-           "models": [{"model": "M1"}, {"model": "M2"}, {"model": "M1"}]}
-    assert agent_name(two, models) == "Review agent (Claude Opus 5.5 and GPT-6)"
+    code = {"type": "agent", "name": "Claude Code", "system": {"name": "Claude Code", "version": "2.1"},
+            "models": [{"model": "M1"}]}
+    assert agent_name(code, models) == "Claude Opus 5.5" and harness(code) == "Claude Code 2.1"
+    two = {"type": "agent", "name": "Review agent", "models": [{"model": "M1"}, {"model": "M2"}, {"model": "M1"}]}
+    assert agent_name(two, models) == "Claude Opus 5.5 and GPT-6" and harness(two) is None
     assert agent_name({"type": "agent", "name": "Claude Code"}, models) == "Claude Code"          # none known
     assert agent_name({"type": "agent", "models": [{"model": "M9"}]}, models) == "an AI agent"
     assert model_names({"models": [{"model": "M3"}]}, models) == ["Model <b>"]
@@ -577,9 +577,11 @@ def test_an_agent_is_named_with_its_model():
     doc = proofs()
     doc["models"] = models
     doc["contributors"].append({"id": "P9", "type": "agent", "name": "Claude Code", "positions": ["author"],
-                                "system": {"name": "Claude Code"}, "models": [{"model": "M3", "role": "sole"}]})
+                                "system": {"name": "Claude <Code>"}, "models": [{"model": "M3", "role": "sole"}],
+                                "credit_roles": ["software"]})
     page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-17"}])
-    assert "Model &lt;b&gt; in Claude Code" in page and "Model <b>" not in page                 # escaped
+    assert "Model &lt;b&gt;" in page and "Model <b>" not in page                                  # escaped
+    assert 'title="Run in Claude &lt;Code&gt;"' in page and "in Claude &lt;Code&gt;</span>" in page   # hover; fold
 
 
 def test_an_agent_named_by_its_model_is_not_also_called_an_ai_agent():
@@ -588,6 +590,6 @@ def test_an_agent_named_by_its_model_is_not_also_called_an_ai_agent():
     models = [{"id": "M1", "name": "Claude Opus", "version": "5.5"}]
     named = {"type": "agent", "name": "Claude Code", "system": {"name": "Claude Code"},
              "models": [{"model": "M1"}], "credit_roles": ["software"]}
-    assert _author(named, models=models) == "Claude Opus 5.5 in Claude Code"
+    assert _author(named, models=models) == "Claude Opus 5.5"
     assert _author({"type": "agent", "name": "Claude Code"}, models=models) == "Claude Code (AI agent)"
     assert "AI agent" not in _contributions([named], models)

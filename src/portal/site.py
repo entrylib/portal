@@ -774,8 +774,12 @@ def person(c, where, models=None):
         return (f'<a class="guarantor-link" href="/people/{orcid}">{name}</a>' if orcid else name) + ident
     if c.get("type") == "agent":
         label = c.get("label") if isinstance(c.get("label"), str) and c["label"].strip() else None
-        return (f'<span class="who">{ICON["agent"]}{esc(pageview.agent_name(c, models))}'
-                + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "") + "</span>")
+        ran = pageview.harness(c) if pageview.model_names(c, models) else None
+        tip = f' title="Run in {esc(ran)}"' if ran else ""             # the header: the model; the harness on hover
+        return (f'<span class="who"{tip}>{ICON["agent"]}{esc(pageview.agent_name(c, models))}'
+                + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "")
+                + (f' <span class="cs-label">in {esc(ran)}</span>' if ran and where == "credit" else "")
+                + "</span>")
     return f'<span class="who">{ICON["human"]}{name}{ident}</span>'
 
 
