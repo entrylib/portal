@@ -1644,8 +1644,10 @@ def _pending_about(it):
     paper = doc.get("paper") if isinstance(doc.get("paper"), dict) else {}
     people = [c for c in doc.get("contributors") or [] if isinstance(c, dict) and c.get("name")]
     humans = [esc(c["name"]) for c in people if c.get("type") != "agent"]
-    agents = [esc(pageview.agent_name(c, doc.get("models"))) for c in people if c.get("type") == "agent"]
-    byline = ", ".join(humans) + (f" · with {', '.join(agents)} (AI)" if agents else "")
+    agents = [esc(pageview.agent_name(c, doc.get("models")))           # "(AI)" when no model names the agent
+              + ("" if pageview.model_names(c, doc.get("models")) else " (AI)")
+              for c in people if c.get("type") == "agent"]
+    byline = ", ".join(humans) + (f" · with {', '.join(agents)}" if agents else "")
     refs = len([b for b in doc.get("references") or [] if isinstance(b, dict)])
     claims = [c for c in doc.get("claims") or [] if isinstance(c, dict) and isinstance(c.get("id"), str)]
     principal = set(paper.get("contributions") or [])

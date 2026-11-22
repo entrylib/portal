@@ -139,7 +139,7 @@ def test_a_waiting_submission_reads_as_a_paper(app_client):
     out, _ = submit(app_client, doc)
     page = signed_in(app_client).text
     card = page[page.index('<section class="pending"'):page.index("</section>")]
-    for part in ("A. Researcher · with Example research agent (Example model 1.0) (AI)", "3 claims, 1 principal",
+    for part in ("A. Researcher · with Example research agent (Example model 1.0)<", "3 claims, 1 principal",
                  "<h3>Summary</h3>",
                  "Retail sales are seasonal", "<h3>Claims</h3>", "Method M improves accuracy",
                  "· principal", "Monthly retail sales series exhibit"):

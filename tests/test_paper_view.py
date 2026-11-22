@@ -580,3 +580,14 @@ def test_an_agent_is_named_with_its_model():
                                 "system": {"name": "Claude Code"}, "models": [{"model": "M3", "role": "sole"}]})
     page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-17"}])
     assert "Model &lt;b&gt; in Claude Code" in page and "Model <b>" not in page                 # escaped
+
+
+def test_an_agent_named_by_its_model_is_not_also_called_an_ai_agent():
+    """A model's name says what the agent is; the icon marks it. "(AI agent)" stays for an agent without a model."""
+    from portal.page import _author, _contributions
+    models = [{"id": "M1", "name": "Claude Opus", "version": "5.5"}]
+    named = {"type": "agent", "name": "Claude Code", "system": {"name": "Claude Code"},
+             "models": [{"model": "M1"}], "credit_roles": ["software"]}
+    assert _author(named, models=models) == "Claude Opus 5.5 in Claude Code"
+    assert _author({"type": "agent", "name": "Claude Code"}, models=models) == "Claude Code (AI agent)"
+    assert "AI agent" not in _contributions([named], models)

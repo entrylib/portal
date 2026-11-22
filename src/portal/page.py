@@ -653,7 +653,8 @@ def _person(c, verified=False):
 
 def _author(c, P=None, where="author", models=None):
     """A person or agent named in the header: the site's way (`person`, render_parts), or plain text: a person with
-    their ORCID link; an agent with its label after its name (v0.41: `Claude Code · drafting`) and "(AI agent)"."""
+    their ORCID link; an agent by agent_name, with its label after it (v0.41: `Claude Code · drafting`), and
+    "(AI agent)" only when no model names it (a model's name says what it is)."""
     if P is not None:
         models = P.doc.get("models")
     if P is not None and P.person is not None:
@@ -665,7 +666,8 @@ def _author(c, P=None, where="author", models=None):
     if c.get("type") == "agent":
         label = c.get("label") if isinstance(c.get("label"), str) and c.get("label").strip() else None
         return (f'{esc(agent_name(c, models))}'
-                + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "") + " (AI agent)")
+                + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "")
+                + ("" if model_names(c, models) else " (AI agent)"))
     return _person(c)
 
 
@@ -756,7 +758,7 @@ def _header(P):
     meta = [m for m in meta if m]
     if meta:
         out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
-    credit = _contributions(people, P.doc.get("models"))
+    credit = _contributions(people, P.doc.get("models"), P)
     if credit:
         out.append(credit)
     if P.corrections:
@@ -776,7 +778,7 @@ CREDIT_NAMES = {"conceptualization": "Conceptualization", "data_curation": "Data
                 "writing_review_editing": "Writing – review & editing"}
 
 
-def _contributions(people, models=None):
+def _contributions(people, models=None, P=None):
     """The fold *Contributions* under the names (design §5.2): each contributor's CRediT roles, as the file states
     them; nothing when no contributor has any."""
     rows = []
@@ -784,7 +786,7 @@ def _contributions(people, models=None):
         roles = [r for r in c.get("credit_roles") or [] if isinstance(r, str)]
         if roles:
             names = ", ".join(esc(CREDIT_NAMES.get(r, r.replace("_", " ").capitalize())) for r in roles)
-            rows.append(f"<li>{_author(c, models=models)}: {names}</li>")
+            rows.append(f"<li>{_author(c, P, 'credit', models=models)}: {names}</li>")   # the site's, with icons
     if not rows:
         return ""
     return ('<details class="cs-credit"><summary>Contributions</summary><ul>' + "".join(rows) + "</ul></details>")
