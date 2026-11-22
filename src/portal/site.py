@@ -759,10 +759,11 @@ ICON = {
 ORCID_ID = re.compile(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]")
 
 
-def person(c, where):
+def person(c, where, models=None):
     """How a person or agent is shown in a claimset's header (claimset's render_parts `person`, design §7.4): a
     guarantor by name, linked to their page on EntryLib, with their ORCID link; an author with an icon, a robot for
-    an agent (with its label) and a person for a human. Everything from the file is escaped."""
+    an agent (named with its model, pageview.agent_name, and its label) and a person for a human. Everything from
+    the file is escaped."""
     orcid = c.get("orcid") if isinstance(c.get("orcid"), str) and ORCID_ID.fullmatch(c["orcid"]) else None
     name = esc(c.get("name") or ("an AI agent" if c.get("type") == "agent" else ""))
     verified = (' orcid-verified" title="ORCID verified: they signed in with this ORCID iD to publish the paper'
@@ -773,12 +774,12 @@ def person(c, where):
         return (f'<a class="guarantor-link" href="/people/{orcid}">{name}</a>' if orcid else name) + ident
     if c.get("type") == "agent":
         label = c.get("label") if isinstance(c.get("label"), str) and c["label"].strip() else None
-        return (f'<span class="who">{ICON["agent"]}{name}'
+        return (f'<span class="who">{ICON["agent"]}{esc(pageview.agent_name(c, models))}'
                 + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "") + "</span>")
     return f'<span class="who">{ICON["human"]}{name}{ident}</span>'
 
 
-def byline(role, people):
+def byline(role, people, models=None):
     """The header's lines of people (claimset's render_parts `byline`, design §7.4): the guarantor as the responsible
     researcher, then people as authors and AI agents as what the paper was written with. A converted claimset's
     source authors keep the package's line."""
@@ -787,11 +788,12 @@ def byline(role, people):
     if role == "authors":
         humans = [c for c in people if c.get("type") != "agent"]
         agents = [c for c in people if c.get("type") == "agent"]
-        lines = ([f'<span class="byline-part">Authors: {", ".join(person(c, "author") for c in humans)}</span>']
+        lines = ([f'<span class="byline-part">Authors: {", ".join(person(c, "author", models) for c in humans)}'
+                  '</span>']
                  if humans else [])
         if agents:
-            lines.append(f'<span class="byline-part">Written with: {", ".join(person(c, "author") for c in agents)}'
-                         "</span>")
+            lines.append('<span class="byline-part">Written with: '
+                         f'{", ".join(person(c, "author", models) for c in agents)}</span>')
         return " ".join(lines)
     return None
 
@@ -806,9 +808,12 @@ def render(doc, file_url=None, ref_text=None, scores=None, pages=(), claim=None)
     extra = {"ref_text": ref_text} if ref_text else {}
     if claim is not None:
         extra["claim"] = claim
-    return pageview.render_parts(doc, file_url=file_url, number=number, person=person, marker=score_html.marker(scores),
-                               claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None, byline=byline,
-                               **extra)
+    return pageview.render_parts(doc, file_url=file_url, number=number,
+                                 person=lambda c, where: person(c, where, doc.get("models")),
+                                 marker=score_html.marker(scores),
+                                 claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None,
+                                 byline=lambda role, people: byline(role, people, doc.get("models")),
+                                 **extra)
 
 
 def contents(sections, more="", doc=None):
@@ -1639,7 +1644,7 @@ def _pending_about(it):
     paper = doc.get("paper") if isinstance(doc.get("paper"), dict) else {}
     people = [c for c in doc.get("contributors") or [] if isinstance(c, dict) and c.get("name")]
     humans = [esc(c["name"]) for c in people if c.get("type") != "agent"]
-    agents = [esc(c["name"]) for c in people if c.get("type") == "agent"]
+    agents = [esc(pageview.agent_name(c, doc.get("models"))) for c in people if c.get("type") == "agent"]
     byline = ", ".join(humans) + (f" · with {', '.join(agents)} (AI)" if agents else "")
     refs = len([b for b in doc.get("references") or [] if isinstance(b, dict)])
     claims = [c for c in doc.get("claims") or [] if isinstance(c, dict) and isinstance(c.get("id"), str)]

@@ -33,7 +33,7 @@ class TestPeople(unittest.TestCase):
     def test_the_page_view_gives_the_label(self):
         header = html.render_parts(with_people(P1={"name": "Claude Code", "label": "drafting"}))["header"]
         authors = re.search(r'<p class="cs-authors">.*?</p>', header, re.S).group(0)
-        self.assertIn('Claude Code <span class="cs-label">· drafting</span> (AI agent)', authors)
+        self.assertIn('Claude Code (Example model 1.0) <span class="cs-label">· drafting</span> (AI agent)', authors)
         plain = html.render_parts(with_people(P1={"name": "Claude Code"}))["header"]
         self.assertNotIn("cs-label", plain)
 

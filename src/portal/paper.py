@@ -452,7 +452,9 @@ class _View:
     def who(self, pid):
         p = self.people.get(pid, {})
         if p.get("type") == "agent":
-            return "an AI agent" + (f" ({p['label']})" if isinstance(p.get("label"), str) else "")
+            named = pageview.model_names(p, self.doc.get("models"))
+            return " and ".join(named) if named else (
+                "an AI agent" + (f" ({p['label']})" if isinstance(p.get("label"), str) else ""))
         return pageview._s(p.get("name") or pid)
 
     def record_fold(self, c):
@@ -467,7 +469,9 @@ class _View:
             for pid, ch in last.items():
                 if ch.get("outcome") == "confirmed":
                     agent = self.people.get(pid, {}).get("type") == "agent"
-                    line.append("checked independently by an AI agent" if agent
+                    named = pageview.model_names(self.people[pid], self.doc.get("models")) if agent else []
+                    line.append(f"checked independently by {esc(' and '.join(named))}" if named
+                                else "checked independently by an AI agent" if agent
                                 else f"confirmed by {esc(self.who(pid))}")
         plan = c.get("test") if isinstance(c.get("test"), dict) else c.get("estimate") if isinstance(
             c.get("estimate"), dict) else None

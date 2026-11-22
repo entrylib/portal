@@ -605,6 +605,42 @@ def origin(doc):
     return _origin(_Paper(doc))
 
 
+def model_names(c, models):
+    """The models an agent contributor ran on, by name, as people know them ("Claude Opus 5.5"): its `models`
+    entries looked up in the claimset's `models` (claimset §3.12), each a name and a version (the version left out
+    when the name ends with it), in the order the agent lists them, each once. Plain text; [] when none is known."""
+    by_id = {m.get("id"): m for m in models or [] if isinstance(m, dict) and isinstance(m.get("id"), str)}
+    out = []
+    for use in c.get("models") or [] if isinstance(c.get("models"), list) else []:
+        m = by_id.get(use.get("model")) if isinstance(use, dict) else None
+        if not m or not isinstance(m.get("name"), str) or not m["name"].strip():
+            continue
+        name = m["name"].strip()
+        version = str(m["version"]).strip() if isinstance(m.get("version"), (str, int, float)) else ""
+        if version and not name.endswith(version):
+            name = f"{name} {version}"
+        if name not in out:
+            out.append(name)
+    return out
+
+
+def agent_name(c, models):
+    """An agent contributor as the site names it (design §7.4): its model and the harness it ran in, "Claude Opus
+    5.5 in Claude Code"; an agent named otherwise than its harness keeps its name, "Review agent (Claude Opus 5.5)";
+    without a known model, its name alone. Plain text, to be escaped."""
+    name = c.get("name") if isinstance(c.get("name"), str) and c["name"].strip() else ""
+    names = model_names(c, models)
+    if not names:
+        return name or "an AI agent"
+    shown = " and ".join(names)
+    system = c.get("system").get("name") if isinstance(c.get("system"), dict) else None
+    if not name:
+        return shown
+    if isinstance(system, str) and system.strip() == name.strip():
+        return f"{shown} in {name.strip()}"
+    return f"{name.strip()} ({shown})"
+
+
 def _person(c, verified=False):
     name = esc(c.get("name", ""))
     orcid = c.get("orcid")
@@ -615,9 +651,11 @@ def _person(c, verified=False):
             f'{esc(orcid)}</a>)</span>')
 
 
-def _author(c, P=None, where="author"):
+def _author(c, P=None, where="author", models=None):
     """A person or agent named in the header: the site's way (`person`, render_parts), or plain text: a person with
     their ORCID link; an agent with its label after its name (v0.41: `Claude Code · drafting`) and "(AI agent)"."""
+    if P is not None:
+        models = P.doc.get("models")
     if P is not None and P.person is not None:
         shown = P.person(c, where)
         if isinstance(shown, str):
@@ -626,7 +664,7 @@ def _author(c, P=None, where="author"):
         return _person(c, True)
     if c.get("type") == "agent":
         label = c.get("label") if isinstance(c.get("label"), str) and c.get("label").strip() else None
-        return (f'{esc(c.get("name") or "an AI agent")}'
+        return (f'{esc(agent_name(c, models))}'
                 + (f' <span class="cs-label">· {esc(label.strip())}</span>' if label else "") + " (AI agent)")
     return _person(c)
 
@@ -718,7 +756,7 @@ def _header(P):
     meta = [m for m in meta if m]
     if meta:
         out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
-    credit = _contributions(people)
+    credit = _contributions(people, P.doc.get("models"))
     if credit:
         out.append(credit)
     if P.corrections:
@@ -738,7 +776,7 @@ CREDIT_NAMES = {"conceptualization": "Conceptualization", "data_curation": "Data
                 "writing_review_editing": "Writing – review & editing"}
 
 
-def _contributions(people):
+def _contributions(people, models=None):
     """The fold *Contributions* under the names (design §5.2): each contributor's CRediT roles, as the file states
     them; nothing when no contributor has any."""
     rows = []
@@ -746,7 +784,7 @@ def _contributions(people):
         roles = [r for r in c.get("credit_roles") or [] if isinstance(r, str)]
         if roles:
             names = ", ".join(esc(CREDIT_NAMES.get(r, r.replace("_", " ").capitalize())) for r in roles)
-            rows.append(f"<li>{_author(c)}: {names}</li>")
+            rows.append(f"<li>{_author(c, models=models)}: {names}</li>")
     if not rows:
         return ""
     return ('<details class="cs-credit"><summary>Contributions</summary><ul>' + "".join(rows) + "</ul></details>")

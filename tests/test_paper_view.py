@@ -557,3 +557,26 @@ def test_a_step_written_as_bare_latex_is_a_formula():
                  site.claimset_page(doc, base_url=BASE, listing=listing)):
         shown = re.sub(r"<annotation.*?</annotation>", "", page, flags=re.S)   # the TeX kept in the MathML
         assert "\\mu_1" not in shown and page.count('<span class="cs-step-math"><math') >= 2
+
+
+def test_an_agent_is_named_with_its_model():
+    """Design §7.4: "Claude Opus 5.5 in Claude Code", from the agent's models and the claimset's models list."""
+    from portal.page import agent_name, model_names
+    models = [{"id": "M1", "name": "Claude Opus", "version": "5.5"}, {"id": "M2", "name": "GPT-6", "version": "6"},
+              {"id": "M3", "name": "Model <b>", "version": None}]
+    code = {"type": "agent", "name": "Claude Code", "system": {"name": "Claude Code"}, "models": [{"model": "M1"}]}
+    assert agent_name(code, models) == "Claude Opus 5.5 in Claude Code"
+    two = {"type": "agent", "name": "Review agent", "system": {"name": "Codex CLI"},
+           "models": [{"model": "M1"}, {"model": "M2"}, {"model": "M1"}]}
+    assert agent_name(two, models) == "Review agent (Claude Opus 5.5 and GPT-6)"
+    assert agent_name({"type": "agent", "name": "Claude Code"}, models) == "Claude Code"          # none known
+    assert agent_name({"type": "agent", "models": [{"model": "M9"}]}, models) == "an AI agent"
+    assert model_names({"models": [{"model": "M3"}]}, models) == ["Model <b>"]
+    assert model_names({"models": "M1"}, models) == [] and model_names({"models": [{"model": "M1"}]}, "x") == []
+
+    doc = proofs()
+    doc["models"] = models
+    doc["contributors"].append({"id": "P9", "type": "agent", "name": "Claude Code", "positions": ["author"],
+                                "system": {"name": "Claude Code"}, "models": [{"model": "M3", "role": "sole"}]})
+    page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-17"}])
+    assert "Model &lt;b&gt; in Claude Code" in page and "Model <b>" not in page                 # escaped
