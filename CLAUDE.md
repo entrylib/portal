@@ -12,5 +12,6 @@
 
 ## Pull requests
 
+- Open pull requests into `preview`, never into `main`. Only `preview` is merged into `main`, by the maintainer, after its preview has been checked (`docs/deploy.md`, *Previews*); a check refuses any other pull request into `main`.
 - Keep the description short: a bulleted list of what was done, each item one or two sentences. No other sections.
 - Pull requests are reviewed and merged by a maintainer, never by the author's agent.

@@ -189,6 +189,13 @@ or `all`, which fits while the registry has fewer than about 150 papers (Cloudfl
 a paper writes about 130). Only the static pages work there: search, submitting, consent and the MCP server need the
 app. Nothing reaches the Droplet or entrylib.org, and the pages are kept out of search engines.
 
+**Branches.** Changes go into the branch `preview` by pull requests, never straight into `main`. `preview` is previewed
+by hand (Actions → Preview → Run workflow, branch `preview`, at `https://preview.entrylib-preview.pages.dev`), and only
+when it is right is it merged into `main`, by a pull request from `preview`, with a merge commit (not a squash, which
+would leave `preview` behind `main`). entrylib.org runs `main` alone. A ruleset on `main` requires pull requests and the
+check *Into main from preview only* (`.github/workflows/main-from-preview.yml`), which fails for a pull request from any
+other branch.
+
 Once, before the first preview (the workflow makes the Pages project, `entrylib-preview`, at its first run):
 
 1. **An API token.** Cloudflare dashboard → *Account API tokens* → **Create Token** → under *Custom Token*,
