@@ -707,6 +707,105 @@ INTERESTS_NOTE = ("Competing interests and funding, as the authors declare them,
                   "the score.")
 
 
+#: Artefact kinds as the Files pop-up names its groups, in the order it shows them.
+ARTEFACT_GROUPS = {
+    "data": "Data", "table": "Tables", "figure": "Figures", "code": "Code", "software": "Software", "model": "Models",
+    "proof": "Proofs and checks", "protocol": "Protocols", "manuscript": "Manuscripts", "lab_record": "Lab record",
+    "prompt": "Prompts", "trace": "Traces", "instrument": "Instruments", "stimulus": "Stimuli",
+    "codebook": "Codebooks", "recording": "Recordings", "other": "Other"}
+#: What an artefact's availability says, when it is not public (claimset spec, availability levels).
+AVAILABILITY = {"platform": "kept by EntryLib", "audit": "for auditors only", "author_only": "from the authors",
+                "unavailable": "not available", "not_stated": "availability not stated"}
+
+
+def _where(uri):
+    """Where an artefact is kept, in a few words: "GitHub, openforecast-org/smooth", "EntryLib", a host."""
+    m = re.match(r"https?://(?:www\.)?([^/]+)(/[^?#]*)?", str(uri or ""))
+    if not m:
+        return ""
+    host, path = m.group(1).lower(), [x for x in (m.group(2) or "").split("/") if x]
+    if host == "github.com" and len(path) >= 2:
+        return f"GitHub, {path[0]}/{path[1]}"
+    if host in ("entrylib.org", "localhost") or host.endswith("entrylib-preview.pages.dev"):
+        return "EntryLib"
+    return {"doi.org": "DOI", "zenodo.org": "Zenodo", "osf.io": "OSF"}.get(host, host)
+
+
+def _pinned(version):
+    """An artefact's fixed version, in a few words: "commit 8a5fbbb", "checksum 44eb8555…", or None."""
+    v = str(version or "").strip()
+    if re.fullmatch(r"[0-9a-f]{40}", v):
+        return f"commit {v[:7]}"
+    if v.startswith("sha256:"):
+        return f"checksum {v[7:15]}…"
+    return f"version {v}" if v else None
+
+
+def artefacts_help(doc, key):
+    """The Files row's pop-up of the artefacts (design §7.4, *A leaner paper page*): how many, whether they are
+    public, pinned to a fixed version and under which licences; then each, by kind, with its file name (the link),
+    what it is, where it is kept and at which version, its licence, and the claims that use it (directly or through
+    their evidence). The record's list stays the full account; this is what a reader asks first."""
+    arts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict) and isinstance(a.get("id"), str)]
+    if not arts:
+        return ""
+    evidence = {e.get("id"): e for e in doc.get("evidence") or [] if isinstance(e, dict)}
+    users = {a["id"]: [] for a in arts}
+    for c in doc.get("claims") or []:
+        if not isinstance(c, dict) or not isinstance(c.get("id"), str):
+            continue
+        named = {x for x in c.get("artefacts") or [] if isinstance(x, str)}
+        for sp in c.get("support") or []:
+            e = evidence.get(sp.get("evidence")) if isinstance(sp, dict) else None
+            if isinstance(e, dict):
+                named |= {x for x in e.get("artefacts") or [] if isinstance(x, str)}
+                named |= {e["artefact"]} if isinstance(e.get("artefact"), str) else set()
+        for x in named:
+            if x in users and c["id"] not in users[x]:
+                users[x].append(c["id"])
+    public = sum(1 for a in arts if (a.get("availability") or {}).get("level", "public") == "public")
+    pinned = sum(1 for a in arts if _pinned(a.get("version")))
+    licences = {}
+    for a in arts:
+        licences[a.get("licence") or "none stated"] = licences.get(a.get("licence") or "none stated", 0) + 1
+    n = len(arts)
+    summary = (f"{n} file{'s' if n != 1 else ''} behind the paper: "
+               + ("all public" if public == n else f"{public} public")
+               + (", all pinned to a fixed version (a commit or a checksum)" if pinned == n
+                  else f", {pinned} pinned to a fixed version") + ". Licences: "
+               + ", ".join(f"{esc(k)} ({v})" for k, v in sorted(licences.items(), key=lambda kv: -kv[1])) + ".")
+    groups = {}
+    for a in arts:
+        groups.setdefault(a.get("kind") if a.get("kind") in ARTEFACT_GROUPS else "other", []).append(a)
+    out = ['<h2 class="art-title">Artefacts</h2>', f'<p class="small">{summary}</p>']
+    for kind in ARTEFACT_GROUPS:
+        if kind not in groups:
+            continue
+        items = []
+        for a in groups[kind]:
+            uri = str(a.get("uri") or "")
+            name = uri.rstrip("/").rsplit("/", 1)[-1] or a["id"]
+            if re.fullmatch(r"[0-9a-f]{40}", name):                 # a repository at a commit
+                name = uri.split("/tree/")[0].rstrip("/").rsplit("/", 1)[-1]
+            link = (f'<a href="{esc(uri)}">{esc(name)}</a>' if uri.startswith(("http://", "https://"))
+                    else esc(name))
+            where = ", ".join(x for x in (_where(uri), _pinned(a.get("version"))) if x)
+            level = (a.get("availability") or {}).get("level", "public")
+            meta = [x for x in (where, esc(a.get("licence") or ""), AVAILABILITY.get(level, "")) if x]
+            used = users[a["id"]]
+            if used:
+                meta.append("used by " + ", ".join(f'<a href="/p/{key}#{esc(c)}">{esc(c)}</a>' for c in used))
+            items.append(f'<li><span class="art-name">{link}</span> <span class="art-id">{esc(a["id"])}</span>'
+                         f'<br>{esc(a.get("description") or "")}'
+                         + (f'<br><span class="small art-meta">{" · ".join(meta)}</span>' if meta else "")
+                         + "</li>")
+        out.append(f'<h3>{ARTEFACT_GROUPS[kind]} <span class="count">{len(groups[kind])}</span></h3>'
+                   f'<ul class="art-list">{"".join(items)}</ul>')
+    out.append(f'<p class="small"><a href="/p/{key}/record#artefacts">On the record page</a>, with everything the '
+               "claimset says of each.</p>")
+    return f'<template id="artefacts-help">{"".join(out)}</template>'
+
+
 def _lab_row(lab, doc, key):
     """The panel row of what is behind a lab paper (design §5.2): *Lab record*, with the record's reading view and its
     log; nothing for another paper. The artefacts are in the row *Files*, linked as a whole to the record's list,
@@ -734,7 +833,8 @@ def _panel(doc, parts, base_url, key, scores=None, lab=None):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
     arts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
-    files = ([f'<a href="/p/{key}/record#artefacts">Artefacts&nbsp;({len(arts)})</a>'] if arts else []) + [
+    files = ([f'<a href="/p/{key}/record#artefacts" data-help="artefacts-help" data-title="Artefacts">'
+              f'Artefacts&nbsp;({len(arts)})</a>'] if arts else []) + [
         f'<a href="/p/{key}@v{n}.json">JSON</a>']
     issues = (f'<br><a href="/p/{key}@v{n}.issues.txt">Issues as text, for an agent</a>' if scores else "")
     # One row of files (design §7.4, *A leaner paper page*): the reading view is the Text file for AI button's.
@@ -745,7 +845,7 @@ def _panel(doc, parts, base_url, key, scores=None, lab=None):
                         f'<a href="/p/{key}@v{n}.ris" download>RIS</a>', original)
             + _lab_row(lab, doc, key)
             + f'<div class="panel-row files-row"><h2>Files</h2><p class="small">{" · ".join(files)}{issues}</p>'
-            '</div></aside>')
+            f'{artefacts_help(doc, key)}</div></aside>')
 
 
 def reading_page(doc, view, base_url):

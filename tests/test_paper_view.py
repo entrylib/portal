@@ -326,7 +326,8 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     doc["artefacts"] += [{"id": "A3", "kind": "proof", "uri": files + "proofs.md", "description": "The proofs."},
                          {"id": "A4", "kind": "proof", "uri": files + "proofs.pdf", "description": "The same, as PDF."}]
     page = site.paper_page(doc, base_url=BASE, listing=listing)
-    assert "proofs.pdf" not in page.split('<article class="cs-body">')[0]   # the page itself is that document
+    head = page.split('<article class="cs-body">')[0].split('<template id="artefacts-help">')[0]
+    assert "proofs.pdf" not in head                  # the page itself is that document (the Files pop-up lists it)
     assert site.own_document(doc) is None
     doc["artefacts"].append({"id": "A5", "kind": "manuscript", "uri": files + "paper.PDF", "description": "The paper."})
     assert site.own_document(doc) == ("The paper as its authors wrote it", files + "paper.PDF")

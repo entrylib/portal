@@ -276,6 +276,13 @@ a.dots:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; cursor: help; }
 .dot-green { background: var(--cs-green); } .dot-amber { background: var(--cs-amber); } .dot-red { background: var(--cs-red); }
 .lowest { margin: 6px 0 0; }
+/* the Files row's pop-up of the artefacts */
+.art-title { margin: 0 52px 6px 0; font-size: 22px; }
+.art-list { list-style: none; margin: 4px 0 14px; padding: 0; }
+.art-list li { margin: 0 0 10px; overflow-wrap: anywhere; }
+.art-name { font-weight: 600; }
+.art-id, .art-meta, h3 .count { color: var(--muted); }
+h3 .count { font-weight: 400; }
 /* the panel's Cite row: the identifier copies itself, Text copies the citation (page.js) */
 .cite-id.copyable { cursor: pointer; border-bottom: 1px dotted var(--muted); }
 .cite-id.copyable:hover, .cite-id.copyable:focus-visible { color: var(--accent); }

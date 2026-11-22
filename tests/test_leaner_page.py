@@ -55,3 +55,22 @@ def test_the_breakdown_lists_each_kind_of_problem_once():
     assert '<td class="num" title="C1, C2">2 claims</td>' in html and '<td class="num" title="C1">1 claim</td>' in html
     one = score_html._paper_problems(scores, ["P1", "P2"])                # one of a kind: an entry of its own
     assert "<table" not in one and one.count("<li>") == 2
+
+
+def test_the_artefacts_pop_up_says_what_each_file_is_and_who_uses_it():
+    doc = {"artefacts": [
+        {"id": "A1", "kind": "code", "uri": "https://github.com/o/r/blob/" + "a" * 40 + "/run.py", "version": "a" * 40,
+         "licence": "MIT", "description": "The script."},
+        {"id": "A2", "kind": "table", "uri": "https://entrylib.org/p/2026.000001/v1/files/out.csv",
+         "version": "sha256:" + "b" * 64, "description": "The results.", "availability": {"level": "author_only"}}],
+        "evidence": [{"id": "E1", "artefact": "A2", "artefacts": ["A1"]}],
+        "claims": [{"id": "C1", "support": [{"evidence": "E1"}]}, {"id": "C2", "artefacts": ["A1"]}]}
+    html = site.artefacts_help(doc, "2026.000001")
+    assert html.startswith('<template id="artefacts-help">') and "2 files behind the paper: 1 public" in html
+    assert "all pinned to a fixed version" in html and "Licences: MIT (1), none stated (1)." in html
+    assert html.index("<h3>Tables") < html.index("<h3>Code")
+    assert '<a href="https://github.com/o/r/blob/' in html and ">run.py</a>" in html
+    assert "GitHub, o/r, commit aaaaaaa · MIT · used by" in html and "EntryLib, checksum bbbbbbbb…" in html
+    assert "from the authors" in html
+    assert 'used by <a href="/p/2026.000001#C1">C1</a>, <a href="/p/2026.000001#C2">C2</a>' in html
+    assert site.artefacts_help({"artefacts": []}, "k") == ""
