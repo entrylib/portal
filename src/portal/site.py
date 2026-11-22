@@ -1339,8 +1339,9 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
             f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{note}'
             f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}'
             f'{ask_ai(doc, base_url, cid)}</div>'
-            f'{panel}'
-            f'{nav}<article class="cs-body">{body}'
+            # the paper view's grid: one column of text, the panel in the rail at its right (as the paper's page)
+            + (f'<div class="entry-rail">{panel}</div>' if view == "paper" else f'{panel}{nav}')
+            + f'<article class="cs-body">{body}'
             f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}{extra}'
             '</article></div>')
     if view == "paper":                                  # what is not on this page is on the paper's (or its record)

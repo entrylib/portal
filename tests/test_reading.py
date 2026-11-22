@@ -201,6 +201,8 @@ def test_claim_pages(env):
     # *A leaner paper page*)
     assert re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', body)[0] == "claim"
     assert '<article class="pv-claim" id="C2">' in body and 'aria-label="Views of this claim"' in body
+    # the paper view's grid: the panel in the rail, as on the paper's page (else the text is squeezed into a column)
+    assert '<div class="entry-rail"><aside class="panel" aria-label="About this claim">' in body
     assert f'href="/p/{KEY}/C2/record"' in body and f'href="/p/{KEY}/C2" aria-current="page"' in body
     record = (out / "p" / KEY / "C2" / "record.html").read_text()
     sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', record)
