@@ -138,7 +138,7 @@ def score_block(score, band, popup):
 
 
 def panel_rows(scores, lights=None):
-    """The panel's first rows: Support and novelty, then the claims by band (without scores: by support
+    """The panel's first rows: Support, with the lowest claim, and Novelty (without scores: the claims by support
     light, from the page view)."""
     if not scores or not scores.get("paper"):
         names = {"green": "checkable", "amber": "not checkable", "red": "unsupported"}
@@ -161,16 +161,19 @@ def panel_rows(scores, lights=None):
     # Only a close match the authors do not acknowledge says something while the library is small.
     check = "in question: a close match on EntryLib is not acknowledged" if "unacknowledged" in checks else ""
     novelty = ", ".join(f"{v} {k}" for k, v in labels.items()) or "–"
-    rows = "".join(f'<li><span class="score-badge small band-{b}">{counts[b]}</span>{w.lower()}</li>'
-                   for b, w in BANDS.items())
+    # The claims by band are not listed: the score counts them. The lowest claim is the one fact the mean hides
+    # (design §7.4, *A leaner paper page*).
+    lowest = ""
+    if p.get("lowest") and p.get("lowest_score") is not None:
+        lowest = (f'<p class="small lowest">Lowest claim: <a href="#{esc(p["lowest"])}">{esc(p["lowest"])}</a>, '
+                  f'{esc(p["lowest_score"])}</p>')
     return (f'<div class="panel-row score-row"><h2>{NAME}</h2>'
-            + score_block(p["score"], p["band"], "score-paper") + dot_list(scores)
-            + f'<p class="novelty-row"><span class="novelty-label">Novelty</span> {esc(novelty)}'
-            + (f'<span class="small"> · {esc(check)}</span>' if check else "")
-            + ' · <a class="small" href="/about#quality" data-help="novelty-help" data-title="Novelty">'
-              'What is this?</a>'
-            + "</p>" + novelty_help(scores) + "</div>"
-            f'<div class="panel-row"><h2>Claims</h2><ul class="bands">{rows}</ul></div>')
+            + score_block(p["score"], p["band"], "score-paper") + dot_list(scores) + lowest + "</div>"
+            + '<div class="panel-row novelty-row"><h2>Novelty</h2>'
+            + f'<p class="small">{esc(novelty)}'
+            + (f' · {esc(check)}' if check else "")
+            + ' · <a href="/about#quality" data-help="novelty-help" data-title="Novelty">What is this?</a>'
+            + "</p>" + novelty_help(scores) + "</div>")
 
 
 def novelty_help(scores):
@@ -215,6 +218,49 @@ def _problem(scores, pid, cost=None):
             + f' <span class="fix">To remove it: {text.html(p["fix"])}</span></li>')
 
 
+#: What a group of problems of one check is called in the paper's breakdown, when there are several.
+GROUP_TITLES = {"unchecked_assumption": "Assumptions not checked"}
+
+
+def _paper_problems(scores, pids):
+    """The paper's problems, each kind once (design §7.4, *A leaner paper page*): problems of one check with one fix
+    and an object each (the unchecked assumptions) make one entry, with the fix once and a table of the objects, what
+    each says, its cost and how many claims it touches (the claims on hover); any other problem is its own entry."""
+    groups, order = {}, []
+    for pid in pids:
+        p = scores["problems"][pid]
+        key = (p.get("check"), p.get("fix")) if p.get("check") in GROUP_TITLES and p.get("objects") else pid
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(pid)
+    out = []
+    names = dict(_groups())
+    for key in order:
+        members = groups[key]
+        if len(members) == 1:
+            out.append(_problem(scores, members[0]))
+            continue
+        first = scores["problems"][members[0]]
+        costs = sorted({scores["problems"][m]["cost"] for m in members})
+        cost = f"−{costs[-1]}" if len(costs) == 1 else f"−{costs[0]} to −{costs[-1]}"
+        rows = []
+        for m in members:
+            q = scores["problems"][m]
+            obj = q["objects"][0]
+            said = str(q["text"]).split(": ", 1)[1] if ": " in str(q["text"]) else q["text"]
+            claims = q.get("claims") or []
+            n = len(claims)
+            rows.append(f'<tr><td><a href="#{esc(obj)}">{esc(obj)}</a></td><td>{text.html(_sentence(said))}</td>'
+                        f'<td class="num">−{q["cost"]}</td><td class="num" title="{esc(", ".join(claims))}">'
+                        f'{n} claim{"s" if n != 1 else ""}</td></tr>')
+        out.append(f'<li><span class="cost">{cost}</span> <span class="group">'
+                   f'{esc(names.get(first["group"], first["group"]))}</span> {esc(GROUP_TITLES[first["check"]])}'
+                   f'<table class="problem-table"><tbody>{"".join(rows)}</tbody></table>'
+                   f'<span class="fix">To remove each: {text.html(first["fix"])}</span></li>')
+    return "".join(out)
+
+
 def _claim_explain(scores, cid):
     c = scores["claims"][cid]
     problems = "".join(_problem(scores, pid, c["costs"][pid]) for pid in c["problems"])
@@ -250,11 +296,10 @@ def section(scores, issues_url=None, paper=None, url=None):
     out = [f'<section class="cs-section score-section" id="score"{named}><h2>Score</h2>']
     p = scores.get("paper")
     if p:
-        problems = "".join(_problem(scores, pid) for pid in p["problems"])
+        problems = _paper_problems(scores, p["problems"])
         out.append(f'<div class="score-explain" id="score-paper"><h3>{NAME} of the paper: '
                    f'<span class="band-{p["band"]}">{p["score"]}, {BANDS[p["band"]]}</span></h3>{note}'
-                   f'<p>{_basis(p)}. Open problems in the principal claims and what they rest on, each '
-                   f'counted once, with the most it costs a claim:</p>'
+                   f'<p>{_basis(p)}. What lowered it, each problem once, with the most it costs a claim:</p>'
                    + (f'<ol class="problems">{problems}</ol>' if problems else "<p>None.</p>") + "</div>")
     out.append("<h3>Claims</h3>")
     for cid in scores["claims"]:

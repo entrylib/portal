@@ -273,13 +273,13 @@ def test_robots_and_for_models(env):
     assert ", for programs" not in page
     # Ask your AI (design §7.4): a button copying a message that names the reading view's web page
     assert 'data-copy="ask-message"' in page and ">Ask your AI about this paper</button>" in page
-    message = re.search(r'<p class="cite-text" id="ask-message">(.*?)</p>', page).group(1)
+    message = re.search(r'<span class="ask-message" id="ask-message" hidden>(.*?)</span>', page).group(1)
     assert message.startswith(f"Read {BASE}/p/{KEY}@v1.read, a research paper") and "instead of guessing" in message
     claim = (out / "p" / KEY / "C2.html").read_text()
     assert ">Ask your AI about this claim</button>" in claim and f"Read {BASE}/p/{KEY}/C2, one claim" in claim
     # beside it, the reading view as a file to attach, for an assistant that cannot open the address
-    assert f'href="/p/{KEY}@v1.txt" download="entrylib-{KEY}-v1.txt">Text file for AI</a>' in page
-    assert f'href="/p/{KEY}/C2.txt" download="entrylib-{KEY}-v1-C2.txt">Text file for AI</a>' in claim
+    assert f'href="/p/{KEY}@v1.txt" download="entrylib-{KEY}-v1.txt" title="' in page
+    assert f'href="/p/{KEY}/C2.txt" download="entrylib-{KEY}-v1-C2.txt" title="' in claim
 
 
 def test_a_proposed_subfield_is_kept(env):
@@ -363,7 +363,7 @@ def test_reading_aids(env):
     out = ctx["published_dir"]
     page = (out / "p" / f"{KEY}.html").read_text()
     assert '<body id="top">' in page and f"<ol>{site.TOC_TOP}" in page
-    assert f"<ol>{site.TOC_TOP}" in (out / "p" / KEY / "C2.html").read_text()
+    assert f"<ol>{site.TOC_TOP}" in (out / "p" / KEY / "C2" / "record.html").read_text()   # a claim's record
     assert 'data-copy="cite-text"' in page and "copy-link" not in page
     guarantor = next(c for c in example()["contributors"] if "guarantor" in c.get("positions", []))
     assert f'<a class="guarantor-link" href="/people/{guarantor["orcid"]}">{site.esc(guarantor["name"])}</a>' in page

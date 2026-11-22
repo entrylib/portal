@@ -25,7 +25,10 @@ def test_the_score_says_what_it_measures(env):
     assert re.search(r'<p class="small score-why"><a href="#score" data-popup="score-paper">Why \d+\?</a></p>', panel)
     assert "Conflicts of interest</h2>" in panel and "principal claim" not in panel.split("score-why")[0]
     assert not any(f">{w}<" in page.split('<aside class="panel"')[1][:3000] for w in score_html.BANDS.values())
-    assert "Issues as text, for an agent" in page.split('<h2>For models</h2>')[1]   # agent links in their row
+    files = page.split('<h2>Files</h2>')[1].split("</div>")[0]            # one row of files (design §7.4)
+    assert "Issues as text, for an agent" in files and ">JSON</a>" in files and "Reading view" not in panel
+    assert "<h2>For models</h2>" not in panel and "<h2>Claims</h2>" not in panel
+    assert re.search(r'Lowest claim: <a href="#C\d+">C\d+</a>, \d+', panel)
     assert "no close match on EntryLib" not in page                     # says nothing while the library is small
     home = (out / "index.html").read_text()
     assert "Checks the record, not the science" not in home or "not peer review" in home
@@ -297,7 +300,12 @@ def test_a_paper_its_authors_prepared_says_so():
         assert "Converted by its authors" in site.card(doc)
         line = site._origin_line(doc, "native", None)
         assert ('Converted by its authors from their paper: <a href="https://doi.org/10.1/x">The article, 2025</a>'
-                in line)
+                in line)                                       # no date in brackets: the description as it is
+        doc["artefacts"][-1]["description"] = "LaTeX source of the draft 'A long title' (October 2026)."
+        assert site._origin_line(doc, "native", None) == (
+            '<p class="origin-line">Converted from the authors&#x27; <a href="https://doi.org/10.1/x" '
+            'title="LaTeX source of the draft &#x27;A long title&#x27; (October 2026)">LaTeX draft</a> '
+            "(October 2026)</p>")
     assert site.own_paper({"artefacts": [{"kind": "manuscript", "uri": "doi:10.1/y"}]})[0] == "https://doi.org/10.1/y"
 
 

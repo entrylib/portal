@@ -50,9 +50,6 @@ RELATION = {"supports": "Supports", "contradicts": "Contradicts", "extends": "Ex
             "replicates": "Repeats", "fails_to_replicate": "Does not repeat", "supersedes": "Supersedes",
             "addresses": "Answers", "explains": "Explains", "qualifies": "Qualifies",
             "disputes_evidence": "Disputes the evidence of"}
-NOVELTY = {"extension": "extends earlier work", "no_prior_found": "no earlier result found",
-           "replication": "repeats an earlier result", "refutation": "refutes an earlier result",
-           "synthesis": "states what earlier work establishes"}
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
           "November", "December")
 #: The most figures shown under a claim; the rest open in the viewer.
@@ -485,17 +482,13 @@ class _View:
         strengths = [f"{a.get('strength')} support, by its {a.get('by')}" for a in _dicts(c.get("assessments"))
                      if a.get("strength")]
         line += [esc(s) for s in strengths]
-        rows.append(("Claim", " · ".join(esc(pageview._s(x).replace("_", " ")) for x in (
-            cid, c.get("type"), c.get("role"), NOVELTY.get(c.get("novelty"), c.get("novelty"))) if x)))
         if plan and plan.get("lab_plan"):
             what = "Test" if isinstance(c.get("test"), dict) else "Estimate"
             when = f", recorded {_day(c['planned_at'])}" if c.get("planned_at") else ""
             rows.append(("Plan", f"{what} planned in lab plan {esc(plan['lab_plan'])}{when}"))
-        ev = [f'<a href="{esc(self.record)}#{esc(sp["evidence"])}">{esc(sp["evidence"])}</a>'
+        ev = [f'<a href="{esc(self.record)}#{esc(sp["evidence"])}">Evidence {esc(sp["evidence"])}</a>'
               for sp in _dicts(c.get("support")) if isinstance(sp.get("evidence"), str)]
-        if ev:
-            rows.append(("Evidence", ", ".join(ev) + " in the record"))
-        elif kinds:
+        if not ev and kinds:
             rows.append(("Support", esc(", ".join(pageview._s(k).replace("_", " ") for k in kinds if k))))
         for ch in _dicts(c.get("checks")):
             res = f" <i>{esc(ch['resolution'])}</i>" if isinstance(ch.get("resolution"), str) else ""
@@ -511,12 +504,14 @@ class _View:
         sc = self.scores.get(cid) if isinstance(self.scores, dict) else None
         if isinstance(sc, dict) and sc.get("score") is not None:
             # the number opens the claim's breakdown (the Score section's, as a pop-up)
-            rows.append(("Support score", f"{score_html.badge(self.all_scores, cid, small=True)} of 100. "
-                                          f"The score checks the record, not the science."))
-        rows.append(("Record", f'<a href="{esc(self.record)}#{esc(cid)}">This claim on the record page</a>'))
+            rows.append(("Support score", f"{score_html.badge(self.all_scores, cid, small=True)} of 100"))
+        # one line of links (design §7.4, *A leaner paper page*): the claim's ID, type and role are its heading's
+        # and tags', and the score's caption is the panel's
+        links = [f'<a href="{esc(self.record)}#{esc(cid)}">On the record page</a>'] + ev
         own = self.claim_url(cid) if callable(self.claim_url) else None
         if isinstance(own, str) and own:
-            rows.append(("To cite it", f'<a class="cs-claim-page" href="{esc(own)}">The page of this claim</a>'))
+            links.append(f'<a class="cs-claim-page" href="{esc(own)}">The page of this claim</a>')
+        rows.append(("Links", " · ".join(links)))
         dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
         shown = " · ".join(line) if line else "What the record holds of this claim"
         return (f'<details class="pv-record"><summary><span class="pv-record-line">{shown}</span>'
@@ -539,10 +534,15 @@ class _View:
         name = self.name(cid)
         tags = [f'<span class="pv-how pv-key">{KEY_CLAIM}</span>'] if cid in self.key else []
         tags += [f'<span class="pv-how">{esc(how)}</span>'] if how else []
-        head = (f'<h3><span class="pv-claim-id">{self.called(c)} {esc(cid)}{"." if name else ""}</span> '
-                f'{("<span class=" + chr(34) + "pv-name" + chr(34) + ">" + esc(name) + "</span> ") if name else ""}'
-                f'{("<span class=" + chr(34) + "pv-tags" + chr(34) + ">" + "".join(tags) + "</span>") if tags else ""}'
-                f'</h3>')
+        # one line: "Claim C1." (a link to the claim's own page, where it has one) and the name, the tags at the
+        # right (design §7.4, *A leaner paper page*)
+        called = f"{self.called(c)} {esc(cid)}{'.' if name else ''}"
+        own = self.claim_url(cid) if callable(self.claim_url) else None
+        if isinstance(own, str) and own:
+            called = f'<a class="pv-claim-link" href="{esc(own)}" title="The page of this claim">{called}</a>'
+        head = (f'<h3><span class="pv-head-text"><span class="pv-claim-id">{called}</span>'
+                + (f' <span class="pv-name">{esc(name)}</span>' if name else "") + "</span>"
+                + (f'<span class="pv-tags">{"".join(tags)}</span>' if tags else "") + "</h3>")
         summary = c.get("summary")
         plain = (f'<p class="pv-summary">{self.text(summary)}</p>'
                  if isinstance(summary, str) and summary.strip() else "")
@@ -625,12 +625,28 @@ def render(doc, record, file_url=None, ref_text=None, number=None, scores=None, 
                      '<section class="cs-section pv-section" id="claims"><h2>Claims</h2>'
                      # what a reader needs to know of the layout; not the order of the claims (removed on
                      # 18 November 2026: design §7.4, *Paper view*)
-                     '<p class="pv-lead">'
-                     'A term is defined before the claim that first uses it, and what supports a claim stands under '
-                     'its statement.<button type="button" class="button-quiet pv-open-all" hidden '
+                     # the button alone: the layout explains itself (design §7.4, *A leaner paper page*)
+                     '<p class="pv-lead"><button type="button" class="button-quiet pv-open-all" hidden '
                      'data-open="Open all proofs" data-close="Close all proofs">Open all proofs</button></p>'
                      f'{claims}{other}</section>')]
         return {"sections": sections, "extra": "".join(V.galleries.values()) + "".join(V.panels),
                 "parts": [(f"sec-{i}", title, list(cids)) for i, (title, cids) in enumerate(V.parts, 1)]}
+    finally:
+        DIGITS.reset(token)
+
+
+def claim_block(doc, cid, record, file_url=None, ref_text=None, number=None, scores=None, claim_url=None):
+    """One claim as the paper view shows it, for the claim's own page (design §7.4, *A leaner paper page*): the same
+    block, made by the same code, with every term it uses before it (on its own page no term has been met yet).
+    (html, extra, users): `extra` is what the block's pop-ups and viewer need, which the page appends; `users`, the
+    claims of the paper that depend on it or use it in a proof."""
+    token = DIGITS.set(number if callable(number) else None)
+    try:
+        P = pageview._Paper(doc, file_url=file_url, ref_text=ref_text)
+        V = _View(doc, record, P, scores, claim_url)
+        block = V.claim(V.claims[cid])
+        users = sorted((x for x, c in V.claims.items()
+                        if x != cid and (cid in _strs(c.get("depends_on")) or cid in V.needs(c))), key=_number_of)
+        return block, "".join(V.galleries.values()) + "".join(V.panels), users
     finally:
         DIGITS.reset(token)
