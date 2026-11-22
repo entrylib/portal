@@ -32,8 +32,8 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert {f.name for f in (out / "p" / KEY).glob("C*")} == \
         {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")} | {"C2.html", "C2"}  # a page for the principal claim
     assert (out / "p" / KEY / "C2" / "record.html").is_file()                        # and its record
-    assert text.rstrip().endswith(f"{concept}@v1. {BASE}/p/{KEY}@v1") and "HOW TO CITE" in text
-    assert "This claim: " in text and f"{concept}@v1#C2. {BASE}/p/{KEY}/C2" in text
+    assert text.rstrip().endswith(f"{BASE}/p/{KEY}@v1 Identifier: {concept}@v1.") and "HOW TO CITE" in text
+    assert "This claim: " in text and f"{BASE}/p/{KEY}/C2 Identifier: {concept}@v1#C2." in text
     view = (out / "p" / f"{KEY}.txt").read_text()
     assert "HOW TO CITE" in view and f"{concept}@v1#C2 for claim C2" in view and f"{BASE}/p/{KEY}/C2." in view
     page = (out / "p" / f"{KEY}.html").read_text()

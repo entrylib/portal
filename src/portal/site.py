@@ -328,9 +328,7 @@ def _who(doc):
         names.append(f"{last}, {_initials(given)}".rstrip(", ") if given else last)
     who = ", ".join(names[:-1]) + (", & " if len(names) > 2 else " & ") + names[-1] if len(names) > 1 else \
         (names[0] if names else SITE)
-    if as_guarantor and people:
-        who += " (guarantor)"
-    return who
+    return who                                  # no role: the guarantor stands as an author (design §7.8)
 
 
 def citation_text(doc, base_url, claim=None):
@@ -338,14 +336,31 @@ def citation_text(doc, base_url, claim=None):
     versioned identifier (entrylib:2026.000001@v3#C4) and gives the address of the claim's page."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
-    src = _source(doc)
-    title = p.get("title", "")
-    if src:
-        title += f" [Claimset converted from {src}]"
+    title = str(p.get("title", "")).rstrip(".")
+    # APA, without bracketed descriptions: how it was made is the BibTeX and RIS note's (design §7.8)
     if claim:
-        return (f"{_who(doc)} ({_year(doc)}). Claim {claim}, in: {title}. {SITE}. {p['id']}@v{n}#{claim}. "
+        return (f"{_who(doc)} ({_year(doc)}). Claim {claim}. In {title} (Version {n}). {SITE}. "
                 f"{base_url}/p/{key}/{claim}")
-    return f"{_who(doc)} ({_year(doc)}). {title}. {SITE}. {p['id']}@v{n}. {base_url}/p/{key}@v{n}"
+    return f"{_who(doc)} ({_year(doc)}). {title} (Version {n}). {SITE}. {base_url}/p/{key}@v{n}"
+
+
+def citation_made(doc):
+    """How a claimset was made, for the note of its BibTeX and RIS entries (design §7.8): "Claimset, written with
+    Claude Opus 5.5 and Claude Sonnet 5.5", or "Claimset converted from doi:… with …", then its identifier. The
+    models as the byline names them, each once, "and others" after two."""
+    p = doc["paper"]
+    models = doc.get("models")
+    names = []
+    for c in doc.get("contributors") or []:
+        if isinstance(c, dict) and c.get("type") == "agent":
+            name = pageview.agent_name(c, models)
+            if name and name not in names:
+                names.append(name)
+    shown = " and ".join(names) if len(names) <= 2 else f"{', '.join(names[:2])} and others"
+    src = _source(doc)
+    made = (f"Claimset converted from {src}" + (f" with {shown}" if names else "")) if src else \
+        ("Claimset, written with " + shown if names else "Claimset")
+    return f"{made}. {p['id']}@v{p.get('version')}"
 
 
 def citation_note(doc, base_url, claim=None):
@@ -354,11 +369,12 @@ def citation_note(doc, base_url, claim=None):
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     out = ["", "HOW TO CITE"]
+    # the citation (APA) and, for an agent citing in its own words, the identifier (design §7.8)
     if claim:
-        out.append(f"This claim: {citation_text(doc, base_url, claim)}")
-        out.append(f"The claimset it is from: {citation_text(doc, base_url)}")
+        out.append(f"This claim: {citation_text(doc, base_url, claim)} Identifier: {p['id']}@v{n}#{claim}.")
+        out.append(f"The claimset it is from: {citation_text(doc, base_url)} Identifier: {p['id']}@v{n}.")
     else:
-        out.append(f"This claimset: {citation_text(doc, base_url)}")
+        out.append(f"This claimset: {citation_text(doc, base_url)} Identifier: {p['id']}@v{n}.")
         first = (claim_pages(doc) or ["C1"])[0]
         out.append(f"One claim of it: by its identifier, as {p['id']}@v{n}#{first} for claim {first}."
                    + (f" Each principal claim has its own page, as {base_url}/p/{key}/{first}." if claim_pages(doc)
@@ -379,10 +395,8 @@ def bibtex(doc, base_url):
     people, _ = cited_people(doc)
     authors = " and ".join(_bib_escape(", ".join(x for x in _split_name(c.get("name")) if x)) for c in people)
     fields = [("title", _bib_escape(p.get("title"))), ("author", authors), ("year", _year(doc)),
-              ("howpublished", f"{SITE}, claimset {p['id']}@v{n}"), ("url", f"{base_url}/p/{key}@v{n}")]
-    src = _source(doc)
-    if src:
-        fields.append(("note", "Converted from " + _bib_escape(src)))
+              ("version", n), ("howpublished", SITE), ("url", f"{base_url}/p/{key}@v{n}"),
+              ("note", _bib_escape(citation_made(doc)))]
     body = ",\n".join(f"  {k} = {{{v}}}" for k, v in fields if v)
     return f"@misc{{entrylib{key}v{n},\n{body}\n}}\n"
 
@@ -395,10 +409,7 @@ def ris(doc, base_url):
     lines += [f"AU  - {', '.join(x for x in _split_name(c.get('name')) if x)}" for c in people]
     lines += [f"PY  - {_year(doc)}", f"DA  - {str(p.get('date') or '').replace('-', '/')}", f"PB  - {SITE}",
               f"ID  - {p['id']}@v{n}", f"UR  - {base_url}/p/{key}@v{n}"]
-    src = _source(doc)
-    if src:
-        lines.append(f"N1  - Converted from {src}")
-    lines.append("ER  - ")
+    lines += [f"ET  - Version {n}", f"N1  - {citation_made(doc)}", "ER  - "]
     return "\r\n".join(line.replace("\r", " ").replace("\n", " ") for line in lines) + "\r\n"
 
 

@@ -5,13 +5,14 @@ from portal import score_html, site
 
 def test_written_with_names_each_model_once_with_all_its_labels():
     models = [{"id": "M1", "provider": "Anthropic", "name": "Claude Opus", "version": "5.5"}]
-    agents = [{"type": "agent", "models": ["M1"], "harness": {"name": "Claude Code"}},
-              {"type": "agent", "models": ["M1"], "label": "drafting", "harness": {"name": "Claude Code"}},
-              {"type": "agent", "models": ["M1"], "label": "correction"},
-              {"type": "agent", "models": ["M1"], "label": "drafting"}]
+    agents = [{"type": "agent", "models": [{"model": "M1"}], "harness": {"name": "Claude Code"}},
+              {"type": "agent", "models": [{"model": "M1"}], "label": "drafting", "harness": {"name": "Claude Code"}},
+              {"type": "agent", "models": [{"model": "M1"}], "label": "correction"},
+              {"type": "agent", "models": [{"model": "M1"}], "label": "drafting"}]
     out = site._agents(agents, models)
     assert len(out) == 1
     name = site.pageview.agent_name(agents[0], models)
+    assert name == "Claude Opus 5.5"
     assert f"{name} <span class=\"cs-label\">· drafting, correction</span></span>" in out[0]
     assert out[0].count("<svg") == 1
 

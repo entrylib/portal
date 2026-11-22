@@ -194,8 +194,19 @@ def test_citations():
     doc = example()
     doc["paper"].update(id="entrylib:2026.000007", version=2, date="2026-11-04", status="active")
     text = site.citation_text(doc, BASE)
-    assert text == (f"Researcher, A. (guarantor) (2026). {doc['paper']['title']}. EntryLib. "
-                    f"entrylib:2026.000007@v2. {BASE}/p/2026.000007@v2")
+    # APA, no role, no bracket (design §7.8)
+    assert text == (f"Researcher, A. (2026). {doc['paper']['title'].rstrip('.')} (Version 2). EntryLib. "
+                    f"{BASE}/p/2026.000007@v2")
+    bib = site.bibtex(doc, BASE)
+    assert "version = {2}" in bib and "howpublished = {EntryLib}" in bib
+    assert "note = {Claimset" in bib and "entrylib:2026.000007@v2}" in bib
+    assert "N1  - Claimset" in site.ris(doc, BASE) and "ET  - Version 2" in site.ris(doc, BASE)
+    doc["contributors"] = list(doc.get("contributors") or []) + [
+        {"id": "P9", "type": "agent", "models": [{"model": "M9"}], "label": "drafting"},
+        {"id": "P10", "type": "agent", "models": [{"model": "M9"}], "label": "checking"}]
+    doc["models"] = [{"id": "M9", "provider": "Anthropic", "name": "Claude Opus", "version": "5.5"}]
+    made = site.citation_made(doc)
+    assert made.count("Claude Opus") == 1 and made.startswith("Claimset, written with ")
     doc["paper"]["title"] = "Costs {50%} & $x_1$"
     bib = site.bibtex(doc, BASE)
     assert r"title = {Costs \{50\%\} \& \$x\_1\$}" in bib and "author = {Researcher, A.}" in bib
