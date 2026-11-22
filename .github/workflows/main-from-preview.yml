@@ -1,0 +1,27 @@
+name: Into main from preview only
+
+# Changes go into the branch preview by pull requests, are checked there in a preview of the website (docs/deploy.md,
+# "Previews"), and reach main only when preview itself is merged into it. A ruleset on main requires this check, so a
+# pull request into main from any other branch cannot be merged.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  only-preview:
+    name: Into main from preview only
+    runs-on: ubuntu-latest
+    steps:
+      - name: The pull request comes from preview
+        env:
+          HEAD: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD" != "preview" ] || [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "Only the branch preview of $REPO is merged into main: open this pull request into preview." >&2
+            exit 1
+          fi
