@@ -546,12 +546,42 @@ class _View:
         summary = c.get("summary")
         plain = (f'<p class="pv-summary">{self.text(summary)}</p>'
                  if isinstance(summary, str) and summary.strip() else "")
-        return (f'<article class="pv-claim" id="{esc(cid)}">{self.terms_block(c)}{head}{plain}'
-                f'{self.statement(c.get("statement"))}'
+        # in order (design §7.4, *A leaner paper page*): the heading, the terms it uses, the assumptions it rests on,
+        # the claim itself, its proof or evidence, earlier work, the record
+        return (f'<article class="pv-claim" id="{esc(cid)}">{head}{self.terms_block(c)}{self.assumes_line(c)}'
+                f'{plain}{self.statement(c.get("statement"))}'
                 f'{self.support(c)}{self.beside(c)}{self.remarks(c)}'
                 # the earlier wordings and merged hypotheses that went into it, folded (design §7.6, *Not claimed*)
                 f'{pageview.earlier_block(self.P.not_claimed, cid, self.P.text, self.P.lab_record, self.P.hypotheses)}'
                 f'{self.record_fold(c)}</article>')
+
+    def assumes(self, c):
+        """The assumptions a claim rests on: those it depends on or its proof uses, and theirs, through the claims
+        between (as the score counts them), in their order."""
+        seen, out, todo = {c["id"]}, [], [c]
+        while todo:
+            x = todo.pop()
+            e = self.proof(x)
+            deps = _strs(x.get("depends_on")) + [
+                b for st in _dicts((e or {}).get("steps")) for b in _strs(st.get("by"))]
+            for d in deps:
+                if d in seen or d not in self.claims:
+                    continue
+                seen.add(d)
+                if d in self.assumed:
+                    out.append(d)
+                else:
+                    todo.append(self.claims[d])
+        return sorted(out, key=_number_of)
+
+    def assumes_line(self, c):
+        """The assumptions a claim rests on, as their IDs, each opening the assumption in a pop-up (page.js)."""
+        ids_ = self.assumes(c)
+        if not ids_:
+            return ""
+        links = " · ".join(self.xref(a, bare=True) for a in ids_)
+        word = "Assumptions" if len(ids_) != 1 else "Assumption"
+        return f'<p class="pv-assumes"><span class="pv-label">{word}</span> {links}</p>'
 
     # ---------- terms ----------
     def named(self, text):

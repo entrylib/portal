@@ -211,14 +211,15 @@ def test_a_term_stands_before_the_claim_that_first_uses_it():
     claims = sections["claims"]
     c1, c2 = claims.index('id="C1"'), claims.index('id="C2"')
     d1 = claims.index('<div class="pv-term" id="D1"><dt>the term <span class="pv-symbol">')
-    assert c1 < d1 < claims.index("Claim C1.")                          # before the claim that first uses it,
+    # under the heading of the claim that first uses it, before its statement (design §7.4, *The order of a claim*)
+    assert c1 < claims.index("Claim C1.") < d1 < claims.index("pv-statement", c1)
     assert claims.count('id="D1"') == 1                                 # and only there
-    assert c2 < claims.index('<div class="pv-term" id="D3">') < claims.index("Claim C2.")
+    assert c2 < claims.index("Claim C2.") < claims.index('<div class="pv-term" id="D3">')
     assert "Term this claim uses" in claims[c1:c2] and "pv-defs" not in claims[claims.index('id="C3"'):]
     assert 'id="D2"' not in claims and "1 more definition" in claims and "/p/2026.000099/record#definitions" in claims
     doc["definitions"][0]["definition"] = "What the [[D3:ratio]] gives."   # a term whose text names a later one
     claims = view(doc)[0]["claims"]
-    assert claims.index('id="D3"') < claims.index('id="D1"') < claims.index("Claim C1.")
+    assert claims.index("Claim C1.") < claims.index('id="D3"') < claims.index('id="D1"')
 
 
 def test_a_finding_keeps_its_place_and_a_proof_follows_what_it_uses():
@@ -295,7 +296,7 @@ def test_highlights_are_marked_where_they_stand_not_listed():
     page = site.paper_page(doc, base_url=BASE, listing=listing)
     assert 'id="highlights"' not in page and 'href="#highlights"' not in page       # no section in the paper view
     c3, c1 = article(page, "C3"), article(page, "C1")
-    assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[c1.index("<h3>"):]
+    assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[:c1.index("</h3>")]
     assert '<span class="pv-how pv-key">key term</span>' in page                    # a highlighted term, at the term
     assert "pv-toc-key" not in page and '<li><a href="#C3">' in page                # no mark in the contents
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
@@ -592,3 +593,18 @@ def test_an_agent_named_by_its_model_is_not_also_called_an_ai_agent():
     assert _author(named, models=models) == "Claude Opus 5.5"
     assert _author({"type": "agent", "name": "Claude Code"}, models=models) == "Claude Code (AI agent)"
     assert "AI agent" not in _contributions([named], models)
+
+
+def test_a_claim_lists_the_assumptions_it_rests_on_through_the_claims_between():
+    doc = proofs()
+    doc["claims"][0]["depends_on"] = ["C5"]                       # C1 assumes C5; C2 and C3 rest on C1
+    sections, _ = view(doc)
+    claims = sections["claims"]
+    for cid in ("C1", "C2", "C3"):
+        block = claims[claims.index(f'id="{cid}"'):]
+        block = block[:block.index("</article>")]
+        line = '<p class="pv-assumes"><span class="pv-label">Assumption</span> <a class="pv-xref" href="#C5">C5</a></p>'
+        assert line in block, cid
+        assert block.index("</h3>") < block.index(line) < block.index("pv-statement")   # after the terms, before it
+    c4 = claims[claims.index('id="C4"'):]
+    assert "pv-assumes" not in c4[:c4.index("</article>")]                            # C4 rests on no claim
