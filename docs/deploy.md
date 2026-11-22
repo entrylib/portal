@@ -176,3 +176,29 @@ again: a version can be published once. `tests/test_mcp.py` keeps the address an
   which `sudo docker compose exec app portal reindex` rebuilds the database.
 - **Cloudflare's address ranges** are in `deploy/Caddyfile`; update them if Cloudflare publishes new ones
   (cloudflare.com/ips).
+
+## Previews
+
+A change to the pages can be clicked through before it reaches entrylib.org (design §13). The workflow
+`.github/workflows/preview.yml` runs only by hand: Actions → Preview → *Run workflow*, choosing the branch. It rebuilds
+the static pages with that branch's code from a sample of the published registry and uploads them to Cloudflare Pages,
+at `https://<branch>.entrylib-preview.pages.dev` (the branch's name in lower case, other characters as `-`, at most 28
+characters); an open pull request from the branch gets a comment with the address, updated at each run. The sample is
+the papers listed in `.github/preview-papers.txt`, or the identifiers given when it is run (`2026.000003 2026.000007`),
+or `all`, which fits while the registry has fewer than about 150 papers (Cloudflare Pages takes at most 20,000 files, and
+a paper writes about 130). Only the static pages work there: search, submitting, consent and the MCP server need the
+app. Nothing reaches the Droplet or entrylib.org, and the pages are kept out of search engines.
+
+Once, before the first preview (the workflow makes the Pages project, `entrylib-preview`, at its first run):
+
+1. **An API token.** Cloudflare dashboard → *Account API tokens* → **Create Token** → under *Custom Token*,
+   **Get started**. Name it (`entrylib-preview`); under *Permissions* choose **Account**, **Cloudflare Pages**, **Edit**,
+   and nothing else; **Continue to summary** → **Create Token**. Copy the token: it is shown once.
+2. **The account ID.** On the overview of the `entrylib.org` domain in the dashboard, the *API* section on the right
+   shows the *Account ID*.
+3. **The repository's secrets.** GitHub → entrylib/portal → Settings → Secrets and variables → Actions → New repository
+   secret: `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (the ID).
+4. **Optional, after the first run: only you can open the previews.** Workers & Pages → `entrylib-preview` → Settings →
+   General → **Enable access policy**. It restricts the previews to the Cloudflare account's members.
+
+Old previews stay until deleted (Workers & Pages → entrylib-preview → Deployments).

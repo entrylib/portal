@@ -1,0 +1,6 @@
+# The papers a preview of the website shows (.github/workflows/preview.yml), by identifier, one per line: a sample
+# that covers the kinds of page, kept small (Cloudflare Pages takes at most 20,000 files, about 130 per paper).
+# A converted paper with proofs and simulations, sections and an update
+2026.000003
+# A paper made in the lab, with a lab record and log
+2026.000002

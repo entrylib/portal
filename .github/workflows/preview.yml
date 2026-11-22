@@ -1,0 +1,113 @@
+name: Preview
+
+# A preview of the website (docs/deploy.md, "Previews"), run only by hand: Actions → Preview → Run workflow, choosing
+# the branch. The static pages are rebuilt with that branch's code from a sample of the published registry (the papers
+# listed in .github/preview-papers.txt, or those given when it is run) and uploaded to Cloudflare Pages at
+# https://<branch>.entrylib-preview.pages.dev; an open pull request from the branch gets a comment with the address.
+# Only the static pages: search, submitting, consent and the MCP server need the app and do not work there. Nothing
+# here touches the Droplet or entrylib.org.
+on:
+  workflow_dispatch:
+    inputs:
+      papers:
+        description: "Papers to include, by identifier (2026.000003 2026.000002), or all; empty: .github/preview-papers.txt"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: write          # the comment with the preview's address
+
+concurrency:
+  group: preview-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: portal
+          POSTGRES_PASSWORD: portal
+          POSTGRES_DB: portal
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U portal -d portal"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - name: Refuse main
+        if: github.ref_name == 'main'
+        run: |
+          echo "Preview a branch, not main." >&2
+          exit 1
+      - name: Name the preview
+        id: name
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          branch=$(echo "$REF" | tr -c 'a-zA-Z0-9-\n' '-' | tr 'A-Z' 'a-z' | cut -c1-28)
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "url=https://$branch.entrylib-preview.pages.dev" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+      - name: Fetch the sample of the registry
+        env:
+          PAPERS: ${{ inputs.papers }}
+        run: |
+          # The whole history (a version's date is its commit's), but on disk only the papers of the sample.
+          git clone -q --filter=blob:none --no-checkout https://github.com/entrylib/registry registry
+          if [ "$PAPERS" = "all" ]; then
+            git -C registry checkout -q
+          else
+            [ -n "$PAPERS" ] || PAPERS=$(grep -v '^#' .github/preview-papers.txt)
+            git -C registry sparse-checkout set --no-cone /README.md $(for id in $PAPERS; do echo "/*/*/entrylib_$id/"; done)
+            git -C registry checkout -q
+          fi
+          echo "papers: $(ls -d registry/*/*/entrylib_* | wc -l)"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[scores]'
+      - name: Build the pages from the registry
+        env:
+          DATABASE_URL: postgresql://portal:portal@localhost:5432/portal
+          PORTAL_REGISTRY_DIR: registry
+          PORTAL_PUBLISHED_DIR: site
+          PORTAL_BASE_URL: ${{ steps.name.outputs.url }}
+        run: |
+          portal reindex
+          python -c "import os, psycopg; from portal import indexer
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True) as conn:
+              indexer.write_site(conn, os.environ['PORTAL_PUBLISHED_DIR'], os.environ['PORTAL_BASE_URL'])"
+      - name: Keep the preview out of search engines
+        run: |
+          printf 'User-agent: *\nDisallow: /\n' > site/robots.txt
+          printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > site/_headers
+      - name: Upload to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The project is made at the first run (later runs: it exists, and the create fails harmlessly). Its
+          # production branch, main, is never uploaded (a run on main is refused above): every preview is a branch's.
+          preCommands: npx wrangler pages project create entrylib-preview --production-branch=main || true
+          command: pages deploy site --project-name=entrylib-preview --branch=${{ steps.name.outputs.branch }} --commit-dirty=true
+      - name: Say where the preview is
+        uses: actions/github-script@v8
+        env:
+          URL: ${{ steps.name.outputs.url }}
+        with:
+          script: |
+            const marker = "<!-- entrylib-preview -->";
+            const {owner, repo} = context.repo;
+            const pulls = await github.rest.pulls.list({owner, repo, state: "open", head: `${owner}:${context.ref.replace("refs/heads/", "")}`});
+            if (!pulls.data.length) return;
+            const issue_number = pulls.data[0].number;
+            const body = `${marker}\nPreview of this branch: ${process.env.URL}\n\n` +
+              `Built from \`${context.sha.slice(0, 7)}\` and a sample of the published registry. ` +
+              `Static pages only: search, submitting and consent do not work there.`;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number});
+            const old = comments.find(c => (c.body || "").startsWith(marker));
+            if (old) await github.rest.issues.updateComment({owner, repo, comment_id: old.id, body});
+            else await github.rest.issues.createComment({owner, repo, issue_number, body});
