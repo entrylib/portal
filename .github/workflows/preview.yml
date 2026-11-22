@@ -89,9 +89,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # The project is made at the first run; later runs find it there. Its production branch, main, is never
+          # The project is made at the first run (later runs: it exists, and the create fails harmlessly). Its
+          # production branch, main, is never
           # uploaded (a run on main is refused below), so every preview is a branch deployment.
-          preCommands: npx wrangler pages project list | grep -q ' entrylib-preview ' || npx wrangler pages project create entrylib-preview --production-branch=main
+          preCommands: npx wrangler pages project create entrylib-preview --production-branch=main || true
           command: pages deploy site --project-name=entrylib-preview --branch=${{ steps.name.outputs.branch }} --commit-dirty=true
       - name: Say where the preview is
         uses: actions/github-script@v8
