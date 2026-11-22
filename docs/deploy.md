@@ -176,3 +176,30 @@ again: a version can be published once. `tests/test_mcp.py` keeps the address an
   which `sudo docker compose exec app portal reindex` rebuilds the database.
 - **Cloudflare's address ranges** are in `deploy/Caddyfile`; update them if Cloudflare publishes new ones
   (cloudflare.com/ips).
+
+## Previews
+
+Every pull request of this repository gets a preview of the website, so that a change to the pages can be clicked
+through before it reaches entrylib.org (design §13). The workflow `.github/workflows/preview.yml` rebuilds the static
+pages from the published registry with the pull request's code and uploads them to Cloudflare Pages, at
+`https://pr-<number>.entrylib-preview.pages.dev`; a comment on the pull request gives the address and is updated at
+each push. A manual run (Actions → Preview → Run workflow) previews any branch at
+`https://<branch>.entrylib-preview.pages.dev`. Only the static pages work there: search, submitting, consent and the MCP
+server need the app. Nothing reaches the Droplet or entrylib.org, and the pages are kept out of search engines.
+
+Once, before the first preview:
+
+1. **The Pages project.** In Cloudflare → Workers & Pages → Create → Pages → *Use direct upload* (not *Connect to
+   Git*): name it `entrylib-preview`, and create it without uploading anything (or upload any empty folder). Its
+   production branch is `main`, which is never uploaded: every preview is a branch deployment.
+2. **An API token.** Cloudflare → My Profile → API Tokens → Create Token → *Custom token*: permission
+   **Account → Cloudflare Pages → Edit**, on your account only; no other permission. Copy the token.
+3. **The repository's secrets.** In GitHub, entrylib/portal → Settings → Secrets and variables → Actions → New
+   repository secret: `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (the Account ID shown on the right
+   of the account's Workers & Pages overview).
+4. **Optional: only you can open them.** Workers & Pages → entrylib-preview → Settings → General → *Access policy*:
+   enable it for preview deployments, then allow your e-mail address (Cloudflare Access sends a one-time code). Without
+   this the previews are public, at addresses that are not linked from anywhere.
+
+A pull request from a fork gets no secrets, so no preview. Old previews stay until deleted (Workers & Pages →
+entrylib-preview → Deployments).

@@ -1,0 +1,93 @@
+name: Preview
+
+# A preview of the website for each pull request (docs/deploy.md, "Previews"): the static pages rebuilt from the
+# published registry with the pull request's code, on Cloudflare Pages at https://pr-<number>.entrylib-preview.pages.dev.
+# Only the static pages: search, submitting, consent and the MCP server need the app and do not work there. Nothing here
+# touches the Droplet or entrylib.org. A manual run previews any branch at https://<branch>.entrylib-preview.pages.dev.
+on:
+  pull_request:
+    paths: ["**.py", "pyproject.toml", "src/**", ".github/workflows/preview.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write          # the comment with the preview's address
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # A pull request from a fork gets no secrets, so no preview.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: portal
+          POSTGRES_PASSWORD: portal
+          POSTGRES_DB: portal
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U portal -d portal"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - name: Name the preview
+        id: name
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          REF: ${{ github.ref_name }}
+        run: |
+          if [ -n "$PR" ]; then branch="pr-$PR"; else branch=$(echo "$REF" | tr -c 'a-zA-Z0-9-\n' '-' | tr 'A-Z' 'a-z' | cut -c1-28); fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "url=https://$branch.entrylib-preview.pages.dev" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: entrylib/registry
+          path: registry
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[scores]'
+      - name: Build the pages from the registry
+        env:
+          DATABASE_URL: postgresql://portal:portal@localhost:5432/portal
+          PORTAL_REGISTRY_DIR: registry
+          PORTAL_PUBLISHED_DIR: site
+          PORTAL_BASE_URL: ${{ steps.name.outputs.url }}
+        run: |
+          portal reindex
+          python -c "import os, psycopg; from portal import indexer
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True) as conn:
+              indexer.write_site(conn, os.environ['PORTAL_PUBLISHED_DIR'], os.environ['PORTAL_BASE_URL'])"
+      - name: Keep the preview out of search engines
+        run: |
+          printf 'User-agent: *\nDisallow: /\n' > site/robots.txt
+          printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > site/_headers
+      - name: Upload to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=entrylib-preview --branch=${{ steps.name.outputs.branch }} --commit-dirty=true
+      - name: Say where the preview is
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        env:
+          URL: ${{ steps.name.outputs.url }}
+        with:
+          script: |
+            const marker = "<!-- entrylib-preview -->";
+            const body = `${marker}\nPreview of this pull request: ${process.env.URL}\n\n` +
+              `Built from \`${context.payload.pull_request.head.sha.slice(0, 7)}\` and the published registry. ` +
+              `Static pages only: search, submitting and consent do not work there.`;
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number});
+            const old = comments.find(c => (c.body || "").startsWith(marker));
+            if (old) await github.rest.issues.updateComment({owner, repo, comment_id: old.id, body});
+            else await github.rest.issues.createComment({owner, repo, issue_number, body});
