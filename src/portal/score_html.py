@@ -242,8 +242,7 @@ def _paper_problems(scores, pids):
             out.append(_problem(scores, members[0]))
             continue
         first = scores["problems"][members[0]]
-        costs = sorted({scores["problems"][m]["cost"] for m in members})
-        cost = f"−{costs[-1]}" if len(costs) == 1 else f"−{costs[0]} to −{costs[-1]}"
+        cost = f"−{max(scores['problems'][m]['cost'] for m in members)}"      # the most it costs, as for the others
         rows = []
         for m in members:
             q = scores["problems"][m]

@@ -50,7 +50,7 @@ def test_the_breakdown_lists_each_kind_of_problem_once():
                "fix": "Test the assumption."}}}
     html = score_html._paper_problems(scores, ["P1", "P2", "P3"])
     assert html.count("<li>") == 2 and html.count("Test the assumption.") == 1
-    assert "−1 to −3" in html and "Assumptions not checked" in html
+    assert '<span class="cost">−3</span>' in html and "Assumptions not checked" in html
     assert '<td><a href="#C30">C30</a></td><td>The errors are independent.</td><td class="num">−3</td>' in html
     assert '<td class="num" title="C1, C2">2 claims</td>' in html and '<td class="num" title="C1">1 claim</td>' in html
     one = score_html._paper_problems(scores, ["P1", "P2"])                # one of a kind: an entry of its own

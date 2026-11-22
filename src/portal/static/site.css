@@ -293,6 +293,12 @@ a.dots:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
 .problem-table td { border-top: 1px solid var(--rule-light); padding: 4px 10px 4px 0; vertical-align: top; }
 .problem-table td.num { text-align: right; white-space: nowrap; }
 .problem-table + .fix { display: block; text-indent: 0; }
+/* on a phone the table keeps to the pop-up's width: no hanging indent, and the counts may wrap */
+@media (max-width: 640px) {
+  .problems li:has(.problem-table) { padding-left: 0; text-indent: 0; }
+  .problem-table td { padding-right: 8px; }
+  .problem-table td:nth-child(2) { overflow-wrap: anywhere; }
+}
 .score-claim { border-top: 1px solid var(--rule-light); padding: 8px 0; }
 .score-claim h4 { margin: 0; font-size: 17px; font-weight: 600; }
 dialog.peek h3, dialog.peek h4 { margin-top: 0; }
