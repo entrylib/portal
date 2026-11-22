@@ -179,13 +179,15 @@ again: a version can be published once. `tests/test_mcp.py` keeps the address an
 
 ## Previews
 
-Every pull request of this repository gets a preview of the website, so that a change to the pages can be clicked
-through before it reaches entrylib.org (design §13). The workflow `.github/workflows/preview.yml` rebuilds the static
-pages from the published registry with the pull request's code and uploads them to Cloudflare Pages, at
-`https://pr-<number>.entrylib-preview.pages.dev`; a comment on the pull request gives the address and is updated at
-each push. A manual run (Actions → Preview → Run workflow) previews any branch at
-`https://<branch>.entrylib-preview.pages.dev`. Only the static pages work there: search, submitting, consent and the MCP
-server need the app. Nothing reaches the Droplet or entrylib.org, and the pages are kept out of search engines.
+A change to the pages can be clicked through before it reaches entrylib.org (design §13). The workflow
+`.github/workflows/preview.yml` runs only by hand: Actions → Preview → *Run workflow*, choosing the branch. It rebuilds
+the static pages with that branch's code from a sample of the published registry and uploads them to Cloudflare Pages,
+at `https://<branch>.entrylib-preview.pages.dev` (the branch's name in lower case, other characters as `-`, at most 28
+characters); an open pull request from the branch gets a comment with the address, updated at each run. The sample is
+the papers listed in `.github/preview-papers.txt`, or the identifiers given when it is run (`2026.000003 2026.000007`),
+or `all`, which fits while the registry has fewer than about 150 papers (Cloudflare Pages takes at most 20,000 files, and
+a paper writes about 130). Only the static pages work there: search, submitting, consent and the MCP server need the
+app. Nothing reaches the Droplet or entrylib.org, and the pages are kept out of search engines.
 
 Once, before the first preview:
 
@@ -201,5 +203,4 @@ Once, before the first preview:
    enable it for preview deployments, then allow your e-mail address (Cloudflare Access sends a one-time code). Without
    this the previews are public, at addresses that are not linked from anywhere.
 
-A pull request from a fork gets no secrets, so no preview. Old previews stay until deleted (Workers & Pages →
-entrylib-preview → Deployments).
+Old previews stay until deleted (Workers & Pages → entrylib-preview → Deployments).
