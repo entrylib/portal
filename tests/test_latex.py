@@ -356,21 +356,32 @@ def test_findings_have_run_in_headings_and_are_named_by_their_section():
     one["paper"]["sections"] = [{"title": "Findings", "claims": ["C2"]}]
     alone = files(one)[1]["paper.tex"]
     assert "\\paragraph{Skill.}" not in alone and "\\label{claim:C2} Method M improves" in alone   # alone: none
-    intro = tex[tex.index("\\section{Introduction}"):tex.index("\\section{Theory}")]
-    assert "(Section~\\ref{sec:part-2})" in intro and "(Theorem~\\ref{thm:C4})" in intro
+    assert "Section~\\ref{sec:part-2}" in tex[tex.index("\\section{Introduction}"):]
 
 
-def test_earlier_work_says_each_work_once():
-    tex = files(theorems())[1]["paper.tex"]
+def test_the_introduction_motivates_and_holds_no_claim():
+    _, f, _ = files(theorems())
+    tex = f["paper.tex"]
+    intro = tex[tex.index("\\section{Introduction}"):tex.index("\\subsection{Earlier work}")]
+    assert "\\ref{thm:" not in intro and "\\item" not in intro and "The mean is linear" not in intro
+    assert "Section~\\ref{sec:part-1} (Theory)" in intro                                      # the roadmap stays
+    assert "A contribution: The mean is linear (in [0, 1] too)" in f["GAPS.md"]            # given for the motivation
+
+
+def test_earlier_work_is_a_literature_review():
+    _, f, _ = files(theorems())
+    tex = f["paper.tex"]
     work = tex[tex.index("\\subsection{Earlier work}"):tex.index("\\section{Theory}")]
+    assert "Smith (2001) defines the mean for every distribution with a finite first moment \\citep{B1}." in work
     assert work.count("Smith (2001) defines the mean") == 1                                   # the note once
-    assert "Theorem~\\ref{thm:C4} and Section~\\ref{sec:part-2} extend \\citet{B1}." in work         # one sentence
+    assert "extend" not in work and "\\ref{" not in work                                     # no claim of the paper
+    assert "B1: The mean is linear (in [0, 1] too) (extends); Skill (extends)" in f["GAPS.md"]
 
 
 def test_each_gap_comes_with_what_the_claimset_gives():
     _, f, _ = files(theorems())
     gaps = f["GAPS.md"]
     assert "## What the claimset gives towards them" in gaps
-    assert "Smith (2001) defines the mean" in gaps                                            # for the earlier work
+    assert "B1: The mean is linear" in gaps                                                   # for the earlier work
     assert "Theorem 1: The mean is linear" in gaps                                            # for the discussion
     assert "a sentence leading into this section (Theory)" in gaps

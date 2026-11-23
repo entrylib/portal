@@ -312,16 +312,6 @@ def _list(items):
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
-def _plural(verb):
-    """A relation's verb for several claims: "Extends" -> "extend", "Does not repeat" -> "do not repeat"."""
-    v = verb.lower()
-    if v.startswith("does "):
-        return "do " + v[5:]
-    first, _, rest = v.partition(" ")
-    first = first[:-3] + "y" if first.endswith("ies") else first[:-1] if first.endswith("s") else first
-    return f"{first} {rest}".strip()
-
-
 def _sentence_tex(s):
     return s[:1].upper() + s[1:]
 
@@ -645,25 +635,17 @@ class _Paper:
     def introduction(self):
         D, p = self.D, self.p
         D.add("\\section{Introduction}\\label{sec:introduction}")
-        contributions = [c for c in _strs(p.get("contributions")) if c in self.claims]
-        names = [self.claim_name(self.claims[c]) for c in contributions]
-        D.add(D.gap("the motivation: why the question matters, and to whom",
-                    ["The contributions it leads to: " + "; ".join(n for n in names if n)] if any(names) else []))
+        contributions = [self.claims[c] for c in _strs(p.get("contributions")) if c in self.claims]
+        given = []
+        for c in contributions:
+            name = self.claim_name(c)
+            summary = c.get("summary") if isinstance(c.get("summary"), str) and c["summary"].strip() else ""
+            given.append(": ".join(x for x in (name, summary) if x) or str(c.get("statement") or ""))
+        # what the paper finds is the results' to state; the introduction says why it matters, so the contributions
+        # are what GAPS.md gives towards the motivation, not claims set out here
+        D.add(D.gap("the motivation: why the question matters, to whom, and what this paper contributes",
+                    [f"A contribution: {g}" for g in given]))
         D.blank()
-        if contributions:
-            D.add("The contributions of this paper are the following.")
-            D.add("\\begin{itemize}")
-            for cid in contributions:
-                c = self.claims[cid]
-                name = self.claim_name(c)
-                summary = c.get("summary") if isinstance(c.get("summary"), str) and c["summary"].strip() else ""
-                if name:
-                    body = f"\\textbf{{{D.esc(name)}.}}" + (f" {self.t(summary)}" if summary else "")
-                    field = "name, summary" if summary else "name"
-                else:
-                    body, field = self.t(summary or c.get("statement")), "summary" if summary else "statement"
-                D.add(f"\\item {body} ({self.xref(cid)})", cid, field)
-            D.add("\\end{itemize}")
         parts = self.parts()
         roadmap = [f"Section~\\ref{{sec:part-{i}}} ({D.esc(title)})" for i, (title, _) in enumerate(parts, 1)]
         tail = ("Section~\\ref{sec:discussion} discusses the results and Section~\\ref{sec:conclusion} concludes.")
@@ -703,21 +685,23 @@ class _Paper:
                 if note and note not in works[key]["notes"]:
                     works[key]["notes"].append(note)
         D.add("\\subsection{Earlier work}")
-        D.add(D.gap("the earlier work this paper builds on, and what it leaves open",
-                    [f"{(w['r'].get('reference') or w['r'].get('target'))}: " + " ".join(w["notes"]) for w in
-                     (works[k] for k in order)]))
+        material = []
         for key in order:
             w = works[key]
             r = w["r"]
-            who = (self.cite(r["reference"], r.get("locator"), text=True) if r.get("reference") in self.bib
-                   else D.esc(f"{r.get('id_type', '')}: {r.get('target', '')}"))
-            said = []
-            for verb, cids in w["by"].items():
-                refs = _list(list(dict.fromkeys(self.xref(c) for c in cids)))
-                said.append(f"{refs} {_plural(verb) if len(cids) > 1 else verb.lower()} {who}")
-            text = _sentence_tex("; ".join(said)) + "."
-            if w["notes"]:
-                text += " " + " ".join(self.t(n) for n in w["notes"])
+            claims = "; ".join(f"{self.claim_name(self.claims[c]) or c} ({verb.lower()})"
+                               for verb, cids in w["by"].items() for c in cids)
+            material.append(f"{r.get('reference') or r.get('target')}: {claims}")
+        D.add(D.gap("the earlier work this paper builds on, and what it leaves open", material))
+        for key in order:
+            w = works[key]
+            if not w["notes"]:
+                continue                                 # a work related without a note is listed in GAPS.md only
+            r = w["r"]
+            cite = (self.cite(r["reference"], r.get("locator")) if r.get("reference") in self.bib
+                    else "(" + D.esc(f"{r.get('id_type', '')}: {r.get('target', '')}") + ")")
+            text = " ".join(self.t(n).strip() for n in w["notes"])
+            text = (text[:-1] if text.endswith(".") else text) + f" {cite}."
             D.blank()
             D.add(text, ",".join(c for cids in w["by"].values() for c in cids), "relations")
         D.blank()
