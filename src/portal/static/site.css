@@ -776,9 +776,7 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .fold:not(.open) > .fold-body { display: block !important; }
 }
 /* Your submissions (design §4.2): its sections beside a menu, as a specification's; a published paper's row. */
-.submissions .spec-body h2:first-child { margin-top: 0; }
-.submissions section > h2 { margin-top: 32px; }
-.submissions section:first-child > h2 { border-top: 0; padding-top: 0; margin-top: 0; }
+.submissions .entry-header h1 { margin: 0 0 8px; }
 .pub-list { list-style: none; padding: 0; margin: 0; }
 .pub-list li { padding: 14px 0; border-bottom: 1px solid var(--rule-light); }
 .pub-title { font-weight: 600; font-size: 18px; }
