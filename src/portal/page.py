@@ -53,6 +53,8 @@ def _join(items, sep="; "):
 BRIEF_MAX = 5
 
 TERM = re.compile(r"\[\[([^:\]]+):([^\]]+)\]\]")
+#: A marker whose text holds a formula: shown as a link around the formula (see _Paper._maths).
+FORMULA_MARK = re.compile(r"\[\[([^:\]]+):([^\]]*\$[^\]]*)\]\]")
 #: The year of a written reference: in brackets ("Kolassa, S. (2011). …") or, in a classical list, after the authors
 #: ("Kolassa, S., 2011. …").
 YEAR = re.compile(r"\((\d{4}[a-z]?)\)|(?<=[.\w], )(\d{4}[a-z]?)(?=\.(?:\s|$))")
@@ -146,6 +148,13 @@ def _link(uri, text=None):
     return f'<a href="{esc(uri)}">{text}</a>' if _href(uri) else text
 
 
+#: An item of the file named in a text (claimset §8 rule 13): `C27`, `E3`, `E3.R2`, `D4`; not inside a word, a link, an
+#: EntryLib identifier or a file name.
+LOCAL_ID = re.compile(r"(?<![\w.:/#@-])([A-Z]\d+)(?:\.([A-Z]+\d+))?(?![\w])")
+#: A blank line between paragraphs (claimset §8 rule 15).
+PARAGRAPH = re.compile(r"[ \t]*\n[ \t]*\n\s*")
+#: The parts of a statement (claimset §8 rule 11): `(a)`, `(b)`, … where a word may begin.
+PART = re.compile(r"(?:(?<=\s)|^)\(([a-h])\)(?=\s)")
 GLOBAL_ID = re.compile(r"entrylib:(\d{4}\.\d{6,})(@v\d+)?(?:#([A-Z]+\d+(?:\.\d+)*))?")
 
 
@@ -433,6 +442,20 @@ class _Paper:
         return self.text(s)
 
     def _maths(self, s):
+        """Formulas and markers. A marker whose text holds a formula (`[[D46:$I_n$]]`, which claimset §8 rule 5 and
+        warning 67 ask to write as words) is shown as a link around the formula, not broken apart by it."""
+        out, last = [], 0
+        for m in FORMULA_MARK.finditer(s):
+            out.append(self._maths_in(s[last:m.start()]))
+            tid, inner = m.group(1), self._maths_in(m.group(2))
+            d = self.by_id.get(tid)
+            kind = "ref" if d is not None and d in self.refs else "term" if d is not None and d in self.defs else None
+            out.append(f'<a class="{kind}" href="#{esc(tid)}">{inner}</a>' if kind else inner)
+            last = m.end()
+        out.append(self._maths_in(s[last:]))
+        return "".join(out)
+
+    def _maths_in(self, s):
         out, last = [], 0
         for m in MATH.finditer(s):
             out.append(self._terms(s[last:m.start()]))
@@ -453,17 +476,76 @@ class _Paper:
     def _terms(self, s):
         out, last = [], 0
         for m in TERM.finditer(s):
-            out.append(linked(s[last:m.start()]))
+            out.append(self._plain(s[last:m.start()]))
             tid, shown = m.group(1), m.group(2)
             d = self.by_id.get(tid)
-            if d is not None and d in self.defs:
+            if d is not None and d in self.refs:          # a citation marker (claimset §8 rule 14)
+                tip = self.labels.get(tid) or tid
+                out.append(f'<a class="ref" href="#{esc(tid)}" title="{esc(tip)}">{esc(shown)}</a>')
+            elif d is not None and d in self.defs:
                 tip = f"{d.get('term', '')}: " + _first_sentence(d.get("definition", ""))
                 out.append(f'<a class="term" href="#{esc(tid)}" title="{esc(tip)}">{esc(shown)}</a>')
             else:
                 out.append(esc(shown))
             last = m.end()
-        out.append(linked(s[last:]))
+        out.append(self._plain(s[last:]))
         return "".join(out)
+
+    def _plain(self, s):
+        """Plain text: escaped, EntryLib identifiers and the file's own items (claimset §8 rule 13) linked, a blank line
+        kept as a break between paragraphs (§8 rule 15)."""
+        out = []
+        for i, para in enumerate(PARAGRAPH.split(s)):
+            if i:
+                out.append('<span class="cs-para"></span>')
+            last, kept = 0, []
+            for m in GLOBAL_ID.finditer(para):
+                kept.append(self._items(para[last:m.start()]))
+                kept.append(_global_link(m))
+                last = m.end()
+            kept.append(self._items(para[last:]))
+            out.append("".join(kept))
+        return "".join(out)
+
+    def _items(self, s):
+        out, last = [], 0
+        for m in LOCAL_ID.finditer(s):
+            oid, sub = m.group(1), m.group(2)
+            if oid not in self.by_id:
+                continue
+            out.append(esc(s[last:m.start()]))
+            target = f"{oid}.{sub}" if sub and self._has_part(oid, sub) else oid
+            out.append(f'<a class="cs-ref-id" href="#{esc(target)}">{esc(m.group(0))}</a>')
+            last = m.end()
+        out.append(esc(s[last:]))
+        return "".join(out)
+
+    def _has_part(self, oid, sub):
+        """Whether `E3.R2` (a result, a table, a step of evidence E3) has an anchor of its own on the page."""
+        e = self.by_id.get(oid)
+        return isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") == sub
+                                           for k in ("results", "tables", "steps") for x in e.get(k) or [])
+
+    def statement(self, s):
+        """A claim's statement: as text, its parts (claimset §8 rule 11: `(a)`, `(b)`, …) set out one per line after
+        the words that hold for all of them. Marks inside a formula, code or a marker are not parts."""
+        if not isinstance(s, str):
+            return self.text(s)
+        hidden = re.sub(r"```.*?```|`[^`]*`|\$\$.+?\$\$|\$[^$]+?\$|\[\[[^\]]*\]\]",
+                        lambda m: "x" * len(m.group(0)), s, flags=re.S)
+        marks, want = [], "a"
+        for m in PART.finditer(hidden):
+            if m.group(1) == want:
+                marks.append(m)
+                want = chr(ord(want) + 1)
+        if len(marks) < 2:
+            return self.text(s)
+        parts = [self.text(s[:marks[0].start()].rstrip())] if s[:marks[0].start()].strip() else []
+        for i, m in enumerate(marks):
+            end = marks[i + 1].start() if i + 1 < len(marks) else len(s)
+            parts.append(f'<span class="cs-part"><span class="cs-part-mark">({m.group(1)})</span> '
+                         f'{self.text(s[m.end():end].strip())}</span>')
+        return "".join(parts)
 
     # ---------- images ----------
     def image_src(self, a):
@@ -888,7 +970,7 @@ def _claim(P, c, principal=False):
     elif c.get("planning") == "planned_estimate":
         head.append("planned estimate")
     lines = [f'<p class="cs-claim-meta">{before}' + " · ".join(h for h in head if h) + f"{after}</p>",
-             f'<p class="cs-statement">{P.text(c.get("statement", ""))}</p>' + _corrected(P, c.get("id"))]
+             f'<p class="cs-statement">{P.statement(c.get("statement", ""))}</p>' + _corrected(P, c.get("id"))]
     links = []
     if c.get("scope"):
         links.append(f'<span class="k">Scope:</span> {P.text(_scope(c["scope"]))}')
@@ -1421,7 +1503,7 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
                     '<span class="long">Definition</span><span class="short">D</span></span>'
                     f'<span><strong>{esc(x.get("term", ""))}</strong>: '
                     f'{P.text(x.get("definition", ""))} <a class="cs-id" href="#{esc(oid)}">{esc(oid)}</a></span></li>')
-        return (f'<li>{P.mark(x, "brief")[0]}<span>{P.text(x.get("statement", ""))} '
+        return (f'<li>{P.mark(x, "brief")[0]}<span>{P.statement(x.get("statement", ""))} '
                 f'<a class="cs-id" href="#{esc(oid)}">{esc(oid)}</a></span></li>')
     brief_items = [brief_item(oid) for oid in brief_ids]
     principal = [c for c in P.claims if c.get("role") == "principal" and not P.is_assumption(c)]

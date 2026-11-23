@@ -124,5 +124,8 @@ mtable[columnspacing="0"] mtd { padding-left: 0; padding-right: 0; }      /* ali
   border: 1px solid var(--cs-rule-light); border-radius: 3px; padding: 0 4px; overflow-wrap: anywhere; }
 .cs-code-block { display: block; white-space: pre; overflow-x: auto; overflow-wrap: normal; padding: 8px 12px;
   margin: 6px 0; }                                         /* a fenced block: its lines kept, scrolled when wide */
+.cs-para { display: block; height: 0.6em; }                /* a blank line between paragraphs */
+.cs-part { display: block; padding-left: 1.8em; text-indent: -1.8em; margin-top: 0.2em; }   /* a statement's parts */
+.cs-part-mark { display: inline-block; min-width: 1.6em; text-indent: 0; }
 .cs-table td.txt { text-align: left; }
 """

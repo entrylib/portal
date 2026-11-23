@@ -167,6 +167,30 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertIn('Source: <a class="ref" href="#B1">Smith (2020)</a>', body)
         self.assertIn('Used by: <a href="#D1">D1</a>', body)
 
+    def test_items_citations_paragraphs_and_parts(self):
+        doc = example()
+        doc["references"] = [{"id": "B1", "target": "Smith, J. (2020). A paper.", "id_type": "reference"}]
+        cid = doc["claims"][0]["id"]
+        P = H._Paper(doc)
+        out = P.text(f"Given {cid}, as in [[B1:Smith (2020)]]; C999, $C1$, `C1()` and https://x.org/{cid} stay.\n\nNext.")
+        self.assertIn(f'<a class="cs-ref-id" href="#{cid}">{cid}</a>', out)          # an item named by its ID
+        self.assertIn('<a class="ref" href="#B1" title="Smith (2020)">Smith (2020)</a>', out)   # a citation marker
+        self.assertNotIn('href="#C999"', out)                                         # no such item: plain
+        self.assertIn('<code class="cs-code">C1()</code>', out)
+        self.assertIn(f"https://x.org/{cid}", out)
+        self.assertIn('<span class="cs-para"></span>Next.', out)                       # a blank line: a paragraph
+        out = P.statement("For $y > 0$: (a) one holds; (b) the other, with $(c)$ in a formula.")
+        self.assertEqual(out.count('class="cs-part"'), 2)                             # parts, one per line
+        self.assertIn('<span class="cs-part-mark">(a)</span> one holds;', out)
+        self.assertEqual(P.statement("Only (a) here."), P.text("Only (a) here."))      # one mark: no list
+        did = doc["definitions"][0]["id"]
+        out = P.text(f"Written with [[{did}:$I_n$]] and [[B1:$x$]].")                 # a formula in a marker
+        self.assertNotIn("[[", out)
+        self.assertIn(f'<a class="term" href="#{did}"><math>', out)
+        self.assertIn('<a class="ref" href="#B1"><math>', out)
+        for rule in (".cs-para {", ".cs-part {"):
+            self.assertIn(rule, page_css.CSS)
+
     def test_a_fenced_block_is_a_block(self):
         P = H._Paper({"paper": {}})
         out = P.text("Run:\n```r\nfit <- adam(y, h = 12)\nif (a != b) x <- 1\n```\nthen `es()` inline.")
