@@ -230,6 +230,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         body = {"portal": __version__, "claimset": claimset.__version__, "spec": claimset.SPEC_VERSION}
         if indexer.REBUILDING.is_set():                 # after an update: the pages are being written again
             body["rebuilding"] = True
+            if indexer.PROGRESS.get("total"):
+                body["pages_updated"] = f"{indexer.PROGRESS.get('done', 0)} of {indexer.PROGRESS['total']}"
         try:
             with pool.connection(timeout=2) as conn:
                 conn.execute("SELECT 1")
@@ -306,13 +308,10 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             q = read.Query.parse(params)
             return RedirectResponse(q.url().replace("&amp;", "&"), status_code=301)
         q = read.Query.parse(params)
-        with pool.connection() as conn:
-            docs = [r[0] for r in conn.execute(
-                "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
-                " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
+        with pool.connection() as conn:                     # from the index: the papers shown alone are read
             corrected = history.corrected_concepts(conn)
-        return HTMLResponse(read.page(docs, q, settings.base_url, corrected, published_dir=settings.published_dir),
-                            headers={"Content-Security-Policy": PAGE_CSP})
+            html_ = read.page_from_db(conn, q, settings.base_url, corrected, published_dir=settings.published_dir)
+        return HTMLResponse(html_, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():

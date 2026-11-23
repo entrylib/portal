@@ -120,21 +120,26 @@ class Query:
         return areas.path(area) + ("?" + "&amp;".join(parts) if parts else "")
 
 
-def _tree(docs, q):
-    domains, fields, subs = areas.taxonomy()
+def tree_counts(docs):
+    """{area: how many of `docs` it holds} for the tree: each domain (d<id>), field and subfield."""
     count = {}
     for d in docs:
         dom, fld, sub = area_of(d)
         for key in (f"d{dom}", fld, sub):
             if dom:
                 count[key] = count.get(key, 0) + 1
+    return count
+
+
+def _tree(count, total, q):
+    domains, fields, subs = areas.taxonomy()
 
     def link(area, name):
         current = ' aria-current="page"' if area == q.area else ""
         return f'<a href="{q.url(area=area)}"{current}>{site.esc(name)}</a> <span class="count">{count[area]}</span>'
 
     out = [f'<li><a href="{q.url(area="")}"' + (' aria-current="page"' if not q.area else "")
-           + f'>Everything</a> <span class="count">{len(docs)}</span></li>']
+           + f'>Everything</a> <span class="count">{total}</span></li>']
     for dom, dname in domains.items():
         if not count.get(f"d{dom}"):
             continue
@@ -239,37 +244,122 @@ def claimsets(docs, q, published_dir=None):
 
 
 def page(docs, q, base_url="", corrected=None, published_dir=None):
-    """The Read page. `docs`: the current version of every published claimset. Its canonical address is the area's
-    own, without filters, so that search engines index one page per area."""
+    """The Read page from `docs`, the current version of every published claimset, held in memory: the reference
+    page_from_db must give the same page as (tests/test_read.py)."""
+    if q.view == "claims":
+        rows = claims(docs, q, published_dir)
+    else:
+        rows = claimsets(docs, q, published_dir)
+    area_count = sum(1 for d in docs if in_area(area_of(d), q.area))
+    return _layout(q, base_url, corrected, tree_counts(docs), len(docs), len(rows),
+                   rows[q.offset:q.offset + PAGE], area_count)
+
+
+#: SQL for an area of Read: a domain (d<id>), a field (two digits) or a subfield.
+def _area_sql(area):
+    if not area:
+        return "true", []
+    if area.startswith("d"):
+        return "p.domain = %s", [area[1:]]
+    return ("p.field = %s", [area]) if len(area) == 2 else ("p.subfield = %s", [area])
+
+
+def page_from_db(conn, q, base_url="", corrected=None, published_dir=None):
+    """The Read page from the index (design §7.7): filters, sorts, counts and pages by the columns the indexer keeps
+    (migration 0018), and loads the files of the papers shown alone. The same page as page() on every paper's file,
+    which the app read on each visit."""
+    count, total = {}, 0
+    for dom, fld, sub, n in conn.execute("SELECT domain, field, subfield, count(*) FROM papers p"
+                                         " GROUP BY 1, 2, 3").fetchall():
+        total += n
+        if dom:
+            for key in (f"d{dom}", fld, sub):
+                count[key] = count.get(key, 0) + n
+    where, args = _area_sql(q.area)
+    area_count = conn.execute(f"SELECT count(*) FROM papers p WHERE {where}", args).fetchone()[0]
+    if q.view == "claims":
+        cond, cargs = [where, "c.listed"], list(args)
+        if not q.all:
+            cond.append("c.role = 'principal'")
+        for col, val in (("c.type", q.type), ("c.novelty", q.novelty)):
+            if val:
+                cond.append(f"{col} = %s")
+                cargs.append(val)
+        if q.planning:
+            cond.append("coalesce(c.planning, 'exploratory') = %s")
+            cargs.append(q.planning)
+        if q.band:
+            cond.append("c.band = %s")
+            cargs.append(q.band)
+        order = ("p.updated DESC, coalesce(c.score, -1) ASC" if q.sort == "newest" else
+                 "coalesce(c.score, -1) DESC, p.updated ASC")
+        sql = (" FROM claims c JOIN papers p ON p.concept_id = c.concept_id AND c.version = p.current_version"
+               f" WHERE {' AND '.join(cond)}")
+        n_rows = conn.execute("SELECT count(*)" + sql, cargs).fetchone()[0]
+        page_rows = conn.execute(f"SELECT c.concept_id, c.claim_id{sql} ORDER BY {order}, p.concept_id, c.position"
+                                 " LIMIT %s OFFSET %s", cargs + [PAGE, q.offset]).fetchall()
+        docs = _files(conn, [r[0] for r in page_rows])
+        shown = []
+        for concept, cid in page_rows:
+            d = docs.get(concept)
+            c = next((x for x in (d or {}).get("claims") or [] if isinstance(x, dict) and x.get("id") == cid), None)
+            if c is None:
+                continue
+            sc = scores_of(d, published_dir)
+            item = sc["claims"].get(cid) if sc else None
+            shown.append((d, c, sc, item["score"] if item else -1))
+    else:
+        cond, cargs = [where], list(args)
+        if q.band:
+            cond.append("p.band = %s")
+            cargs.append(q.band)
+        order = "p.updated DESC" if q.sort == "newest" else "coalesce(p.score, -1) DESC, p.updated DESC"
+        sql = f" FROM papers p WHERE {' AND '.join(cond)}"
+        n_rows = conn.execute("SELECT count(*)" + sql, cargs).fetchone()[0]
+        page_rows = conn.execute(f"SELECT p.concept_id{sql} ORDER BY {order}, p.concept_id LIMIT %s OFFSET %s",
+                                 cargs + [PAGE, q.offset]).fetchall()
+        docs = _files(conn, [r[0] for r in page_rows])
+        shown = [docs[r[0]] for r in page_rows if r[0] in docs]
+    return _layout(q, base_url, corrected, count, total, n_rows, shown, area_count)
+
+
+def _files(conn, concepts):
+    """{concept: its current version's file} for the papers a page shows."""
+    if not concepts:
+        return {}
+    return {c: f for c, f in conn.execute(
+        "SELECT p.concept_id, v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
+        " AND v.version = p.current_version WHERE p.concept_id = ANY(%s)", (list(set(concepts)),)).fetchall()}
+
+
+def _layout(q, base_url, corrected, count, total, n_rows, shown, area_count):
+    """The Read page: the tree (`count` per area, `total` papers), the tabs and filters, `n_rows` results of which
+    `shown` (this page's), and the pager. Its canonical address is the area's own, without filters, so that search
+    engines index one page per area."""
     tabs = "".join(f'<a href="{q.url(view=v, offset="")}"' + (' aria-current="page"' if v == q.view else "")
                    + f">{label}</a>" for v, label in (("claimsets", "Papers"), ("claims", "Claims")))
     if q.view == "claims":
-        rows = claims(docs, q, published_dir)
-        shown = rows[q.offset:q.offset + PAGE]
         what = "claims" if q.all else "principal claims"
         body = (f'<ol class="results">{"".join(_claim_item(d, c, sc) for d, c, sc, _ in shown)}</ol>' if shown
                 else '<p class="muted">No claims here match.</p>')
     else:
-        rows = claimsets(docs, q, published_dir)
-        shown = rows[q.offset:q.offset + PAGE]
         what = "papers"
         body = (f'<div class="cards">{site._cards(shown, corrected)}</div>' if shown
                 else '<p class="muted">No papers here match.</p>')
     more = []
     if q.offset:
         more.append(f'<a href="{q.url(offset=max(0, q.offset - PAGE))}">Previous</a>')
-    if q.offset + PAGE < len(rows):
+    if q.offset + PAGE < n_rows:
         more.append(f'<a href="{q.url(offset=q.offset + PAGE)}">Next</a>')
     main = (f'<div class="wrap"><h1>Read</h1>{site._search_form(view=q.view)}'
-            f'<div class="read-layout">{_tree(docs, q)}<div class="read-main">'
+            f'<div class="read-layout">{_tree(count, total, q)}<div class="read-main">'
             f'<h2>{site.esc(area_name(q.area))}</h2><nav class="tabs" aria-label="Show">{tabs}</nav>{_filters(q)}'
-            f'<p class="muted">{len(rows)} {what}' + (f", {q.offset + 1}–{q.offset + len(shown)}" if len(rows) > PAGE
-                                                     else "") + "</p>"
+            f'<p class="muted">{n_rows} {what}' + (f", {q.offset + 1}–{q.offset + len(shown)}" if n_rows > PAGE
+                                                  else "") + "</p>"
             f'{body}' + (f'<p class="pager">{" · ".join(more)}</p>' if more else "") + "</div></div></div>")
     title = "Read" if not q.area else f"{area_name(q.area)}: papers and claims"
-    count = sum(1 for d in docs if in_area(area_of(d), q.area))
-    description = (f"{area_name(q.area)} on EntryLib: {count} paper{'s' if count != 1 else ''}, their claims with "
-                   "their support scores, each with what it rests on." if q.area else
+    description = (f"{area_name(q.area)} on EntryLib: {area_count} paper{'s' if area_count != 1 else ''}, their "
+                   "claims with their support scores, each with what it rests on." if q.area else
                    "What EntryLib holds, by field: its papers, and their claims with their support scores.")
     return site.shell(title, main, active="read", description=description,
                       canonical=base_url + areas.path(q.area) if base_url else None)
