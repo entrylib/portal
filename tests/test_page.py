@@ -134,6 +134,18 @@ class TestTermsReferencesMaths(unittest.TestCase):
         self.assertEqual(P.text("[[D1:CES]] and [[D9:other]]"),
                          '<a class="term" href="#D1" title="CES: Complex exponential smoothing.">CES</a> and other')
 
+    def test_a_definition_shows_its_tables(self):
+        d = {"id": "D4", "kind": "concept", "term": "block matrices", "definition": "The blocks of $W$.",
+             "tables": [{"description": "Blocks by restriction", "columns": ["Restriction", "$W$"],
+                         "rows": [["Individual level", "$W_1 = I_n$"], ["Common level", "$W_1 = 1_n$"]]}]}
+        P = H._Paper({"paper": {}, "definitions": [d]})
+        html = H._definition(P, d)
+        self.assertIn('<div class="cs-table cs-def-table"><table><caption>Blocks by restriction</caption>', html)
+        self.assertEqual(html.count("<tr>"), 3)
+        self.assertNotIn("<script", H._def_tables(P.text, {"tables": [{"description": "<script>", "columns": ["a"],
+                                                                         "rows": [["b"]]}]}))
+        self.assertEqual(H._def_tables(P.text, {"tables": "odd"}), "")
+
     def test_author_year_labels(self):
         refs = [{"id": "B1", "id_type": "reference",
                  "target": "Hyndman, R. J., Koehler, A. B., Ord, J. K., & Snyder, R. D. (2008). Forecasting. Springer."},
