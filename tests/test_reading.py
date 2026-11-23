@@ -203,6 +203,8 @@ def test_claim_pages(env):
     assert '<article class="pv-claim" id="C2">' in body and 'aria-label="Views of this claim"' in body
     # the paper view's grid: the panel in the rail, as on the paper's page (else the text is squeezed into a column)
     assert '<div class="entry-rail"><aside class="panel" aria-label="About this claim">' in body
+    # its assumptions, as a section of their own, so that the links to them open in a pop-up
+    assert 'id="assumptions"' in body or "pv-assumes" not in body
     assert f'href="/p/{KEY}/C2/record"' in body and f'href="/p/{KEY}/C2" aria-current="page"' in body
     record = (out / "p" / KEY / "C2" / "record.html").read_text()
     sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', record)

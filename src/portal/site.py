@@ -1410,6 +1410,9 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
         used = ('<p class="claim-users small">' + (f'Used by {", ".join(links)} · ' if links else "")
                 + f'<a href="/p/{key}#{esc(cid)}">This claim in the paper</a></p>')
         body = f'<section class="cs-section pv-section claim-paper" id="claim">{block}{used}</section>'
+        # the assumptions it rests on, as the paper's page has them, so that each opens in a pop-up here too
+        record_parts = render(bundle, file_url, ref_text, scores, pages, claim=cid)
+        body += (record_parts.get("blocks") or {}).get("assumptions", "")
         nav = ""
     else:
         parts = render(bundle, file_url, ref_text, scores, pages, claim=cid)
