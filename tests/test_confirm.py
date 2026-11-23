@@ -106,11 +106,16 @@ def test_your_submissions(app_client):
     assert "Your submissions" in page and "Only you see this page" in page
     assert len(tickets(page)) == 1 and "Confirm and publish" in page            # what waits for you
     assert "Closed in the last 14 days" in page and "cancelled by you" in page
-    assert "<h2>Published</h2>" in page and 'href="/p/2026.000001"' in page and f'href="/people/{GUARANTOR}"' in page
+    assert '<section class="cs-section" id="published"><h2>Published</h2>' in page
+    assert 'href="/p/2026.000001"' in page and f'href="/people/{GUARANTOR}"' in page
     # in the order a guarantor acts on them, with a menu of them and how many each holds
-    order = [page.index(f'<section id="{s}">') for s in ("waiting", "published", "closed")]
+    order = [page.index(f'<section class="cs-section" id="{s}">') for s in ("waiting", "published", "closed")]
     assert order == sorted(order)
-    menu = page[page.index('<nav class="cs-toc spec-toc"'):page.index("</nav>", page.index('class="cs-toc'))]
+    # the contents of every page, to the right of the text as on the paper view, with Top; the sections stay open
+    assert '<div class="entry-rail"><nav class="cs-toc"' in page and 'data-view="paper"' in page
+    assert '<article class="cs-body" data-open>' in page
+    menu = page[page.index('<nav class="cs-toc"'):page.index("</nav>", page.index('class="cs-toc'))]
+    assert "On this page" in menu and 'href="#top">\u2191 Top</a>' in menu
     for sid, title in (("waiting", "Waiting for you"), ("published", "Published"),
                        ("closed", "Closed in the last 14 days")):
         assert f'<a href="#{sid}">{title}</a> <span class="count">1</span>' in menu

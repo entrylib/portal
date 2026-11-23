@@ -1995,13 +1995,14 @@ def submissions_list(items, past, orcid, name=None, session=False):
     if past.get("closed"):
         sections.append(("closed", "Closed in the last 14 days", len(past["closed"]),
                          "<ul>" + "".join(_submission_row(x) for x in past["closed"]) + "</ul>"))
-    toc = "".join(f'<li><a href="#{sid}">{esc(title)}</a> <span class="count">{n}</span></li>'
-                  for sid, title, n, _ in sections)
-    body = "".join(f'<section id="{sid}"><h2>{esc(title)}</h2>{html_}</section>' for sid, title, _, html_ in sections)
-    main = (f'<div class="wrap spec submissions"><h1>Your submissions</h1>'
-            f'<p>Signed in as {who}. Only you see this page. {signout}</p>'
-            f'<div class="cs-layout"><nav class="cs-toc spec-toc" aria-label="Sections"><p class="cs-toc-title">'
-            f'On this page</p><ol>{toc}</ol></nav><div class="spec-body">{body}</div></div></div>')
+    body = "".join(f'<section class="cs-section" id="{sid}"><h2>{esc(title)}</h2>{html_}</section>'
+                   for sid, title, _, html_ in sections)
+    # laid out as the paper view (site.css, .entry[data-view="paper"]): one column of text, and to its right the
+    # contents, the same as every page's (contents(): On this page, Top, the sections with their counts)
+    nav = contents([(sid, title, str(n)) for sid, title, n, _ in sections])
+    main = (f'<div class="cs-page entry submissions" data-view="paper"><div class="cs-header entry-header">'
+            f'<h1>Your submissions</h1><p>Signed in as {who}. Only you see this page. {signout}</p></div>'
+            f'<div class="entry-rail">{nav}</div><article class="cs-body" data-open>{body}</article></div>')
     return shell("Your submissions", main, active="submissions", script="/page.js",
                  head='<meta name="robots" content="noindex">')
 
