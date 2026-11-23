@@ -37,7 +37,7 @@ from pathlib import Path
 from claimset.render import render
 from claimset.validate import with_verifiability
 
-from . import limits, previews
+from . import latex, limits, previews
 from .publish import load_submission
 from .submissions import CANCELLED, _sha256, check, duplicate, packaged_files, token_hash
 
@@ -276,7 +276,8 @@ def history(conn, orcid, now=None, published_dir=None):
     """What /submissions shows besides the pending submissions waiting for `orcid`: {"others": submissions that wait
     for another guarantor or are being published, "closed": those closed in the last 14 days (with the reason),
     "published": the current version of every claimset `orcid` guarantees, with its dates, its claims (all, and
-    principal; assumptions aside) and its paper's score from the score file written with it (`published_dir`)},
+    principal; assumptions aside), its paper's score from the score file written with it (`published_dir`) and
+    why it has no LaTeX draft (`no_draft`, latex.refusal; None when it has one)},
     each newest first."""
     now = now or dt.datetime.now(dt.UTC)
     rows = conn.execute(
@@ -290,13 +291,16 @@ def history(conn, orcid, now=None, published_dir=None):
         " (SELECT count(*) FROM claims c WHERE c.concept_id = p.concept_id AND c.version = p.current_version"
         "  AND NOT c.is_assumption),"
         " (SELECT count(*) FROM claims c WHERE c.concept_id = p.concept_id AND c.version = p.current_version"
-        "  AND NOT c.is_assumption AND c.role = 'principal')"
+        "  AND NOT c.is_assumption AND c.role = 'principal'),"
+        " (SELECT jsonb_build_object('paper', v.file->'paper', 'artefacts', v.file->'artefacts') FROM versions v"
+        "  WHERE v.concept_id = p.concept_id AND v.version = p.current_version)"
         " FROM papers p WHERE %s = ANY(p.guarantors) ORDER BY p.updated DESC, p.concept_id DESC", (orcid,)).fetchall()
     return {"others": [x for x in subs if x["state"] in ("pending", "confirmed", "publishing") and
                        not (x["state"] == "pending" and x["confirmed"] is None)],
             "closed": [x for x in subs if x["state"] in ("refused", "expired")],
             "published": [dict(zip(("id", "version", "title", "status", "date", "first", "key", "claims",
-                                    "principal"), r, strict=True), score=_paper_score(published_dir, r[6], r[1]))
+                                    "principal"), r[:9], strict=True), score=_paper_score(published_dir, r[6], r[1]),
+                               no_draft=latex.refusal(r[9] or {}))
                           for r in published]}
 
 
