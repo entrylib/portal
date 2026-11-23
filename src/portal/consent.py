@@ -272,10 +272,12 @@ def cancel_ticket(conn, ticket, submissions_dir, now=None):
     return Outcome("cancelled", "cancelled", sid)
 
 
-def history(conn, orcid, now=None):
+def history(conn, orcid, now=None, published_dir=None):
     """What /submissions shows besides the pending submissions waiting for `orcid`: {"others": submissions that wait
     for another guarantor or are being published, "closed": those closed in the last 14 days (with the reason),
-    "published": the current version of every claimset `orcid` guarantees}, each newest first."""
+    "published": the current version of every claimset `orcid` guarantees, with its dates, its claims (all, and
+    principal; assumptions aside) and its paper's score from the score file written with it (`published_dir`)},
+    each newest first."""
     now = now or dt.datetime.now(dt.UTC)
     rows = conn.execute(
         "SELECT s.id, s.state, s.kind, s.target, s.title, s.received, s.detail, s.published_id, g.confirmed"
@@ -284,13 +286,30 @@ def history(conn, orcid, now=None):
     keys = ("submission", "state", "kind", "target", "title", "received", "detail", "published_id", "confirmed")
     subs = [dict(zip(keys, r, strict=True)) for r in rows]
     published = conn.execute(
-        "SELECT p.concept_id, p.current_version, p.title, p.status, p.updated FROM papers p"
-        " WHERE %s = ANY(p.guarantors) ORDER BY p.updated DESC, p.concept_id DESC", (orcid,)).fetchall()
+        "SELECT p.concept_id, p.current_version, p.title, p.status, p.updated, p.first_published, p.url_key,"
+        " (SELECT count(*) FROM claims c WHERE c.concept_id = p.concept_id AND c.version = p.current_version"
+        "  AND NOT c.is_assumption),"
+        " (SELECT count(*) FROM claims c WHERE c.concept_id = p.concept_id AND c.version = p.current_version"
+        "  AND NOT c.is_assumption AND c.role = 'principal')"
+        " FROM papers p WHERE %s = ANY(p.guarantors) ORDER BY p.updated DESC, p.concept_id DESC", (orcid,)).fetchall()
     return {"others": [x for x in subs if x["state"] in ("pending", "confirmed", "publishing") and
                        not (x["state"] == "pending" and x["confirmed"] is None)],
             "closed": [x for x in subs if x["state"] in ("refused", "expired")],
-            "published": [dict(zip(("id", "version", "title", "status", "date"), r, strict=True))
+            "published": [dict(zip(("id", "version", "title", "status", "date", "first", "key", "claims",
+                                    "principal"), r, strict=True), score=_paper_score(published_dir, r[6], r[1]))
                           for r in published]}
+
+
+def _paper_score(published_dir, key, version):
+    """{score, band} of a version's paper, from its score file (indexer), or None."""
+    if not published_dir:
+        return None
+    try:
+        held = json.loads((Path(published_dir) / "p" / f"{key}@v{version}.score.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    paper = held.get("paper") if isinstance(held, dict) else None
+    return paper if isinstance(paper, dict) and paper.get("score") is not None else None
 
 
 def _comparable(doc):
