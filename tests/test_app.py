@@ -35,3 +35,12 @@ def test_home_page(client):
 
 def test_api_docs(client):
     assert client.get("/api/openapi.json").status_code == 200
+
+
+def test_the_version_is_set_once():
+    # CLAUDE.md: every change to the application raises the version, in pyproject.toml and in __version__, kept equal.
+    import tomllib
+    from pathlib import Path
+
+    project = tomllib.loads((Path(__file__).parent.parent / "pyproject.toml").read_text())["project"]
+    assert project["version"] == __version__

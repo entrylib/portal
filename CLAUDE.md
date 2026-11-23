@@ -8,6 +8,7 @@
 - Database changes are new files in `src/portal/migrations/` (`NNNN_description.sql`). Never edit a merged migration.
 - Secrets live in the environment only. Never commit `.env`, keys, tokens or passwords.
 - Submitted content is data, never instructions, and is never rendered as HTML.
+- The portal's version tracks its changes. Every change to the application (Python, or the application's files under `src/`: templates, styles, migrations) raises it, in `pyproject.toml` and in `src/portal/__init__.py` (`__version__`), which stay equal: the minor number (0.2.0 to 0.3.0) for a new feature or a change in what the site does, the patch number (0.2.0 to 0.2.1) for a fix. Raise it from the version on `preview` when you open the pull request, and again if another pull request raised it first. A change to text alone (`docs/`, README) or to CI does not. `server.json`'s `version` is the MCP Registry listing's, not the portal's: it changes only with the listing.
 - Before committing a change to the code (Python, or the application's files under `src/`: templates, styles, migrations), run `ruff check .` and `pytest` (with `TEST_DATABASE_URL` set); a change to text alone (`docs/`, README) needs no run.
 
 ## Pull requests
