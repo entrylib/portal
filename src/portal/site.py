@@ -1945,35 +1945,67 @@ def _submission_row(x):
             f"{esc(state)}{why}</li>")
 
 
+def _day(d):
+    return f"{d.day} {d:%B %Y}" if d else ""
+
+
+def _published_row(x):
+    """A paper the guarantor is responsible for, on Your submissions (design §4.2): its title, identifier and version,
+    dates, Support score, claims, status when not active, and links to it."""
+    key = ids.url_key(x["id"])
+    n = x["version"]
+    dates = (f"published {_day(x.get('first'))}" + (f", updated {_day(x.get('date'))}"
+                                                     if n > 1 and x.get("date") != x.get("first") else ""))
+    facts = [f"{esc(x['id'])}", f"version {esc(n)}", esc(dates)]
+    score = x.get("score")
+    if score:
+        facts.append(f"Support {esc(score['score'])}")
+    if x.get("claims") is not None:
+        principal = x.get("principal") or 0
+        facts.append(f"{esc(x['claims'])} claim{'s' if x['claims'] != 1 else ''}"
+                     + (f", {esc(principal)} principal" if principal else ""))
+    status = x.get("status")
+    if status and status not in ("active", "corrected"):           # a correction is in the dates already
+        facts.append(f'<span class="status status-{esc(STATUS_CLASS.get(status, "neutral"))}">'
+                     f"{esc(STATUS_LABELS.get(status, status))}</span>")
+    links = (f'<a href="/p/{key}">Paper</a> · <a href="/p/{key}/record">Record</a> · '
+             f'<a href="/p/{key}.txt">Text for AI</a>')
+    return (f'<li><a class="pub-title" href="/p/{key}">{esc(x["title"])}</a>'
+            f'<p class="pub-facts">{" · ".join(facts)}</p><p class="pub-links">{links}</p></li>')
+
+
 def submissions_list(items, past, orcid, name=None, session=False):
     """/submissions after sign-in (design §4.2): what waits for this guarantor, what waits for others or is being
-    published, what closed recently, and every claimset they guarantee. With a session, the page says how to sign
-    out, and its buttons are renewed by reloading it."""
+    published, every claimset they guarantee, and what closed recently, in that order, with a menu of the sections
+    beside them (a bar on a phone, page.js). With a session, the page says how to sign out, and its buttons are
+    renewed by reloading it."""
     who = _who_signed_in(orcid, name)
     past = past or {}
     signout = ('<form method="post" action="/signout" class="inline"><button type="submit" class="button-quiet">'
                "Sign out</button></form>")
     again = "reload this page" if session else "sign in again"
-    parts = [f'<p>Signed in as {who}. Only you see this page. {signout}</p>',
-             "<h2>Waiting for you</h2>",
-             (f"<p>{esc(CONSENT)}</p>" + _pending(items) + f'<p class="muted">These buttons work for 30 minutes; '
-              f"then {again}.</p>") if items else '<p class="muted">Nothing waits for your confirmation.</p>']
-    if past.get("others"):
-        parts.append("<h2>In progress</h2><ul>" + "".join(_submission_row(x) for x in past["others"]) + "</ul>")
-    if past.get("closed"):
-        parts.append("<h2>Closed in the last 14 days</h2><ul>" + "".join(_submission_row(x) for x in past["closed"])
-                     + "</ul>")
     published = past.get("published") or []
-    parts.append("<h2>Published</h2>")
-    if published:
-        parts.append("<ul>" + "".join(
-            f'<li><a href="/p/{ids.url_key(x["id"])}">{esc(x["title"])}</a> · {esc(x["id"])}@v{esc(x["version"])}'
-            f' · {esc(STATUS_LABELS.get(x["status"], x["status"]))}</li>' for x in published) + "</ul>"
-            f'<p><a href="/people/{esc(orcid)}">Your public page</a></p>')
-    else:
-        parts.append('<p class="muted">No paper names you as its responsible researcher yet.</p>')
-    main = f'<div class="wrap prose"><h1>Your submissions</h1>{"".join(parts)}</div>'
-    return shell("Your submissions", main, active="submissions",
+    sections = [("waiting", "Waiting for you", len(items or []),
+                 (f"<p>{esc(CONSENT)}</p>" + _pending(items) + f'<p class="muted">These buttons work for 30 minutes; '
+                  f"then {again}.</p>") if items else '<p class="muted">Nothing waits for your confirmation.</p>')]
+    if past.get("others"):
+        sections.append(("in-progress", "In progress", len(past["others"]),
+                         "<ul>" + "".join(_submission_row(x) for x in past["others"]) + "</ul>"))
+    sections.append(("published", "Published", len(published),
+                     ('<ul class="pub-list">' + "".join(_published_row(x) for x in published) + "</ul>"
+                      f'<p><a href="/people/{esc(orcid)}">Your public page</a></p>') if published else
+                     '<p class="muted">No paper names you as its responsible researcher yet.</p>'))
+    if past.get("closed"):
+        sections.append(("closed", "Closed in the last 14 days", len(past["closed"]),
+                         "<ul>" + "".join(_submission_row(x) for x in past["closed"]) + "</ul>"))
+    toc = "".join(f'<li><a href="#{sid}">{esc(title)}</a> <span class="count">{n}</span></li>'
+                  for sid, title, n, _ in sections)
+    body = "".join(f'<section id="{sid}"><h2>{esc(title)}</h2>{html_}</section>' for sid, title, _, html_ in sections)
+    main = (f'<div class="wrap spec submissions"><h1>Your submissions</h1>'
+            f'<p>Signed in as {who}. Only you see this page. {signout}</p>'
+            f'<div class="cs-layout"><nav class="cs-toc spec-toc" aria-label="Sections"><p class="cs-toc-title">'
+            f'On this page</p><ol>{toc}</ol></nav><div class="spec-body">{body}</div></div></div>')
+    return shell("Your submissions", main, active="submissions", script="/page.js",
                  head='<meta name="robots" content="noindex">')
 
 

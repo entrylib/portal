@@ -107,6 +107,19 @@ def test_your_submissions(app_client):
     assert len(tickets(page)) == 1 and "Confirm and publish" in page            # what waits for you
     assert "Closed in the last 14 days" in page and "cancelled by you" in page
     assert "<h2>Published</h2>" in page and 'href="/p/2026.000001"' in page and f'href="/people/{GUARANTOR}"' in page
+    # in the order a guarantor acts on them, with a menu of them and how many each holds
+    order = [page.index(f'<section id="{s}">') for s in ("waiting", "published", "closed")]
+    assert order == sorted(order)
+    menu = page[page.index('<nav class="cs-toc spec-toc"'):page.index("</nav>", page.index('class="cs-toc'))]
+    for sid, title in (("waiting", "Waiting for you"), ("published", "Published"),
+                       ("closed", "Closed in the last 14 days")):
+        assert f'<a href="#{sid}">{title}</a> <span class="count">1</span>' in menu
+    assert 'src="/page.js' in page
+    # a published paper: identifier, version, date, claims, and its links
+    row = page[page.index('<ul class="pub-list">'):page.index("</ul>", page.index('<ul class="pub-list">'))]
+    for part in ("entrylib:2026.000001", "version 1", "version 1 · published", "1 claim, 1 principal", "Support ",
+                 'href="/p/2026.000001/record">Record', 'href="/p/2026.000001.txt">Text for AI'):
+        assert part in row, part
     other = sign_in_at(app_client, "submissions", as_orcid="0000-0002-1825-0097").text
     assert "Nothing waits for your confirmation" in other and "No paper names you" in other
 

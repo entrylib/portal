@@ -475,7 +475,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             def listing():
                 with pool.connection() as conn:
                     items = consent.listing(conn, state, who, settings.submissions_dir)
-                    return items, (consent.history(conn, who) if items is not None else None)
+                    return items, (consent.history(conn, who, published_dir=settings.published_dir)
+                                   if items is not None else None)
             items, past = await run_in_threadpool(listing)
             if items is None:
                 return _page(site.message_page("Sign-in expired", "This sign-in has expired or was already used. "
@@ -538,7 +539,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             if who is None:
                 return _page(site.submissions_page(orcid.configured))
             items = consent.listing_for(conn, who[0], settings.submissions_dir)
-            past = consent.history(conn, who[0])
+            past = consent.history(conn, who[0], published_dir=settings.published_dir)
         return _page(site.submissions_list(items, past, who[0], who[1], session=True))
 
     @app.get("/submissions/{submission}/preview", response_class=HTMLResponse, include_in_schema=False)
