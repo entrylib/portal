@@ -8,7 +8,7 @@ import re
 import pytest
 from publishing import BASE, example, write
 
-from portal import search, site
+from portal import reading, search, site
 from portal.indexer import reindex
 from portal.publish import publish
 
@@ -228,3 +228,13 @@ def test_a_claim_result_carries_its_own_warnings_not_its_papers():
           {"rule": "W13", "where": "claims:C2"}]
     assert [w["rule"] for w in search.claim_warnings(ws, "C2")] == ["W22", "W11", "W13"]
     assert search.claim_warnings(None, "C2") == [] and search.claim_warnings(ws, "C9") == []
+
+
+def test_llms_txt_asks_for_a_leaner_claimset_before_submitting():
+    # From the sMAPE study's version 4 (entrylib:2026.000013), whose build added asides nobody had asked for: agents are
+    # asked to have another agent review the claimset with `claimset lean`, and their human decides what goes.
+    text = reading.llms_txt(BASE)
+    lean, score = text.index("claimset lean <file> --prompt"), text.index("Optional, before submitting: the scores")
+    assert lean < score
+    assert "different agent than the one\n  that wrote the claimset" in text
+    assert f"{BASE}/skills/claimset-submit.md, step 11a" in text
