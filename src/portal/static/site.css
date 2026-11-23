@@ -777,6 +777,12 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
 }
 /* Your submissions (design §4.2): its sections beside a menu, as a specification's; a published paper's row. */
 .submissions .entry-header h1 { margin: 0 0 8px; }
+/* Your submissions' contents (design §4.2): Waiting for you and Published open the list of their papers by name, as
+   the paper view's sections open their claims; at the top of the contents they read as its other entries. */
+.submissions .cs-toc > ol > .pv-toc-sec > details > summary { color: var(--accent); padding-top: 0; padding-bottom: 0; }
+.submissions .cs-toc > ol > .pv-toc-sec > a.pv-toc-go { padding: 0; line-height: 2; }
+.pub-toc { list-style: none; margin: 2px 0 10px 15px; padding: 0; font-size: 14px; display: grid; gap: 4px; }
+.cs-toc .pub-toc a, .toc-js .cs-toc .pub-toc a { display: block; grid-template-columns: none; }
 .pub-list { list-style: none; padding: 0; margin: 0; }
 .pub-list li { padding: 14px 0; border-bottom: 1px solid var(--rule-light); }
 .pub-title { font-weight: 600; font-size: 18px; }
