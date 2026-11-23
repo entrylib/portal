@@ -99,6 +99,9 @@ NOT_CHECKABLE = {"argument", "cited", "expert_judgement", "consensus"}
 
 MATH = re.compile(r"\$\$(.+?)\$\$|\$([^$\s][^$]*?)\$|\\\((.+?)\\\)", re.S)
 CODE = re.compile(r"(`+)(.+?)\1", re.S)
+#: A fenced block (claimset §8 rule 12): three backticks, an optional language on the same line, the lines, three
+#: backticks. Shown as a block whose lines are kept, inside the paragraph that holds it.
+FENCED_CODE = re.compile(r"```[ \t]*([^\n`]*)\n(.*?)\n?[ \t]*```", re.S)
 
 
 #: LaTeX in a text: a command (\\mu, \\frac) or a sub- or superscript.
@@ -409,7 +412,13 @@ class _Paper:
         out, last = [], 0
         for m in CODE.finditer(s):
             out.append(self._maths(s[last:m.start()]))
-            out.append(f'<code class="cs-code">{esc(m.group(2).strip())}</code>')
+            block = FENCED_CODE.fullmatch(m.group(0))
+            if block:      # a fenced block (claimset §8 rule 12): its lines kept, its language named in the class
+                lang = re.sub(r"[^A-Za-z0-9+#-]", "", block.group(1))[:20]
+                cls = f" language-{lang}" if lang else ""
+                out.append(f'<code class="cs-code cs-code-block{cls}">{esc(block.group(2).rstrip())}</code>')
+            else:
+                out.append(f'<code class="cs-code">{esc(m.group(2).strip())}</code>')
             last = m.end()
         out.append(self._maths(s[last:]))
         return "".join(out)

@@ -12,6 +12,7 @@ from importlib import resources
 from pathlib import Path
 
 from portal import page as H
+from portal import page_css
 
 EXAMPLES = Path(str(resources.files("claimset") / "data" / "examples"))
 
@@ -165,6 +166,18 @@ class TestTermsReferencesMaths(unittest.TestCase):
         body = H.render_parts(doc)["body"]
         self.assertIn('Source: <a class="ref" href="#B1">Smith (2020)</a>', body)
         self.assertIn('Used by: <a href="#D1">D1</a>', body)
+
+    def test_a_fenced_block_is_a_block(self):
+        P = H._Paper({"paper": {}})
+        out = P.text("Run:\n```r\nfit <- adam(y, h = 12)\nif (a != b) x <- 1\n```\nthen `es()` inline.")
+        self.assertIn('<code class="cs-code cs-code-block language-r">fit &lt;- adam(y, h = 12)\n'
+                      'if (a != b) x &lt;- 1</code>', out)               # its lines kept, its language a class
+        self.assertIn('<code class="cs-code">es()</code>', out)
+        self.assertNotIn("`", out)
+        out = P.text("```\nfor t in 1..T:\n    step\n```")
+        self.assertIn('<code class="cs-code cs-code-block">for t in 1..T:\n    step</code>', out)
+        self.assertIn('<code class="cs-code">x</code>', P.text("odd ```x``` inline"))  # on one line: inline code
+        self.assertIn(".cs-code-block {", page_css.CSS)
 
     def test_maths_and_code(self):
         P = H._Paper({"paper": {}})

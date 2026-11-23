@@ -122,5 +122,7 @@ math { font-family: var(--cs-math-font); font-size: 1.05em; }
 mtable[columnspacing="0"] mtd { padding-left: 0; padding-right: 0; }      /* aligned equations: = under = */
 .cs-code, .math-tex { font-family: var(--cs-code-font); font-size: 0.9em; background: var(--cs-panel);
   border: 1px solid var(--cs-rule-light); border-radius: 3px; padding: 0 4px; overflow-wrap: anywhere; }
+.cs-code-block { display: block; white-space: pre; overflow-x: auto; overflow-wrap: normal; padding: 8px 12px;
+  margin: 6px 0; }                                         /* a fenced block: its lines kept, scrolled when wide */
 .cs-table td.txt { text-align: left; }
 """
