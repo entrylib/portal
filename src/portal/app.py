@@ -575,7 +575,12 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             return None
         return dict(zip(("id", "version", "title", "status", "file"), row, strict=True))
 
-    def _no_draft():
+    def _no_draft(x=None):
+        """No draft: the reason, for a paper of this guarantor made otherwise than with claimset-lab (§4.6)."""
+        reason = latex.refusal(x["file"]) if x else None
+        if reason:
+            return _page(site.message_page("No LaTeX draft", latex.NO_DRAFT[reason][1],
+                                           ("/submissions#published", "Your submissions")), 403)
         return _page(site.message_page("Not available", "There is no paper at this address that you guarantee and "
                                        "can make a LaTeX draft of: it is retracted or withdrawn, or it names someone "
                                        "else as its guarantor.", ("/submissions", "Your submissions")), 404)
@@ -589,7 +594,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             if who is None:
                 return RedirectResponse("/submissions", status_code=303)
             x = _draftable(conn, who[0], key)
-        return _page(site.draft_page(x)) if x else _no_draft()
+        return _page(site.draft_page(x)) if x and not latex.refusal(x["file"]) else _no_draft(x)
 
     @app.post("/submissions/draft/{key}", include_in_schema=False)
     def draft_build(request: Request, key: str):
@@ -599,8 +604,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             if who is None:
                 return RedirectResponse("/submissions", status_code=303)
             x = _draftable(conn, who[0], key)
-            if x is None:
-                return _no_draft()
+            if x is None or latex.refusal(x["file"]):
+                return _no_draft(x)
             refs = latex.known_references(conn, x["file"], settings.base_url)
         name, data = latex.build(x["file"], settings.base_url, refs,
                                  latex.figure_files(settings.published_dir, settings.base_url))

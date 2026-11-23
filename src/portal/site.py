@@ -1970,10 +1970,28 @@ def _published_row(x):
                      f"{esc(STATUS_LABELS.get(status, status))}</span>")
     links = (f'<span><a href="/p/{key}">Paper</a> · <a href="/p/{key}/record">Record</a> · '
              f'<a href="/p/{key}.txt">Text for AI</a></span>')
-    if status in DRAFTABLE:
+    if status in DRAFTABLE and not x.get("no_draft"):
         links += f'<a class="button-quiet pub-action" href="/submissions/draft/{key}">LaTeX draft</a>'
+    elif status in DRAFTABLE:
+        # said in the row, so that a guarantor without the button knows why (design §4.6)
+        short, full = latex_reasons().get(x["no_draft"], ("", ""))
+        links += f'<span class="pub-action pub-nodraft" title="{esc(full)}">No LaTeX draft: {esc(short)}</span>'
     return (f'<li><a class="pub-title" href="/p/{key}">{esc(x["title"])}</a>'
             f'<p class="pub-facts">{" · ".join(facts)}</p><p class="pub-links">{links}</p></li>')
+
+
+def _draft_rule(published):
+    """The rule of the LaTeX drafts, said once above the papers when one of them has none (design §4.6)."""
+    from . import latex
+    if any(x.get("no_draft") and x.get("status") in DRAFTABLE for x in published):
+        return f'<p class="muted">{esc(latex.DRAFT_RULE)}</p>'
+    return ""
+
+
+def latex_reasons():
+    """latex.NO_DRAFT, imported here since latex builds on this module."""
+    from . import latex
+    return latex.NO_DRAFT
 
 
 #: The statuses of a paper its guarantor may make a LaTeX draft of (design §4.6): not one retracted or withdrawn.
@@ -2025,7 +2043,8 @@ def submissions_list(items, past, orcid, name=None, session=False):
         sections.append(("in-progress", "In progress", len(past["others"]),
                          "<ul>" + "".join(_submission_row(x) for x in past["others"]) + "</ul>"))
     sections.append(("published", "Published", len(published),
-                     ('<ul class="pub-list">' + "".join(_published_row(x) for x in published) + "</ul>"
+                     (_draft_rule(published) + '<ul class="pub-list">'
+                      + "".join(_published_row(x) for x in published) + "</ul>"
                       f'<p><a href="/people/{esc(orcid)}">Your public page</a></p>') if published else
                      '<p class="muted">No paper names you as its responsible researcher yet.</p>'))
     if past.get("closed"):

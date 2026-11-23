@@ -188,8 +188,29 @@ def test_the_draft_counts_against_validation():
     assert ratelimit.kind_of("GET", "/submissions/draft/2026.000001") is None
 
 
-def publish_one(c):
-    submit(c)
+def lab_made():
+    return example("submission-from-lab.json")
+
+
+def test_only_research_done_with_the_lab_gets_a_draft():
+    """A draft is made of a claimset made with claimset-lab, never of one that restates a published paper."""
+    assert latex.refusal(lab_made()) is None
+    assert latex.refusal(example()) == "not_lab"                                   # written directly as a claimset
+    own = lab_made()
+    own["paper"]["published_as"] = {"id_type": "doi", "id": "10.1016/j.ijforecast.2025.01.001"}
+    assert latex.refusal(own) == "restates"                                        # converted by its authors
+    manuscript = lab_made()
+    manuscript["artefacts"].append({"id": "A9", "kind": "manuscript", "uri": "https://doi.org/10.1016/j.ijforecast.2025.01.001"})
+    assert latex.refusal(manuscript) == "restates"
+    other = lab_made()
+    other["paper"]["origin"] = "converted"
+    assert latex.refusal(other) == "restates"                                      # converted by others
+    for key, (short, full) in latex.NO_DRAFT.items():
+        assert short and "claimset-lab" in full, key
+
+
+def publish_one(c, doc=None):
+    submit(c, doc or lab_made())
     [ticket] = tickets(sign_in_at(c, "submissions").text)
     assert "published as entrylib:" in confirm(c, ticket).text
 
@@ -214,6 +235,17 @@ def test_the_guarantors_button(app_client, settings):
         conn.execute("UPDATE papers SET status = 'retracted'")
     assert app_client.post("/submissions/draft/2026.000001").status_code == 404           # retracted: no draft
     assert "LaTeX draft" not in signed_in(app_client).text
+
+
+def test_the_guarantor_is_told_why_a_paper_has_no_draft(app_client):
+    publish_one(app_client, example())                                             # not made with the lab
+    page = signed_in(app_client).text
+    row = page[page.index('<ul class="pub-list">'):page.index("</ul>", page.index('<ul class="pub-list">'))]
+    assert 'href="/submissions/draft/' not in row
+    assert "No LaTeX draft: not made with claimset-lab" in row
+    assert latex.DRAFT_RULE in page                                                # the rule, said once
+    for r in (app_client.get("/submissions/draft/2026.000001"), app_client.post("/submissions/draft/2026.000001")):
+        assert r.status_code == 403 and "carry a lab record" in r.text
 
 
 def test_someone_else_gets_no_draft(app_client):
