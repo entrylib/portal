@@ -13,7 +13,7 @@ import psycopg
 import pytest
 from publishing import example
 from test_confirm import confirm, sign_in_at, signed_in, tickets
-from test_consent import submit
+from test_consent import submit, titled
 
 from portal import latex, ratelimit
 
@@ -193,9 +193,9 @@ def lab_made():
 
 
 def test_only_research_done_with_the_lab_gets_a_draft():
-    """A draft is made of a claimset made with claimset-lab, never of one that restates a published paper."""
+    """A draft is made of research that has no paper yet, never of a claimset that restates a published paper."""
     assert latex.refusal(lab_made()) is None
-    assert latex.refusal(example()) == "not_lab"                                   # written directly as a claimset
+    assert latex.refusal(example()) is None                                        # written directly as a claimset
     own = lab_made()
     own["paper"]["published_as"] = {"id_type": "doi", "id": "10.1016/j.ijforecast.2025.01.001"}
     assert latex.refusal(own) == "restates"                                        # converted by its authors
@@ -206,7 +206,7 @@ def test_only_research_done_with_the_lab_gets_a_draft():
     other["paper"]["origin"] = "converted"
     assert latex.refusal(other) == "restates"                                      # converted by others
     for key, (short, full) in latex.NO_DRAFT.items():
-        assert short and "claimset-lab" in full, key
+        assert short and "written directly" in full, key
 
 
 def publish_one(c, doc=None):
@@ -238,14 +238,21 @@ def test_the_guarantors_button(app_client, settings):
 
 
 def test_the_guarantor_is_told_why_a_paper_has_no_draft(app_client):
-    publish_one(app_client, example())                                             # not made with the lab
+    """A claimset written directly has the button; one that restates a published paper says why it has none."""
+    publish_one(app_client, example())                                             # written directly
+    restating = titled("restated")
+    restating["paper"]["published_as"] = {"id_type": "doi", "id": "10.1016/j.ijforecast.2025.01.001"}
+    publish_one(app_client, restating)
     page = signed_in(app_client).text
-    row = page[page.index('<ul class="pub-list">'):page.index("</ul>", page.index('<ul class="pub-list">'))]
-    assert 'href="/submissions/draft/' not in row
-    assert "No LaTeX draft: not made with claimset-lab" in row
+    rows = page[page.index('<ul class="pub-list">'):page.index("</ul>", page.index('<ul class="pub-list">'))]
+    direct, restated = (rows[rows.index(f'href="/p/{k}"'):] for k in ("2026.000001", "2026.000002"))
+    assert 'href="/submissions/draft/2026.000001">LaTeX draft' in direct
+    assert 'href="/submissions/draft/2026.000002"' not in rows
+    assert "No LaTeX draft: it restates a published paper" in restated
     assert latex.DRAFT_RULE in page                                                # the rule, said once
-    for r in (app_client.get("/submissions/draft/2026.000001"), app_client.post("/submissions/draft/2026.000001")):
-        assert r.status_code == 403 and "carry a lab record" in r.text
+    for r in (app_client.get("/submissions/draft/2026.000002"), app_client.post("/submissions/draft/2026.000002")):
+        assert r.status_code == 403 and "already published" in r.text
+    assert app_client.post("/submissions/draft/2026.000001").status_code == 200
 
 
 def test_someone_else_gets_no_draft(app_client):

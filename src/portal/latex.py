@@ -1137,27 +1137,24 @@ def gaps_md(global_id, gaps):
 NO_DRAFT = {
     "restates": ("it restates a published paper",
                  "This claimset restates a paper that is already published, which is its paper for people. The LaTeX "
-                 "draft is for research done with claimset-lab, which has no paper yet."),
-    "not_lab": ("not made with claimset-lab",
-                "This claimset was not made with claimset-lab. The LaTeX draft is made only from claimsets that carry "
-                "a lab record, which holds the research itself."),
+                 "draft is for research that has no paper yet: made with claimset-lab or written directly as a "
+                 "claimset."),
 }
 #: What Your submissions says once about the drafts, when a paper has none.
-DRAFT_RULE = ("A LaTeX draft is offered for papers made with claimset-lab. A claimset that restates a paper already "
-              "published has its paper, and gets none.")
+DRAFT_RULE = ("A LaTeX draft is offered for research that has no paper yet: made with claimset-lab or written "
+              "directly as a claimset. A claimset that restates a paper already published has its paper, and gets "
+              "none.")
 
 
 def refusal(doc):
-    """Why no LaTeX draft is made of `doc` (a key of NO_DRAFT), or None when one is: a draft is made of a claimset
-    made with claimset-lab (a lab record, or the exploration it exports), never of one that restates a published
+    """Why no LaTeX draft is made of `doc` (a key of NO_DRAFT), or None when one is: a draft is made of research that
+    has no paper yet (made with claimset-lab, or written directly), never of a claimset that restates a published
     paper, converted by its authors (`published_as`, a `manuscript` with a DOI) or by others (`converted`)."""
     p = doc.get("paper") if isinstance(doc, dict) and isinstance(doc.get("paper"), dict) else {}
     if p.get("origin") == "converted" or isinstance(p.get("converted_from"), dict) \
             or isinstance(p.get("published_as"), dict) or source.doi(doc):
         return "restates"
-    lab = isinstance(p.get("exploration"), dict) or any(
-        isinstance(a, dict) and a.get("kind") == "lab_record" for a in doc.get("artefacts") or [])
-    return None if lab else "not_lab"
+    return None
 
 
 def build(doc, base_url, references=None, figure_file=None):

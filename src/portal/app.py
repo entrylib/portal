@@ -576,7 +576,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return dict(zip(("id", "version", "title", "status", "file"), row, strict=True))
 
     def _no_draft(x=None):
-        """No draft: the reason, for a paper of this guarantor made otherwise than with claimset-lab (§4.6)."""
+        """No draft: the reason, for a paper of this guarantor that restates a published paper (§4.6)."""
         reason = latex.refusal(x["file"]) if x else None
         if reason:
             return _page(site.message_page("No LaTeX draft", latex.NO_DRAFT[reason][1],
