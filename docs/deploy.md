@@ -137,18 +137,21 @@ real paper you want published, or skip this until you have one.
 ## MCP directories
 
 `server.json` at the repository's root lists the MCP server in the official MCP Registry
-(https://registry.modelcontextprotocol.io), from which MCP clients and other directories take their lists. Its name,
-`io.github.entrylib/entrylib`, is proved by signing in to GitHub as an owner of the `entrylib` organisation. From a
-clone of this repository, on any computer:
+(https://registry.modelcontextprotocol.io), from which MCP clients and other directories take their lists. The listing
+holds the server's name, `io.github.entrylib/entrylib`, its description, its address and a version; the tools are not in
+it (clients ask the server for them), so changing a tool needs no new listing.
 
-1. Install the publisher: `brew install mcp-publisher`, or the binary for your system from
-   https://github.com/modelcontextprotocol/registry/releases.
-2. `mcp-publisher login github`: it prints a code to enter at https://github.com/login/device.
-3. `mcp-publisher publish`.
-4. Check: `curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.entrylib/entrylib"`.
+**Publishing is automatic.** When a change to `server.json` reaches `main`, the workflow *Publish to the MCP Registry*
+(`.github/workflows/mcp-registry.yml`) publishes it. It signs in with the workflow's own GitHub identity, which proves
+the name for a repository of the `entrylib` organisation, so no token is stored. The registry takes each version once:
+with every change to the listing (the description, or the server's address), raise `version` in `server.json`; the
+workflow fails, saying so, when the version is already listed. Run it by hand from the Actions tab (*Run workflow*) to
+publish again after a failure. Check: `curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.entrylib/entrylib"`.
+`tests/test_mcp.py` keeps the address and the name in step with the portal.
 
-When the listing changes (the description, or the server's address), raise `version` in `server.json` and publish
-again: a version can be published once. `tests/test_mcp.py` keeps the address and the name in step with the portal.
+By hand, if the workflow cannot run: install the publisher (`brew install mcp-publisher`, or the binary from
+https://github.com/modelcontextprotocol/registry/releases), sign in as an owner of the `entrylib` organisation with
+`mcp-publisher login github` (it prints a code to enter at https://github.com/login/device), then `mcp-publisher publish`.
 
 ## Running it
 

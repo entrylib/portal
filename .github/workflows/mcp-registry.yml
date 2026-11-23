@@ -1,0 +1,44 @@
+name: Publish to the MCP Registry
+
+# server.json lists the MCP server in the official MCP Registry (docs/deploy.md, "MCP directories"). When a change to it
+# reaches main, this job publishes it. It signs in with the workflow's own GitHub identity (OIDC), which proves the name
+# io.github.entrylib/entrylib for a repository of the entrylib organisation: no token or secret is stored. The registry
+# takes each version once, so every change to the listing raises "version" in server.json.
+on:
+  push:
+    branches: [main]
+    paths: [server.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish server.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The version is new to the registry
+        id: check
+        run: |
+          name=$(jq -r .name server.json)
+          version=$(jq -r .version server.json)
+          if curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=$name" \
+              | jq -e --arg v "$version" '.servers[] | select(.server.version == $v)' > /dev/null; then
+            echo "The registry already lists $name $version. Raise \"version\" in server.json to publish a change."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || exit 1
+          fi
+      - name: Install the publisher
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+      - name: Sign in with the workflow's GitHub identity
+        if: steps.check.outputs.skip != 'true'
+        run: ./mcp-publisher login github-oidc
+      - name: Publish
+        if: steps.check.outputs.skip != 'true'
+        run: ./mcp-publisher publish
