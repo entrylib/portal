@@ -504,9 +504,12 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         return pages.message("Confirmed", text, status_url, back=nxt)
 
     removal_csp = PAGE_CSP.replace("form-action 'self'", f"form-action 'self' {settings.orcid_base}")
+    # the pages of a signed-in guarantor run the site's own script (page.js: the contents' bar on a phone, the
+    # section being read), as every other page does; nothing else
+    session_csp = removal_csp + "; script-src 'self'"
 
     def _page(html_, status=200):
-        return HTMLResponse(html_, status_code=status, headers={"Content-Security-Policy": removal_csp})
+        return HTMLResponse(html_, status_code=status, headers={"Content-Security-Policy": session_csp})
 
     @app.get("/files/{sha256}", include_in_schema=False)
     def legacy_file(sha256: str):
@@ -559,7 +562,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         base = f"/submissions/{submission}/preview"
         html_ = pages.session_preview(ctx, scores=preview_scores, base_url=settings.base_url, view=view,
                                       views=(base, f"{base}?view=record"))
-        return HTMLResponse(html_, headers={"Content-Security-Policy": removal_csp + "; script-src 'self'"})
+        return HTMLResponse(html_, headers={"Content-Security-Policy": session_csp})
 
     def _draftable(conn, who, key):
         """The current version of the paper at `key` that the person signed in guarantees and may make a LaTeX draft
@@ -787,7 +790,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
                               base_url=settings.base_url, view=view,
                               views=(f"/consent/{token}", f"/consent/{token}?view=record"))
         # the preview is a paper page: its own script (page.js: pop-ups, contents) runs, as on a published page
-        return HTMLResponse(html_, headers={"Content-Security-Policy": removal_csp + "; script-src 'self'"})
+        return HTMLResponse(html_, headers={"Content-Security-Policy": session_csp})
 
     async def _form_file(request):
         """The file of a form's `package` field, saved to a temporary file; None if absent. Raises UploadTooLarge."""

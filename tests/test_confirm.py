@@ -188,3 +188,12 @@ def test_the_preview_opens_with_the_session(app_client):
     app_client.post("/signout")
     signed_in(app_client, as_orcid="0000-0002-1825-0097")                            # someone else
     assert app_client.get(url).status_code == 404
+
+
+def test_your_submissions_may_run_the_sites_script(app_client):
+    """page.js makes the contents a bar on a phone (design §4.2): the page's policy lets the site's own script run,
+    and nothing else; signed in or not."""
+    for r in (sign_in_at(app_client, "submissions"), signed_in(app_client), app_client.get("/submissions")):
+        csp = r.headers["content-security-policy"]
+        assert "script-src 'self'" in csp and "unsafe-inline" not in csp, csp
+        assert 'src="/page.js' in r.text
