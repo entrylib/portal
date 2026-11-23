@@ -1126,6 +1126,10 @@ def _paper_body(doc, parts, record, more, *, file_url=None, ref_text=None, score
         shown.append((sid, title, c, inner))
     for sid in PAPER_KEEPS:
         keep(sid)
+    # the corrections are not a section of the paper view: its links to them (the header's places, a claim's "Why")
+    # open each in a pop-up (page.js), which shows it from here
+    if "corrections" in blocks:
+        body.append(_popup_only(parts, "corrections"))
     nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
            + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a>'
                                + (f' <span class="count">{esc(c)}</span>' if c else "") + inner + "</li>"
@@ -1309,6 +1313,13 @@ CLAIM_TITLES = {"principal": ("Principal claims", "The claim"),
                 "supporting": ("Supporting claims", "Claims it rests on")}
 
 
+def _popup_only(parts, sid):
+    """A section of the package's blocks held only for the pop-ups that show its items (page.js), not shown in the
+    page: the corrections, on the paper view and a claim's page."""
+    block = (parts.get("blocks") or {}).get(sid)
+    return f'<div class="cs-popup-only" hidden>{block}</div>' if block else ""
+
+
 def _claim_sections(parts, under_claim=""):
     """The sections of a claim bundle's page view (the package's blocks), the claim first; Summary and Highlights are
     left out, since the page's heading is the claim. `under_claim`: HTML that ends the claim's own section."""
@@ -1357,7 +1368,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
         body = f'<section class="cs-section pv-section claim-paper" id="claim">{block}{used}</section>'
         # the assumptions it rests on, as the paper's page has them, so that each opens in a pop-up here too
         record_parts = render(bundle, file_url, ref_text, scores, pages, claim=cid)
-        body += (record_parts.get("blocks") or {}).get("assumptions", "")
+        body += (record_parts.get("blocks") or {}).get("assumptions", "") + _popup_only(record_parts, "corrections")
         nav = ""
     else:
         parts = render(bundle, file_url, ref_text, scores, pages, claim=cid)
@@ -1366,6 +1377,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
         earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record, full.hypotheses,
                                          lambda c: f"#{c}" if c == cid else f"/p/{key}#{c}")
         body, sections = _claim_sections(parts, earlier if 'class="cs-earlier"' not in parts.get("body", "") else "")
+        body += _popup_only(parts, "corrections")       # the claim's "Why" opens its correction in a pop-up
         nav = contents(sections, '<li><a href="#score">Score</a></li>' if item else "")
     tag, note = status_top(p, published)
     if tag:

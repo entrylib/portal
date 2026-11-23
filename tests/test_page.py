@@ -525,6 +525,32 @@ class TestCorrections(unittest.TestCase):
         self.assertNotIn("<b>sum</b>", section)                               # the paper's text is never HTML
         self.assertIn(("corrections", "Corrections to published paper", 2), parts["sections"])
 
+    def test_each_correction_opens_in_a_pop_up(self):
+        """The header names each place, and a corrected object's "Why" links to its correction, which page.js opens in
+        a pop-up; the paper view and a claim's page hold the corrections for it, not as a section."""
+        d, cid, did = self.doc()
+        d["paper"]["published_as"]["corrections"].append(dict(d["paper"]["published_as"]["corrections"][1]))
+        parts = H.render_parts(d)
+        self.assertIn(f'in 3 places: <a href="#corr-1">{cid}</a>, <a href="#corr-2">{did} (1)</a>, '
+                      f'<a href="#corr-3">{did} (2)</a>.', parts["header"])
+        self.assertNotIn('href="#corrections"', parts["header"] + parts["body"])
+        claim_html = parts["body"].split(f'id="{cid}"', 1)[1].split("</div>", 1)[0]
+        self.assertIn('<a href="#corr-1">Why</a>', claim_html)
+        for n in (1, 2, 3):
+            self.assertIn(f'id="corr-{n}" data-name="Correction {n}"', parts["blocks"]["corrections"])
+        from portal import site
+        d["paper"].update({"id": "entrylib:2026.000001", "version": 1})
+        page = site.paper_page(d, base_url="https://entrylib.test", listing=[{"version": 1}])
+        self.assertIn('<div class="cs-popup-only" hidden><section class="cs-section" id="corrections">', page)
+        self.assertNotIn('href="#corrections"', page)                         # not in the paper view's contents
+        self.assertIn('<a href="#corr-1">Why</a>', page.split("cs-popup-only", 1)[0])     # under the claim, in view
+        principal = d["paper"]["contributions"][0]                         # a claim the paper view draws itself
+        d["paper"]["published_as"]["corrections"][0]["field"] = f"{principal}.statement"
+        page = site.paper_page(d, base_url="https://entrylib.test", listing=[{"version": 1}])
+        claim = page.split(f'<article class="pv-claim" id="{principal}"', 1)[1].split("</article>", 1)[0]
+        self.assertIn("Corrected from the published paper", claim)
+        self.assertIn('<a href="#corr-1">Why</a>', claim)
+
     def test_a_converted_source_s_corrections_are_shown_too(self):
         d, cid, _ = self.doc("converted")
         parts = H.render_parts(d)

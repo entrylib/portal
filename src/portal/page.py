@@ -704,14 +704,22 @@ def _corrections(p):
 CORRECTION_WORDS = {"misprint": "misprint", "correction": "correction by the authors"}
 
 
+def correction_id(P, corr):
+    """The anchor of a correction in the list of corrections: corr-<its number, from 1>. A link to it opens the
+    correction in a pop-up (page.js), on the paper view as on the record."""
+    return f"corr-{next(i for i, c in enumerate(P.corrections, 1) if c is corr)}"
+
+
 def _corrected(P, oid):
-    """The note under an object the claimset corrects: what was printed, and a link to why (spec §3.1)."""
+    """The note under an object the claimset corrects: what was printed, and a link to why, which opens the
+    correction in a pop-up (spec §3.1)."""
     out = []
     for corr in P.corrected.get(oid, []):
         kind = CORRECTION_WORDS.get(corr.get("kind"), "corrected")
         where = f", {esc(corr['where'])}" if corr.get("where") else ""
         out.append(f'<p class="cs-correction"><span class="k">Corrected from {P.against}</span> ({esc(kind)}{where}): '
-                   f'printed {P.text(str(corr.get("printed", "")))}. <a href="#corrections">Why</a></p>')
+                   f'printed {P.text(str(corr.get("printed", "")))}. '
+                   f'<a href="#{correction_id(P, corr)}">Why</a></p>')
     return "".join(out)
 
 
@@ -769,9 +777,18 @@ def _header(P):
     if meta:
         out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
     if P.corrections:
+        # each place a link that opens its correction in a pop-up (page.js): what was printed, what is stated, why
         n = len(P.corrections)
+        oids = [corr["field"].split(".")[0] for corr in P.corrections]
+        seen = {}
+
+        def label(oid):                                   # an object corrected twice: E2 (1), E2 (2)
+            seen[oid] = seen.get(oid, 0) + 1
+            return f"{oid} ({seen[oid]})" if oids.count(oid) > 1 else oid
+        places = ", ".join(f'<a href="#{correction_id(P, corr)}">{esc(label(oid))}</a>'
+                           for corr, oid in zip(P.corrections, oids, strict=True))
         out.append(f'<p class="cs-correction">This claimset corrects {P.against} in {n} place{"s" if n != 1 else ""}: '
-                   'see <a href="#corrections">Corrections</a>.</p>')
+                   f'{places}.</p>')
     return "\n".join(out)
 
 
@@ -1315,7 +1332,7 @@ def _evidence(P, e, source_link):
 
 def _correction_item(P, corr):
     """One correction in the paper's list (spec §3.1): what it corrects, where in the paper, what was printed, what is
-    stated instead, why, and who found it."""
+    stated instead, why, and who found it. Its anchor (correction_id) is what the links to it open."""
     oid = corr["field"].split(".")[0]
     head = [P.ids([oid]) if oid in P.by_id else esc(oid), esc(CORRECTION_WORDS.get(corr.get("kind"), "correction")),
             esc(corr.get("where") or "")]
@@ -1323,7 +1340,9 @@ def _correction_item(P, corr):
                    and c.get("id") == corr.get("found_by")), None)
     if finder:
         head.append("found by " + esc(finder.get("name") or finder.get("id")))
-    return (f'<div class="cs-item cs-correction-item"><p class="cs-claim-meta">{" · ".join(h for h in head if h)}</p>'
+    cid = correction_id(P, corr)
+    return (f'<div class="cs-item cs-correction-item" id="{cid}" data-name="Correction {cid[5:]}">'
+            f'<p class="cs-claim-meta">{" · ".join(h for h in head if h)}</p>'
             f'<p><span class="k">Printed:</span> {P.text(str(corr.get("printed", "")))}</p>'
             f'<p><span class="k">Stated here:</span> {P.text(str(corr.get("recorded", "")))}</p>'
             f'<p><span class="k">Why:</span> {P.text(str(corr.get("reason", "")))}</p></div>')

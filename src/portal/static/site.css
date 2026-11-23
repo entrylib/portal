@@ -320,7 +320,10 @@ dialog.peek .score-claim { border-top: 0; padding-top: 0; }
 .claim-page { color: inherit; text-decoration: underline dotted; }
 .claim-code { color: var(--muted); font-weight: 400; white-space: nowrap; }
 .versions { padding-left: 20px; }
-.orcid-verified, .orcid.orcid-verified { padding-left: 20px; background: url(/img/orcid.svg) no-repeat left center / 16px 16px; }
+/* every ORCID iD on the site carries the iD icon: a guarantor's, who signed in with it (verified, with a title saying
+   so), and every other person's the file names (co-authors, contributors) */
+.orcid, .orcid-verified { padding-left: 20px; background: url(/img/orcid.svg) no-repeat left center / 16px 16px; }
+.cs-popup-only, .cs-popup-only[hidden] { display: none !important; }
 @media (max-width: 860px) {
   .entry { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "panel" "bar" "nav" "body"; }
   .entry-header { margin-bottom: 16px; }
