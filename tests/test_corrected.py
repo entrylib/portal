@@ -72,4 +72,6 @@ def test_the_home_page_tags_a_paper_whose_claims_were_corrected(env):
     home = (ctx["published_dir"] / "index.html").read_text()
     assert '<span class="status status-neutral">corrected</span> · v3' in home
     page = (ctx["published_dir"] / "p" / "2026.000001.html").read_text()
-    assert '<span class="status status-neutral">updated</span>' in page and "<strong>Updated</strong>" in page
+    # the tag opens the note of what changed (design §7.4, *Status of a version*)
+    assert 'class="status status-neutral status-toggle"' in page and '>updated</a>' in page
+    assert 'id="status-note" hidden' in page and "Adds a summary." in page.split('id="status-note"')[1]

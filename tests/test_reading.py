@@ -30,9 +30,10 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert bundle["bundle_of"] == "C2" and bundle["paper"]["id"] == concept
     assert [c["id"] for c in bundle["claims"]] == ["C2", "C1", "C3"]
     assert {f.name for f in (out / "p" / KEY).glob("C*")} == \
-        {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")} | {"C2.html"}       # a page for the principal claim
-    assert text.rstrip().endswith(f"{concept}@v1. {BASE}/p/{KEY}@v1") and "HOW TO CITE" in text
-    assert "This claim: " in text and f"{concept}@v1#C2. {BASE}/p/{KEY}/C2" in text
+        {f"C{i}.{e}" for i in (1, 2, 3) for e in ("json", "txt")} | {"C2.html", "C2"}  # a page for the principal claim
+    assert (out / "p" / KEY / "C2" / "record.html").is_file()                        # and its record
+    assert text.rstrip().endswith(f"{BASE}/p/{KEY}@v1 Identifier: {concept}@v1.") and "HOW TO CITE" in text
+    assert "This claim: " in text and f"{BASE}/p/{KEY}/C2 Identifier: {concept}@v1#C2." in text
     view = (out / "p" / f"{KEY}.txt").read_text()
     assert "HOW TO CITE" in view and f"{concept}@v1#C2 for claim C2" in view and f"{BASE}/p/{KEY}/C2." in view
     page = (out / "p" / f"{KEY}.html").read_text()
@@ -196,9 +197,23 @@ def test_claim_pages(env):
     statement = next(c for c in example()["claims"] if c["id"] == "C2")["statement"]
     assert claim["text"] == site.plain_text(statement) and '<meta name="description" content="' in head
     assert f'href="/p/{KEY}/C2.txt"' in body and f'href="/p/{KEY}#C2"' in body
-    sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', body)
+    # it opens on the claim as the paper view shows it, the same block; its record is the claim bundle (design §7.4,
+    # *A leaner paper page*)
+    assert re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', body)[0] == "claim"
+    assert '<article class="pv-claim" id="C2">' in body and 'aria-label="Views of this claim"' in body
+    # the paper view's grid: the panel in the rail, as on the paper's page (else the text is squeezed into a column)
+    assert '<div class="entry-rail"><aside class="panel" aria-label="About this claim">' in body
+    # its assumptions, as a section of their own, so that the links to them open in a pop-up
+    assert 'id="assumptions"' in body or "pv-assumes" not in body
+    assert f'href="/p/{KEY}/C2/record"' in body and f'href="/p/{KEY}/C2" aria-current="page"' in body
+    record = (out / "p" / KEY / "C2" / "record.html").read_text()
+    sections = re.findall(r'<section class="cs-section[^"]*" id="(\w+)"', record)
     assert sections[0] == "principal" and "brief" not in sections and "definitions" in sections
-    assert (out / "p" / f"{KEY}.html").read_text().count(f'class="cs-claim-page" href="/p/{KEY}/C2"') == 1
+    assert f'href="/p/{KEY}/C2/record" aria-current="page"' in record
+    assert f'<link rel="canonical" href="{BASE}/p/{KEY}/C2">' in record
+    paper = (out / "p" / f"{KEY}.html").read_text()
+    assert paper.count(f'class="cs-claim-page" href="/p/{KEY}/C2"') == 1
+    assert f'<a class="pv-claim-link" href="/p/{KEY}/C2" title="The page of this claim">Claim C2' in paper
     sitemap = (out / "sitemap.xml").read_text()
     assert f"<loc>{BASE}/p/{KEY}/C2</loc>" in sitemap and f"<loc>{BASE}/p/{KEY}/C1</loc>" not in sitemap
 
@@ -208,8 +223,11 @@ def test_claim_pages_follow_the_principal_claims(tmp_path):
     doc["paper"]["id"], doc["paper"]["version"] = "entrylib:2026.000001", 1
     (tmp_path / "C9.html").write_text("old")
     (tmp_path / "notes.html").write_text("kept")
+    (tmp_path / "C9").mkdir()
+    (tmp_path / "C9" / "record.html").write_text("old")
     site.write_claim_pages(tmp_path, doc, base_url=BASE)
-    assert {f.name for f in tmp_path.iterdir()} == {"C2.html", "notes.html"}
+    assert {f.name for f in tmp_path.iterdir()} == {"C2.html", "C2", "notes.html"}
+    assert [f.name for f in (tmp_path / "C2").iterdir()] == ["record.html"]
     assert site.claim_pages(doc) == ["C2"]
     doc["claims"][0]["role"] = "principal"                  # C1 rests on an assumption: never a page of its own
     assert site.claim_pages(doc) == ["C2"]

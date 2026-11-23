@@ -211,14 +211,15 @@ def test_a_term_stands_before_the_claim_that_first_uses_it():
     claims = sections["claims"]
     c1, c2 = claims.index('id="C1"'), claims.index('id="C2"')
     d1 = claims.index('<div class="pv-term" id="D1"><dt>the term <span class="pv-symbol">')
-    assert c1 < d1 < claims.index("Claim C1.")                          # before the claim that first uses it,
+    # under the heading of the claim that first uses it, before its statement (design §7.4, *The order of a claim*)
+    assert c1 < claims.index("Claim C1.") < d1 < claims.index("pv-statement", c1)
     assert claims.count('id="D1"') == 1                                 # and only there
-    assert c2 < claims.index('<div class="pv-term" id="D3">') < claims.index("Claim C2.")
+    assert c2 < claims.index("Claim C2.") < claims.index('<div class="pv-term" id="D3">')
     assert "Term this claim uses" in claims[c1:c2] and "pv-defs" not in claims[claims.index('id="C3"'):]
     assert 'id="D2"' not in claims and "1 more definition" in claims and "/p/2026.000099/record#definitions" in claims
     doc["definitions"][0]["definition"] = "What the [[D3:ratio]] gives."   # a term whose text names a later one
     claims = view(doc)[0]["claims"]
-    assert claims.index('id="D3"') < claims.index('id="D1"') < claims.index("Claim C1.")
+    assert claims.index("Claim C1.") < claims.index('id="D3"') < claims.index('id="D1"')
 
 
 def test_a_finding_keeps_its_place_and_a_proof_follows_what_it_uses():
@@ -295,7 +296,7 @@ def test_highlights_are_marked_where_they_stand_not_listed():
     page = site.paper_page(doc, base_url=BASE, listing=listing)
     assert 'id="highlights"' not in page and 'href="#highlights"' not in page       # no section in the paper view
     c3, c1 = article(page, "C3"), article(page, "C1")
-    assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[c1.index("<h3>"):]
+    assert '<span class="pv-how pv-key">key claim</span>' in c3 and "pv-key" not in c1[:c1.index("</h3>")]
     assert '<span class="pv-how pv-key">key term</span>' in page                    # a highlighted term, at the term
     assert "pv-toc-key" not in page and '<li><a href="#C3">' in page                # no mark in the contents
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
@@ -308,7 +309,7 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     listing = [{"version": 1, "date": "2026-11-17"}]
     page = site.paper_page(proofs(), base_url=BASE, listing=listing)
     assert ('<button type="button" class="button-quiet pv-print" aria-label="Print or save as PDF" '
-            'title="Print or save as PDF" hidden>PDF</button>') in page    # the button's name says what it does
+            'title="Print or save as PDF: the whole paper, every proof open" hidden>PDF</button>') in page
     assert ('<p class="pv-print-id">entrylib:2026.000099@v1 · <a href="https://entrylib.test/p/2026.000099@v1">'
             'https://entrylib.test/p/2026.000099@v1</a></p>') in page          # on paper: the link to this version
     assert "pv-print-score" not in page                                    # no scores given: no line
@@ -326,7 +327,8 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     doc["artefacts"] += [{"id": "A3", "kind": "proof", "uri": files + "proofs.md", "description": "The proofs."},
                          {"id": "A4", "kind": "proof", "uri": files + "proofs.pdf", "description": "The same, as PDF."}]
     page = site.paper_page(doc, base_url=BASE, listing=listing)
-    assert "proofs.pdf" not in page.split('<article class="cs-body">')[0]   # the page itself is that document
+    head = page.split('<article class="cs-body">')[0].split('<template id="artefacts-help">')[0]
+    assert "proofs.pdf" not in head                  # the page itself is that document (the Files pop-up lists it)
     assert site.own_document(doc) is None
     doc["artefacts"].append({"id": "A5", "kind": "manuscript", "uri": files + "paper.PDF", "description": "The paper."})
     assert site.own_document(doc) == ("The paper as its authors wrote it", files + "paper.PDF")
@@ -375,17 +377,15 @@ def test_three_buttons_in_one_row_under_the_byline():
     row = head.split('<div class="ask-row">')[1].split("</div>")[0]
     assert re.findall(r"<(button|a) [^>]*>([^<]+)</", row) == [
         ("button", "PDF"), ("button", "Ask your AI about this paper"), ("a", "Text file for AI")]
-    assert row.endswith('<a class="button-quiet" href="/p/2026.000099@v1.txt" '
-                        'download="entrylib-2026.000099-v1.txt">Text file for AI</a>')
+    assert row.endswith('<a class="button-quiet" href="/p/2026.000099@v1.txt" download="entrylib-2026.000099-v1.txt" '
+                        'title="The whole paper as plain text, to attach when your assistant cannot open the address">'
+                        'Text file for AI</a>')
     assert 'class="button" data-copy="ask-message"' in row and row.count(" hidden>") == 2   # shown by the script
     assert page.count("pv-print\"") == 1 and "pv-document" not in page    # one print button; no manuscript, no line
-    note = head.split('<p class="small ask-note">')[1].split("</p>")[0]
-    assert note == ('<span class="pv-print-note" hidden>PDF: the whole paper, every proof open. </span>'
-                    '<span class="ask-copy-note" hidden>Ask your AI: copies a message with this paper\'s address to '
-                    "paste into ChatGPT, Claude or Gemini. </span>Text file: the whole paper as plain text, to "
-                    "attach when your assistant cannot open the address.")
-    after = head.split('<p class="small ask-note">')[1]
-    assert after.index("<details><summary>The message</summary>") < after.index('<p class="pv-print-id">')
+    # what each button does is its tooltip; no line under the row, and the message is not shown (design §7.4)
+    assert 'title="Copies a message with this paper&#x27;s address, to paste into ChatGPT, Claude or Gemini"' in row
+    assert "ask-note" not in head and "The message</summary>" not in head
+    assert '<span class="ask-message" id="ask-message" hidden>Read ' in head
     # the record: the same row without the PDF button, which is the paper view's
     record = site.claimset_page(proofs(), base_url=BASE, listing=listing)
     row = record.split('<div class="ask-row">')[1].split("</div>")[0]
@@ -397,11 +397,10 @@ def test_three_buttons_in_one_row_under_the_byline():
     claim = site.claim_page(proofs(), "C3", base_url=BASE)
     row = claim.split('<div class="ask-row">')[1].split("</div>")[0]
     assert ">Ask your AI about this claim</button>" in row and "pv-print" not in claim
-    assert row.endswith('<a class="button-quiet" href="/p/2026.000099/C3.txt" '
-                        'download="entrylib-2026.000099-v1-C3.txt">Text file for AI</a>')
-    assert "Text file: the claim with what it rests on as plain text" in claim
+    assert 'href="/p/2026.000099/C3.txt" download="entrylib-2026.000099-v1-C3.txt"' in row
+    assert 'title="The claim with what it rests on as plain text' in row
     js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
-    assert 'querySelector(".pv-print-note")' in js and 'querySelector(".ask-copy-note")' in js
+    assert "pv-print-note" not in js and "ask-copy-note" not in js
     css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
     assert ".ask-row { display: flex; flex-wrap: wrap;" in css and ".ask-row [hidden] { display: none; }" in css
 
@@ -418,8 +417,9 @@ def test_the_claims_stand_under_the_papers_sections():
     assert [a or c for a, _t, c in order] == ["sec-1", "C3", "C1", "sec-2", "C4", "sec-3", "C2"]
     assert [t for _a, t, _c in order if t] == ["The weighted median", "Computed", "Other claims"]
     # the line under Claims says nothing of the order, with sections or without (design §7.4, *Sections*)
-    lead = '<h2>Claims</h2><p class="pv-lead">A term is defined before the claim that first uses it, and what supports'
-    assert lead in claims and "a proved claim comes after" not in claims and "In the paper's" not in claims
+    # nor of the layout (design §7.4, *A leaner paper page*): the line holds the button alone
+    lead = '<h2>Claims</h2><p class="pv-lead"><button type="button" class="button-quiet pv-open-all"'
+    assert lead in claims and "A term is defined" not in claims and "In the paper's" not in claims
     # the contents (design §7.4, *Sections*): under Claims each section is an entry whose title opens the list of its
     # claims, in the section's order, each shown as the claims by name show one; an arrow leads to its heading
     nav = page.split('<nav class="cs-toc"')[1].split("</nav>")[0]
@@ -593,3 +593,18 @@ def test_an_agent_named_by_its_model_is_not_also_called_an_ai_agent():
     assert _author(named, models=models) == "Claude Opus 5.5"
     assert _author({"type": "agent", "name": "Claude Code"}, models=models) == "Claude Code (AI agent)"
     assert "AI agent" not in _contributions([named], models)
+
+
+def test_a_claim_lists_the_assumptions_it_rests_on_through_the_claims_between():
+    doc = proofs()
+    doc["claims"][0]["depends_on"] = ["C5"]                       # C1 assumes C5; C2 and C3 rest on C1
+    sections, _ = view(doc)
+    claims = sections["claims"]
+    for cid in ("C1", "C2", "C3"):
+        block = claims[claims.index(f'id="{cid}"'):]
+        block = block[:block.index("</article>")]
+        line = '<p class="pv-assumes"><span class="pv-label">Assumption</span> <a class="pv-xref" href="#C5">C5</a></p>'
+        assert line in block, cid
+        assert block.index("</h3>") < block.index(line) < block.index("pv-statement")   # after the terms, before it
+    c4 = claims[claims.index('id="C4"'):]
+    assert "pv-assumes" not in c4[:c4.index("</article>")]                            # C4 rests on no claim
