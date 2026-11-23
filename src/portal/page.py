@@ -763,11 +763,11 @@ def _header(P):
     if isinstance(P.doc.get("extensions"), dict) and P.doc["extensions"]:
         meta.append("Extensions: " + esc(", ".join(f"{k} {v}" for k, v in P.doc["extensions"].items())))
     meta = [m for m in meta if m]
-    if meta:
-        out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
-    credit = _contributions(people, P.doc.get("models"), P)
+    credit = _contributions(people, P.doc.get("models"), P)    # beside the people it details (design §7.4)
     if credit:
         out.append(credit)
+    if meta:
+        out.append('<p class="cs-meta">' + " · ".join(meta) + "</p>")
     if P.corrections:
         n = len(P.corrections)
         out.append(f'<p class="cs-correction">This claimset corrects {P.against} in {n} place{"s" if n != 1 else ""}: '

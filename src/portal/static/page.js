@@ -255,8 +255,6 @@ window.entrylibPopup = function (className, label) {
   var print = document.querySelector(".pv-print");
   if (print && window.print) {
     print.hidden = false;
-    var note = document.querySelector(".pv-print-note");
-    if (note) note.hidden = false;
     print.addEventListener("click", function () {
       openAll();
       // the figures first: one that has not arrived would print as a gap
@@ -514,7 +512,8 @@ window.entrylibOpen = (function () {
 })();
 
 // Copy buttons: a button names the element whose text it copies (data-copy) and what to say once it has
-// (data-copied). Without the script, or without a clipboard, the button stays hidden and the text is selected by hand.
+// (data-copied). Without the script, or without a clipboard, the button stays hidden. An element marked
+// data-copy-self (the identifier under Cite) copies its own text when clicked, and says so for a moment.
 (function () {
   "use strict";
   if (!navigator.clipboard) return;
@@ -523,8 +522,6 @@ window.entrylibOpen = (function () {
     if (!from) return;
     var label = b.textContent;
     b.hidden = false;
-    var note = b.closest(".ask-ai") && b.closest(".ask-ai").querySelector(".ask-copy-note");
-    if (note) note.hidden = false;           // what the button does, in the line under the row of buttons
     b.addEventListener("click", function () {
       navigator.clipboard.writeText(from.textContent.trim()).then(function () {
         b.textContent = b.getAttribute("data-copied") || "Copied";
@@ -533,6 +530,36 @@ window.entrylibOpen = (function () {
         var open = from.closest("details");
         if (open) open.open = true;
       });
+    });
+  });
+  document.querySelectorAll("[data-copy-self]").forEach(function (el) {
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+    el.classList.add("copyable");
+    var title = el.getAttribute("title") || "Copy";
+    function copy() {
+      navigator.clipboard.writeText(el.textContent.trim()).then(function () {
+        el.classList.add("copied");
+        el.setAttribute("title", "Copied");
+        setTimeout(function () { el.classList.remove("copied"); el.setAttribute("title", title); }, 2000);
+      });
+    }
+    el.addEventListener("click", copy);
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copy(); } });
+  });
+})();
+
+// The status tag of a corrected paper (data-toggle) opens what changed, under the top line; without the script it
+// leads to Versions, which say the same.
+(function () {
+  "use strict";
+  document.querySelectorAll("a[data-toggle]").forEach(function (a) {
+    var note = document.getElementById(a.getAttribute("data-toggle"));
+    if (!note) return;
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      note.hidden = !note.hidden;
+      a.setAttribute("aria-expanded", note.hidden ? "false" : "true");
     });
   });
 })();

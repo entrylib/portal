@@ -94,18 +94,17 @@ def test_the_registry_copy_needs_no_fetch_and_no_record_gives_no_view(tmp_path, 
     assert indexer.write_lab_views(tmp_path / "b", "/x", DOC, None, PINNED) is None
 
 
-def test_the_panel_row_links_the_record_and_the_artefacts_as_a_whole():
+def test_the_panel_row_links_the_record_and_the_log():
     lab = {"copy": PINNED, "view": "/p/k/v1/lab.txt"}
     doc = {"artefacts": [{"id": "A1"}, {"id": "A2"}, {"id": "A3"}]}
     row = site._lab_row(lab, doc, "k")
     assert "<h2>Lab record</h2>" in row and 'href="/p/k/v1/lab.txt">Readable record' in row
-    assert f'href="{PINNED}">Log' in row and '<a href="/p/k/record#artefacts">Artefacts&nbsp;(3)</a>' in row
-    assert "Kept in" not in row and row.count("<a ") == 3
+    # the artefacts are in the row Files (design §7.4, *A leaner paper page*)
+    assert f'href="{PINNED}">Log' in row and "Artefacts" not in row
+    assert "Kept in" not in row and row.count("<a ") == 2
     assert site._lab_row(None, {}, "k") == "" and site._lab_row({"summary": "x"}, {}, "k") == ""
     assert "Readable" not in site._lab_row({"copy": "/p/k/v1/lab.jsonl"}, {}, "k")
-    plain = site._lab_row(None, doc, "k")                    # a paper without a lab record
-    assert plain == ('<div class="panel-row"><h2>Artefacts</h2><p class="small">'
-                     '<a href="/p/k/record#artefacts">Artefacts&nbsp;(3)</a></p></div>')
+    assert site._lab_row(None, doc, "k") == ""                # a paper without a lab record: Files has its artefacts
 
 
 def test_contributions_list_credit_roles():

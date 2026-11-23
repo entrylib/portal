@@ -275,16 +275,37 @@ a.dots:hover { background: var(--panel); }
 a.dots:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; cursor: help; }
 .dot-green { background: var(--cs-green); } .dot-amber { background: var(--cs-amber); } .dot-red { background: var(--cs-red); }
-.novelty-row { margin: 10px 0 0; padding-top: 8px; border-top: 1px dashed var(--rule); font-size: 15px; }
-.novelty-label { font-size: 13px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
-.bands { list-style: none; margin: 0; padding: 0; }
-.bands li { display: flex; align-items: center; margin: 2px 0; }
+.lowest { margin: 6px 0 0; }
+/* the Files row's pop-up of the artefacts */
+.art-title { margin: 0 52px 6px 0; font-size: 22px; }
+.art-list { list-style: none; margin: 4px 0 14px; padding: 0; }
+.art-list li { margin: 0 0 10px; overflow-wrap: anywhere; }
+.art-name { font-weight: 600; }
+.art-id, .art-meta, h3 .count { color: var(--muted); }
+h3 .count { font-weight: 400; }
+/* the panel's Cite row: the identifier copies itself, Text copies the citation (page.js) */
+.cite-id.copyable { cursor: pointer; border-bottom: 1px dotted var(--muted); }
+.cite-id.copyable:hover, .cite-id.copyable:focus-visible { color: var(--accent); }
+.cite-id.copied::after { content: " Copied"; color: var(--ok); }
+.cite-links > :not([hidden]) ~ a::before { content: "\00a0\00b7\00a0"; color: var(--muted); display: inline-block; }
+.link-button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer; }
 .score-note { color: var(--muted); font-size: 15px; }
 .problems { padding-left: 0; list-style: none; margin: 8px 0; }
 .problems li { margin: 6px 0; padding-left: 52px; text-indent: -52px; }
 .problems .cost { display: inline-block; width: 44px; text-indent: 0; text-align: right; margin-right: 8px; font-weight: 600; }
 .problems .group { font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .problems .fix { color: var(--muted); }
+.problem-table { text-indent: 0; border-collapse: collapse; margin: 6px 0; font-size: 15px; width: 100%; }
+.problem-table td { border-top: 1px solid var(--rule-light); padding: 4px 10px 4px 0; vertical-align: top; }
+.problem-table td.num { text-align: right; white-space: nowrap; }
+.problem-table + .fix { display: block; text-indent: 0; }
+/* on a phone the table keeps to the pop-up's width: no hanging indent, and the counts may wrap */
+@media (max-width: 640px) {
+  .problems li:has(.problem-table) { padding-left: 0; text-indent: 0; }
+  .problem-table td { padding-right: 8px; }
+  .problem-table td:nth-child(2) { overflow-wrap: anywhere; }
+}
 .score-claim { border-top: 1px solid var(--rule-light); padding: 8px 0; }
 .score-claim h4 { margin: 0; font-size: 17px; font-weight: 600; }
 dialog.peek h3, dialog.peek h4 { margin-top: 0; }
@@ -460,10 +481,8 @@ dialog.zoom figcaption { padding: 10px 56px 12px 16px; font-size: 15px; }
 .ask-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .ask-row .button-quiet { min-height: 44px; padding: 0 14px; font-size: inherit; }
 .ask-row [hidden] { display: none; }
-.ask-note { margin: 8px 0 0; }
 .ask-ai details { margin-top: 4px; font-size: 15px; color: var(--muted); }
 .ask-ai summary { cursor: pointer; }
-.cite button[data-copy] { margin-top: 6px; }
 
 /* Folded sections and pop-ups for IDs (page.js, design §7.4) */
 .fold > h2 { margin: 0; }
@@ -576,7 +595,7 @@ form.inline { display: inline; margin-left: 8px; }
 
 /* The paper view (paper.py): terms, then the claims in reading order, each with what supports it. */
 .pv-document { margin: 12px 0 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.pv-lead { margin: 0 0 14px; color: var(--muted); font-size: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.pv-lead { margin: 0 0 14px; display: flex; justify-content: flex-end; }
 .pv-open-all { margin-left: auto; }
 .pv-label { margin: 0 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .pv-more { margin: 6px 0 0; font-size: 15px; color: var(--muted); }
@@ -598,11 +617,21 @@ form.inline { display: inline; margin-left: 8px; }
 .pv-sec + .pv-claim { border-top: 0; padding-top: 10px; }
 .pv-claim:target > h3 { background: var(--cs-target, var(--panel)); }
 .pv-claim > * { margin-top: 0; margin-bottom: 0; min-width: 0; max-width: 100%; }
-.pv-claim h3 { margin: 0; font-size: 20px; font-weight: 400; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.pv-claim h3 { margin: 0; font-size: 20px; font-weight: 400; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 12px; }
 .pv-claim-id { font-weight: 700; white-space: nowrap; }
+/* on a phone the tags go under the heading, which keeps the whole width */
+@media (max-width: 640px) {
+  .pv-claim h3 { grid-template-columns: minmax(0, 1fr); }
+  .pv-tags { justify-content: flex-start; }
+}
+.pv-assumes { margin: 0 0 10px; font-size: 16px; }
+.pv-assumes .pv-label { margin-right: 6px; }
+.pv-claim > h3 + .pv-defs, .pv-claim > h3 + .pv-assumes { margin-top: 10px; }
+.pv-claim-link { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.pv-claim-link:hover { color: var(--accent); border-bottom-color: currentColor; }
 .pv-name { font-style: italic; }
 .pv-how { margin-left: auto; font-size: 13px; letter-spacing: .04em; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: 0 7px; white-space: nowrap; }
-.pv-tags { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pv-tags { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .pv-tags .pv-how, .pv-term .pv-how { margin-left: 0; }
 .pv-key { color: var(--ink); border-color: var(--ink); }
 .pv-term .pv-key { margin-left: 0.6em; font-weight: 400; }

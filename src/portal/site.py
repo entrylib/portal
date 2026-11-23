@@ -328,9 +328,7 @@ def _who(doc):
         names.append(f"{last}, {_initials(given)}".rstrip(", ") if given else last)
     who = ", ".join(names[:-1]) + (", & " if len(names) > 2 else " & ") + names[-1] if len(names) > 1 else \
         (names[0] if names else SITE)
-    if as_guarantor and people:
-        who += " (guarantor)"
-    return who
+    return who                                  # no role: the guarantor stands as an author (design §7.8)
 
 
 def citation_text(doc, base_url, claim=None):
@@ -338,14 +336,31 @@ def citation_text(doc, base_url, claim=None):
     versioned identifier (entrylib:2026.000001@v3#C4) and gives the address of the claim's page."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
-    src = _source(doc)
-    title = p.get("title", "")
-    if src:
-        title += f" [Claimset converted from {src}]"
+    title = str(p.get("title", "")).rstrip(".")
+    # APA, without bracketed descriptions: how it was made is the BibTeX and RIS note's (design §7.8)
     if claim:
-        return (f"{_who(doc)} ({_year(doc)}). Claim {claim}, in: {title}. {SITE}. {p['id']}@v{n}#{claim}. "
+        return (f"{_who(doc)} ({_year(doc)}). Claim {claim}. In {title} (Version {n}). {SITE}. "
                 f"{base_url}/p/{key}/{claim}")
-    return f"{_who(doc)} ({_year(doc)}). {title}. {SITE}. {p['id']}@v{n}. {base_url}/p/{key}@v{n}"
+    return f"{_who(doc)} ({_year(doc)}). {title} (Version {n}). {SITE}. {base_url}/p/{key}@v{n}"
+
+
+def citation_made(doc):
+    """How a claimset was made, for the note of its BibTeX and RIS entries (design §7.8): "Claimset, written with
+    Claude Opus 5.5 and Claude Sonnet 5.5", or "Claimset converted from doi:… with …", then its identifier. The
+    models as the byline names them, each once, "and others" after two."""
+    p = doc["paper"]
+    models = doc.get("models")
+    names = []
+    for c in doc.get("contributors") or []:
+        if isinstance(c, dict) and c.get("type") == "agent":
+            name = pageview.agent_name(c, models)
+            if name and name not in names:
+                names.append(name)
+    shown = " and ".join(names) if len(names) <= 2 else f"{', '.join(names[:2])} and others"
+    src = _source(doc)
+    made = (f"Claimset converted from {src}" + (f" with {shown}" if names else "")) if src else \
+        ("Claimset, written with " + shown if names else "Claimset")
+    return f"{made}. {p['id']}@v{p.get('version')}"
 
 
 def citation_note(doc, base_url, claim=None):
@@ -354,11 +369,12 @@ def citation_note(doc, base_url, claim=None):
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     out = ["", "HOW TO CITE"]
+    # the citation (APA) and, for an agent citing in its own words, the identifier (design §7.8)
     if claim:
-        out.append(f"This claim: {citation_text(doc, base_url, claim)}")
-        out.append(f"The claimset it is from: {citation_text(doc, base_url)}")
+        out.append(f"This claim: {citation_text(doc, base_url, claim)} Identifier: {p['id']}@v{n}#{claim}.")
+        out.append(f"The claimset it is from: {citation_text(doc, base_url)} Identifier: {p['id']}@v{n}.")
     else:
-        out.append(f"This claimset: {citation_text(doc, base_url)}")
+        out.append(f"This claimset: {citation_text(doc, base_url)} Identifier: {p['id']}@v{n}.")
         first = (claim_pages(doc) or ["C1"])[0]
         out.append(f"One claim of it: by its identifier, as {p['id']}@v{n}#{first} for claim {first}."
                    + (f" Each principal claim has its own page, as {base_url}/p/{key}/{first}." if claim_pages(doc)
@@ -379,10 +395,8 @@ def bibtex(doc, base_url):
     people, _ = cited_people(doc)
     authors = " and ".join(_bib_escape(", ".join(x for x in _split_name(c.get("name")) if x)) for c in people)
     fields = [("title", _bib_escape(p.get("title"))), ("author", authors), ("year", _year(doc)),
-              ("howpublished", f"{SITE}, claimset {p['id']}@v{n}"), ("url", f"{base_url}/p/{key}@v{n}")]
-    src = _source(doc)
-    if src:
-        fields.append(("note", "Converted from " + _bib_escape(src)))
+              ("version", n), ("howpublished", SITE), ("url", f"{base_url}/p/{key}@v{n}"),
+              ("note", _bib_escape(citation_made(doc)))]
     body = ",\n".join(f"  {k} = {{{v}}}" for k, v in fields if v)
     return f"@misc{{entrylib{key}v{n},\n{body}\n}}\n"
 
@@ -395,10 +409,7 @@ def ris(doc, base_url):
     lines += [f"AU  - {', '.join(x for x in _split_name(c.get('name')) if x)}" for c in people]
     lines += [f"PY  - {_year(doc)}", f"DA  - {str(p.get('date') or '').replace('-', '/')}", f"PB  - {SITE}",
               f"ID  - {p['id']}@v{n}", f"UR  - {base_url}/p/{key}@v{n}"]
-    src = _source(doc)
-    if src:
-        lines.append(f"N1  - Converted from {src}")
-    lines.append("ER  - ")
+    lines += [f"ET  - Version {n}", f"N1  - {citation_made(doc)}", "ER  - "]
     return "\r\n".join(line.replace("\r", " ").replace("\n", " ") for line in lines) + "\r\n"
 
 
@@ -486,6 +497,30 @@ def _notice(p, published=None):
                        claims=claims_changed(p.get("changes")))
 
 
+def status_top(p, published=None):
+    """The status tag of the line at the top of a paper, and what follows that line (design §7.4, *Status of a
+    version*): for a correction, the tag opens what changed, when and by whom (`status-note`, page.js; without the
+    script it leads to Versions, which say the same), and nothing is shown under the line until it is opened; any
+    other status keeps its notice in full. ("", "") for an active paper."""
+    status = p.get("status") or "active"
+    if status == "active":
+        return "", ""
+    if status != "corrected":
+        return _status(p), _notice(p, published)
+    box = _notice(p, published)
+    body = re.search(r"</summary>(.*)</details>$", box, re.S)
+    head = re.search(r"<summary>(.*?)</summary>", box, re.S)
+    if not body:
+        return _status(p), box
+    label = re.search(r">([^<]*)</span>$", _status(p)).group(1)
+    tag = (f'<a class="status status-neutral status-toggle" href="#versions" data-toggle="status-note" '
+           f'aria-controls="status-note" aria-expanded="false" title="What changed">{label}</a>')
+    when = re.sub(r"^<strong>[^<]*</strong>\s*·?\s*", "", head.group(1)) if head else ""
+    note = ('<div class="notice notice-neutral status-note" id="status-note" hidden>'
+            + (f'<p class="small">{when}</p>' if when else "") + body.group(1) + "</div>")
+    return tag, note
+
+
 def _notice_box(status, date, who, reason_code, statement, claims=True):
     """A notice: what happened, when, by whom, and why (the reason, and the words of whoever asked, as text). A
     correction is folded: its line shows "Corrected" (when it changed claims, `claims`) or "Updated", as the status
@@ -556,27 +591,50 @@ def _origin_line(doc, origin, lab):
                 "Its responsible researcher answers for its faithfulness to the paper.</p>")
     own = own_paper(doc)
     if own:
-        href, what = own
-        named = f'<a href="{esc(href)}">{esc(what or href)}</a>' if href else esc(what)
-        return (f'<p class="origin-line">Converted by its authors from their paper{": " + named if named else ""}.'
-                "</p>")
+        return f'<p class="origin-line">{own_paper_line(*own)}</p>'
     return '<p class="origin-line">Written directly as a claimset.</p>'
 
 
-def _cite_row(identifier, citation, extra=""):
-    """The panel's Cite row: the identifier, the citation (folded, with a copy button) and `extra`."""
-    return (f'<div class="panel-row"><h2>Cite</h2><p class="small"><code>{esc(identifier)}</code></p>'
-            f'<details class="cite"><summary>Citation</summary><p class="cite-text" id="cite-text">{esc(citation)}'
-            '</p><button type="button" class="button-quiet" data-copy="cite-text" data-copied="Copied" hidden>'
-            f'Copy the citation</button></details>{extra}</div>')
+def own_paper_line(href, what):
+    """The line on a paper its authors converted (design §7.4, *A leaner paper page*): "Converted from the authors'
+    LaTeX draft (October 2026)", the source as the link and its full description on hover. The short name is the
+    kind of source and its date in brackets, taken from the description when it has them ("LaTeX source of the draft
+    '…' (October 2026)"); otherwise the description as it is."""
+    what = " ".join(str(what or "").split()).rstrip(".")
+    short = ""
+    kind = re.match(r"(?i)(?:the\s+)?(?:(\S+)\s+source\s+of\s+the\s+|)(draft|preprint|manuscript|paper|thesis|"
+                    r"report|article)\b", what)
+    date = re.search(r"\(([^()]*\d{4})\)\s*$", what)
+    if kind and date:                                   # shortened only when the date survives
+        short = " ".join(x for x in (kind.group(1), kind.group(2).lower()) if x) + f" ({date.group(1)})"
+    shown = esc(short) if short else esc(what or href)
+    if not short:
+        link = f'<a href="{esc(href)}">{shown}</a>' if href else shown
+        return f"Converted by its authors from their paper{': ' + link if link else ''}."
+    words, after = (shown.split(" (", 1) + [""])[:2]
+    after = f" ({after}" if after else ""
+    link = f'<a href="{esc(href)}" title="{esc(what)}">{words}</a>' if href else words
+    return f"Converted from the authors&#x27; {link}{after}"
+
+
+def _cite_row(identifier, citation, links="", extra=""):
+    """The panel's Cite row (design §7.4, *A leaner paper page*): the identifier, which copies itself when clicked;
+    then *Text*, which copies the plain citation (shown in full on hover), and the files in `links` (BibTeX, RIS),
+    on one line; then `extra`. Without the script nothing is copied: the identifier is there to select, and the
+    citation is the BibTeX and RIS files'."""
+    text = (f'<button type="button" class="link-button" data-copy="cite-text" data-copied="Copied" '
+            f'title="Copy the citation: {esc(citation)}" hidden>Text</button>'
+            f'<span class="cite-text" id="cite-text" hidden>{esc(citation)}</span>')
+    return (f'<div class="panel-row cite-row"><h2>Cite</h2><p class="small"><code class="cite-id" data-copy-self '
+            f'title="Copy the identifier">{esc(identifier)}</code></p>'
+            f'<p class="small cite-links">{text}{links}</p>{extra}</div>')
 
 
 #: The paper view's button that prints the page with everything open (design §7.4, *Printing*; page.js), the first
-#: of the row of buttons under the byline, and its part of the line under the row. Both hidden until the script
-#: runs: without it the browser's own print command prints the page as it stands.
+#: of the row of buttons under the byline, what it does on hover. Hidden until the script runs: without it the
+#: browser's own print command prints the page as it stands.
 PRINT_BUTTON = ('<button type="button" class="button-quiet pv-print" aria-label="Print or save as PDF" '
-                'title="Print or save as PDF" hidden>PDF</button>')
-PRINT_NOTE = '<span class="pv-print-note" hidden>PDF: the whole paper, every proof open. </span>'
+                'title="Print or save as PDF: the whole paper, every proof open" hidden>PDF</button>')
 
 
 def ask_ai(doc, base_url, cid=None, printed=False):
@@ -584,8 +642,8 @@ def ask_ai(doc, base_url, cid=None, printed=False):
     (the paper view) "PDF", which prints the page; "Ask your AI", which copies a message for an AI assistant, which
     reads the claimset's reading view as a web page (or the claim's page); and "Text file for AI", a link that
     downloads the reading view of this version (or of the claim) as a file, for an assistant that cannot open the
-    address. Under the row a line saying what each does (of a button, once the script has shown the button), and
-    the message itself, to read before copying or select by hand."""
+    address. What each does is its tooltip, and the message the button copies is not shown (design §7.4, *A leaner
+    paper page*)."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     if cid:
@@ -601,13 +659,13 @@ def ask_ai(doc, base_url, cid=None, printed=False):
     message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
     return ('<div class="ask-ai"><div class="ask-row">' + (PRINT_BUTTON if printed else "")
             + '<button type="button" class="button" data-copy="ask-message" '
+            f'title="Copies a message with this {what}&#x27;s address, to paste into ChatGPT, Claude or Gemini" '
             f'data-copied="Copied: now paste it into your AI chat" hidden>Ask your AI about this {what}</button>'
-            f'<a class="button-quiet" href="{esc(text)}" download="{esc(name)}">Text file for AI</a></div>'
-            f'<p class="small ask-note">{PRINT_NOTE if printed else ""}<span class="ask-copy-note" hidden>Ask your '
-            f"AI: copies a message with this {what}'s address to paste into ChatGPT, Claude or Gemini. </span>"
-            f"Text file: {whole} as plain text, to attach when your assistant cannot open the address.</p>"
-            f'<details><summary>The message</summary><p class="cite-text" id="ask-message">{esc(message)}</p>'
-            "</details></div>")
+            f'<a class="button-quiet" href="{esc(text)}" download="{esc(name)}" '
+            f'title="{esc(whole[:1].upper() + whole[1:])} as plain text, to attach when your assistant cannot open '
+            f'the address">Text file for AI</a></div>'
+            # what the button copies: not shown, since the button says what it does (design §7.4, *Ask your AI*)
+            f'<span class="ask-message" id="ask-message" hidden>{esc(message)}</span></div>')
 
 
 #: How much of a competing-interests statement the panel shows before "more".
@@ -649,21 +707,116 @@ INTERESTS_NOTE = ("Competing interests and funding, as the authors declare them,
                   "the score.")
 
 
+#: Artefact kinds as the Files pop-up names its groups, in the order it shows them.
+ARTEFACT_GROUPS = {
+    "data": "Data", "table": "Tables", "figure": "Figures", "code": "Code", "software": "Software", "model": "Models",
+    "proof": "Proofs and checks", "protocol": "Protocols", "manuscript": "Manuscripts", "lab_record": "Lab record",
+    "prompt": "Prompts", "trace": "Traces", "instrument": "Instruments", "stimulus": "Stimuli",
+    "codebook": "Codebooks", "recording": "Recordings", "other": "Other"}
+#: What an artefact's availability says, when it is not public (claimset spec, availability levels).
+AVAILABILITY = {"platform": "kept by EntryLib", "audit": "for auditors only", "author_only": "from the authors",
+                "unavailable": "not available", "not_stated": "availability not stated"}
+
+
+def _where(uri):
+    """Where an artefact is kept, in a few words: "GitHub, openforecast-org/smooth", "EntryLib", a host."""
+    m = re.match(r"https?://(?:www\.)?([^/]+)(/[^?#]*)?", str(uri or ""))
+    if not m:
+        return ""
+    host, path = m.group(1).lower(), [x for x in (m.group(2) or "").split("/") if x]
+    if host == "github.com" and len(path) >= 2:
+        return f"GitHub, {path[0]}/{path[1]}"
+    if host in ("entrylib.org", "localhost") or host.endswith("entrylib-preview.pages.dev"):
+        return "EntryLib"
+    return {"doi.org": "DOI", "zenodo.org": "Zenodo", "osf.io": "OSF"}.get(host, host)
+
+
+def _pinned(version):
+    """An artefact's fixed version, in a few words: "commit 8a5fbbb", "checksum 44eb8555…", or None."""
+    v = str(version or "").strip()
+    if re.fullmatch(r"[0-9a-f]{40}", v):
+        return f"commit {v[:7]}"
+    if v.startswith("sha256:"):
+        return f"checksum {v[7:15]}…"
+    return f"version {v}" if v else None
+
+
+def artefacts_help(doc, key):
+    """The Files row's pop-up of the artefacts (design §7.4, *A leaner paper page*): how many, whether they are
+    public, pinned to a fixed version and under which licences; then each, by kind, with its file name (the link),
+    what it is, where it is kept and at which version, its licence, and the claims that use it (directly or through
+    their evidence). The record's list stays the full account; this is what a reader asks first."""
+    arts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict) and isinstance(a.get("id"), str)]
+    if not arts:
+        return ""
+    evidence = {e.get("id"): e for e in doc.get("evidence") or [] if isinstance(e, dict)}
+    users = {a["id"]: [] for a in arts}
+    for c in doc.get("claims") or []:
+        if not isinstance(c, dict) or not isinstance(c.get("id"), str):
+            continue
+        named = {x for x in c.get("artefacts") or [] if isinstance(x, str)}
+        for sp in c.get("support") or []:
+            e = evidence.get(sp.get("evidence")) if isinstance(sp, dict) else None
+            if isinstance(e, dict):
+                named |= {x for x in e.get("artefacts") or [] if isinstance(x, str)}
+                named |= {e["artefact"]} if isinstance(e.get("artefact"), str) else set()
+        for x in named:
+            if x in users and c["id"] not in users[x]:
+                users[x].append(c["id"])
+    public = sum(1 for a in arts if (a.get("availability") or {}).get("level", "public") == "public")
+    pinned = sum(1 for a in arts if _pinned(a.get("version")))
+    licences = {}
+    for a in arts:
+        licences[a.get("licence") or "none stated"] = licences.get(a.get("licence") or "none stated", 0) + 1
+    n = len(arts)
+    summary = (f"{n} file{'s' if n != 1 else ''} behind the paper: "
+               + ("all public" if public == n else f"{public} public")
+               + (", all pinned to a fixed version (a commit or a checksum)" if pinned == n
+                  else f", {pinned} pinned to a fixed version") + ". Licences: "
+               + ", ".join(f"{esc(k)} ({v})" for k, v in sorted(licences.items(), key=lambda kv: -kv[1])) + ".")
+    groups = {}
+    for a in arts:
+        groups.setdefault(a.get("kind") if a.get("kind") in ARTEFACT_GROUPS else "other", []).append(a)
+    out = ['<h2 class="art-title">Artefacts</h2>', f'<p class="small">{summary}</p>']
+    for kind in ARTEFACT_GROUPS:
+        if kind not in groups:
+            continue
+        items = []
+        for a in groups[kind]:
+            uri = str(a.get("uri") or "")
+            name = uri.rstrip("/").rsplit("/", 1)[-1] or a["id"]
+            if re.fullmatch(r"[0-9a-f]{40}", name):                 # a repository at a commit
+                name = uri.split("/tree/")[0].rstrip("/").rsplit("/", 1)[-1]
+            link = (f'<a href="{esc(uri)}">{esc(name)}</a>' if uri.startswith(("http://", "https://"))
+                    else esc(name))
+            where = ", ".join(x for x in (_where(uri), _pinned(a.get("version"))) if x)
+            level = (a.get("availability") or {}).get("level", "public")
+            meta = [x for x in (where, esc(a.get("licence") or ""), AVAILABILITY.get(level, "")) if x]
+            used = users[a["id"]]
+            if used:
+                meta.append("used by " + ", ".join(f'<a href="/p/{key}#{esc(c)}">{esc(c)}</a>' for c in used))
+            items.append(f'<li><span class="art-name">{link}</span> <span class="art-id">{esc(a["id"])}</span>'
+                         f'<br>{esc(a.get("description") or "")}'
+                         + (f'<br><span class="small art-meta">{" · ".join(meta)}</span>' if meta else "")
+                         + "</li>")
+        out.append(f'<h3>{ARTEFACT_GROUPS[kind]} <span class="count">{len(groups[kind])}</span></h3>'
+                   f'<ul class="art-list">{"".join(items)}</ul>')
+    out.append(f'<p class="small"><a href="/p/{key}/record#artefacts">On the record page</a>, with everything the '
+               "claimset says of each.</p>")
+    return f'<template id="artefacts-help">{"".join(out)}</template>'
+
+
 def _lab_row(lab, doc, key):
-    """The panel row of what is behind the paper (design §5.2): for a lab paper, *Lab record* with the record's
-    reading view, its log and the paper's artefacts; for another paper with artefacts, *Artefacts* with the link
-    alone. The artefacts are linked as a whole, to the record's list, which says where each is kept."""
-    arts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
-    files = f'<a href="/p/{key}/record#artefacts">Artefacts&nbsp;({len(arts)})</a>' if arts else ""
+    """The panel row of what is behind a lab paper (design §5.2): *Lab record*, with the record's reading view and its
+    log; nothing for another paper. The artefacts are in the row *Files*, linked as a whole to the record's list,
+    which says where each is kept."""
     if not lab or not (lab.get("view") or lab.get("copy")):
-        return f'<div class="panel-row"><h2>Artefacts</h2><p class="small">{files}</p></div>' if files else ""
+        return ""
     links = []
     if lab.get("view"):
         links.append(f'<a href="{esc(lab["view"])}">Readable record</a>')
     if lab.get("copy"):
         links.append(f'<a href="{esc(lab["copy"])}">Log</a>')
-    if files:
-        links.append(files)
     about = [esc(lab["summary"])] if lab.get("summary") else []
     if lab.get("verified"):                             # the registry's copy, checked before publication
         about.append("hash chain verified")
@@ -679,17 +832,20 @@ def _panel(doc, parts, base_url, key, scores=None, lab=None):
     if src and src.startswith("doi:"):
         original = (f'<p class="small">Original paper: <a href="https://doi.org/{esc(src[4:])}">{esc(src)}</a>'
                     "</p>")
+    arts = [a for a in doc.get("artefacts") or [] if isinstance(a, dict)]
+    files = ([f'<a href="/p/{key}/record#artefacts" data-help="artefacts-help" data-title="Artefacts">'
+              f'Artefacts&nbsp;({len(arts)})</a>'] if arts else []) + [
+        f'<a href="/p/{key}@v{n}.json">JSON</a>']
+    issues = (f'<br><a href="/p/{key}@v{n}.issues.txt">Issues as text, for an agent</a>' if scores else "")
+    # One row of files (design §7.4, *A leaner paper page*): the reading view is the Text file for AI button's.
     return (f'<aside class="panel" aria-label="About this paper">'
             f'{score_html.panel_rows(scores, parts.get("lights"))}{_interests_row(doc)}'
             + _cite_row(f'{p["id"]}@v{n}', citation_text(doc, base_url),
-                        f'<p class="small"><a href="/p/{key}@v{n}.bib" download>BibTeX</a> · '
-                        f'<a href="/p/{key}@v{n}.ris" download>RIS</a></p>{original}')
+                        f'<a href="/p/{key}@v{n}.bib" download>BibTeX</a>'
+                        f'<a href="/p/{key}@v{n}.ris" download>RIS</a>', original)
             + _lab_row(lab, doc, key)
-            + '<div class="panel-row"><h2>For models</h2>'
-            + (f'<p class="small"><a href="/p/{key}@v{n}.issues.txt">Issues as text, for an agent</a></p>'
-               if scores else "")
-            + f'<p class="small"><a href="/p/{key}@v{n}.txt">Reading view</a> · '
-            f'<a href="/p/{key}@v{n}.json">JSON</a></p></div></aside>')
+            + f'<div class="panel-row files-row"><h2>Files</h2><p class="small">{" · ".join(files)}{issues}</p>'
+            f'{artefacts_help(doc, key)}</div></aside>')
 
 
 def reading_page(doc, view, base_url):
@@ -783,6 +939,27 @@ def person(c, where, models=None):
     return f'<span class="who">{ICON["human"]}{name}{ident}</span>'
 
 
+def _agents(agents, models=None):
+    """The agents a paper was written with, each name once with all its labels ("Claude Opus 5.5 · drafting,
+    correction"; design §7.4, *A leaner paper page*), in the order they first appear; the harness on hover."""
+    groups = {}
+    for c in agents:
+        groups.setdefault(pageview.agent_name(c, models), []).append(c)
+    out = []
+    for name, group in groups.items():
+        labels = []
+        for c in group:
+            label = c.get("label").strip() if isinstance(c.get("label"), str) and c["label"].strip() else None
+            if label and label not in labels:
+                labels.append(label)
+        ran = next((pageview.harness(c) for c in group if pageview.model_names(c, models) and pageview.harness(c)),
+                   None)
+        tip = f' title="Run in {esc(ran)}"' if ran else ""
+        out.append(f'<span class="who"{tip}>{ICON["agent"]}{esc(name)}'
+                   + (f' <span class="cs-label">· {esc(", ".join(labels))}</span>' if labels else "") + "</span>")
+    return out
+
+
 def byline(role, people, models=None):
     """The header's lines of people (claimset's render_parts `byline`, design §7.4): the guarantor as the responsible
     researcher, then people as authors and AI agents as what the paper was written with. A converted claimset's
@@ -797,7 +974,7 @@ def byline(role, people, models=None):
                  if humans else [])
         if agents:
             lines.append('<span class="byline-part">Written with: '
-                         f'{", ".join(person(c, "author", models) for c in agents)}</span>')
+                         f'{", ".join(_agents(agents, models))}</span>')
         return " ".join(lines)
     return None
 
@@ -872,7 +1049,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     key, n = ids.url_key(p["id"]), p.get("version")
     parts = render(doc, file_url, ref_text, scores, claim_pages(doc) if not current or current == n else ())
     origin = parts["origin"]
-    top = [_status(p)] if (p.get("status") or "active") != "active" else []
+    tag, note = status_top(p, published_at(listing, n))
+    top = [tag] if tag else []
     top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
@@ -890,8 +1068,7 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     switch = view_switch(key, "record") if not current or current == n else ""
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
-            f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}'
-            f'{_notice(p, published_at(listing, n))}'
+            f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}{note}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
             f'{_panel(doc, parts, base_url, key, scores, lab)}'
             f'{nav}<article class="cs-body">{body}'
@@ -908,16 +1085,19 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                  script="/page.js")
 
 
-def view_switch(key, view, paper_href=None, record_href=None):
+def view_switch(key, view, paper_href=None, record_href=None, what="paper"):
     """The two views of a paper's current version (design §7.4, *Paper view*): the paper, to read the argument, and
-    the record, to check it. `view`: the one this page is. A preview gives its own two addresses (design §4.2)."""
-    def one(name, href, what):
+    the record, to check it. `view`: the one this page is. A preview gives its own two addresses (design §4.2); a
+    claim's page (`what` "claim") its own (§7.4, *A leaner paper page*)."""
+    def one(name, href, tip):
         here = ' aria-current="page"' if view == name.lower() else ""
-        return f'<a href="{esc(href)}"{here} title="{what}">{name}</a>'
-    return ('<nav class="view-switch" aria-label="Views of this paper">'
-            + one("Paper", paper_href or f"/p/{key}", "The claims in reading order, each with its proof or evidence")
-            + one("Record", record_href or f"/p/{key}/record",
-                  "Every object of the claimset: definitions, claims, evidence, artefacts")
+        return f'<a href="{esc(href)}"{here} title="{tip}">{name}</a>'
+    claim = what == "claim"
+    return (f'<nav class="view-switch" aria-label="Views of this {what}">'
+            + one("Paper", paper_href or f"/p/{key}", "The claim as the paper shows it" if claim
+                  else "The claims in reading order, each with its proof or evidence")
+            + one("Record", record_href or f"/p/{key}/record", "The claim and everything it rests on" if claim
+                  else "Every object of the claimset: definitions, claims, evidence, artefacts")
             + "</nav>")
 
 
@@ -1030,7 +1210,8 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
                                            scores=scores,
                                            claim_url=lambda cid: f"/p/{key}/{cid}" if cid in pages else None)
     issues = f"/p/{key}@v{n}.issues.txt"
-    top = [_status(p)] if (p.get("status") or "active") != "active" else []
+    tag, note = status_top(p, published_at(listing, n))
+    top = [tag] if tag else []
     top.append(f"Version {esc(n)} · {esc(day(p.get('date')))}")
     if subfield_name(doc):
         top.append(esc(subfield_name(doc)))
@@ -1042,7 +1223,7 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
                 f'{esc(base_url)}/p/{esc(key)}@v{esc(n)}</a></p>{score_html.print_line(scores)}')
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
-            f'{_notice(p, published_at(listing, n))}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
+            f'{note}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
             f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
             # the rail (site.css): the panel, and directly under it the contents, to the right of the text
             f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores, lab)}{nav}</div>'
@@ -1204,25 +1385,47 @@ def _claim_sections(parts, under_claim=""):
     return "\n".join(out), shown
 
 
-def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None, trail=None):
-    """The page of one principal claim of the current version, at /p/<key>/<cid>: the claimset's title and the claim's
-    ID as its title and heading, then the claim, its Support and why, how to cite it, and what it rests on (the
-    claim bundle, rendered by the claimset package). The statement itself is the page's description."""
+def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None, published=None, trail=None,
+               view="paper"):
+    """The page of one principal claim of the current version. `view` "paper", at /p/<key>/<cid>: the claim as the
+    paper view shows it, the same block (paper.claim_block), with the claims of the paper that use it; "record", at
+    /p/<key>/<cid>/record: the claim and what it rests on (the claim bundle, rendered by the claimset package). Both
+    have the claimset's title and the claim's ID as their title and heading, the claim's Support, how to cite it and
+    the switch between the two (design §7.4, *A leaner paper page*). The statement itself is the page's
+    description; the paper view is the canonical address."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
     claim = next(c for c in _claims(doc) if c.get("id") == cid)
     bundle = claim_bundle(doc, cid)
-    parts = render(bundle, file_url, ref_text, scores, claim_pages(doc), claim=cid)
-    # the earlier wordings and merged hypotheses that went into the claim, from the paper (design §7.6)
-    full = pageview._Paper(doc)
-    earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record, full.hypotheses,
-                                     lambda c: f"#{c}" if c == cid else f"/p/{key}#{c}")
-    body, sections = _claim_sections(parts, earlier if 'class="cs-earlier"' not in parts.get("body", "") else "")
+    pages = claim_pages(doc)
     url = f"{base_url}/p/{key}/{cid}"
     title = p.get("title") or ""
     item = (scores or {}).get("claims", {}).get(cid) if scores else None
-    nav = contents(sections, '<li><a href="#score">Score</a></li>' if item else "")
-    top = [f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
+    extra = ""
+    if view == "paper":
+        block, extra, users = paperview.claim_block(
+            doc, cid, f"/p/{key}/record", file_url=file_url, ref_text=ref_text, number=number, scores=scores,
+            claim_url=lambda c: f"/p/{key}/{c}" if c in pages and c != cid else None)
+        links = [f'<a href="/p/{key}#{esc(u)}">{esc(u)}</a>' for u in users]
+        used = ('<p class="claim-users small">' + (f'Used by {", ".join(links)} · ' if links else "")
+                + f'<a href="/p/{key}#{esc(cid)}">This claim in the paper</a></p>')
+        body = f'<section class="cs-section pv-section claim-paper" id="claim">{block}{used}</section>'
+        # the assumptions it rests on, as the paper's page has them, so that each opens in a pop-up here too
+        record_parts = render(bundle, file_url, ref_text, scores, pages, claim=cid)
+        body += (record_parts.get("blocks") or {}).get("assumptions", "")
+        nav = ""
+    else:
+        parts = render(bundle, file_url, ref_text, scores, pages, claim=cid)
+        # the earlier wordings and merged hypotheses that went into the claim, from the paper (design §7.6)
+        full = pageview._Paper(doc)
+        earlier = pageview.earlier_block(full.not_claimed, cid, full.text, full.lab_record, full.hypotheses,
+                                         lambda c: f"#{c}" if c == cid else f"/p/{key}#{c}")
+        body, sections = _claim_sections(parts, earlier if 'class="cs-earlier"' not in parts.get("body", "") else "")
+        nav = contents(sections, '<li><a href="#score">Score</a></li>' if item else "")
+    tag, note = status_top(p, published)
+    if tag:
+        tag = tag.replace('href="#versions"', f'href="/p/{key}#versions"')
+    top = [tag, f"Claim {esc(cid)}", esc(claim.get("type")), f'<span class="id">{esc(p["id"])}@v{esc(n)}</span>',
            esc(p.get("date"))]
     if item:
         score_row = (f'<div class="panel-row score-row"><h2>{score_html.NAME}</h2>'
@@ -1238,18 +1441,27 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
              f'{esc(title)}</a></p></div>'
              + (f'<div class="panel-row"><h2>Lab record</h2><p class="small"><a href="{esc(trail)}">Its trail</a>: '
                 'what was planned, run and decided for it, in order</p></div>' if trail else "") +
-             f'<div class="panel-row"><h2>For models</h2><p class="small"><a href="/p/{key}/{esc(cid)}.txt">'
-             f'Reading view</a> · <a href="/p/{key}/{esc(cid)}.json">JSON</a></p></div></aside>')
+             f'<div class="panel-row"><h2>Files</h2><p class="small"><a href="/p/{key}/{esc(cid)}.json">JSON</a>'
+             '</p></div></aside>')
     origin = (f'<p class="origin-line">Principal claim {esc(cid)} of this paper ({esc(_who(doc))}, '
               f'{esc(_year(doc))}), with what it rests on. <a href="/p/{key}#{esc(cid)}">Read the whole paper</a>.'
               '</p>')
-    main = (f'<div class="cs-page entry claim-entry"><div class="cs-header entry-header">'
-            f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{_notice(p, published)}'
+    switch = view_switch(key, view, paper_href=f"/p/{key}/{cid}", record_href=f"/p/{key}/{cid}/record",
+                         what="claim")
+    main = (f'<div class="cs-page entry claim-entry" data-view="{"paper" if view == "paper" else "record"}">'
+            f'<div class="cs-header entry-header">{switch}'
+            f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{note}'
             f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}'
             f'{ask_ai(doc, base_url, cid)}</div>'
-            f'{panel}'
-            f'{nav}<article class="cs-body">{body}'
-            f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}</article></div>')
+            # the paper view's grid: one column of text, the panel in the rail at its right (as the paper's page)
+            + (f'<div class="entry-rail">{panel}</div>' if view == "paper" else f'{panel}{nav}')
+            + f'<article class="cs-body">{body}'
+            f'{score_html.claim_section(scores, [c.get("id") for c in bundle.get("claims") or []])}{extra}'
+            '</article></div>')
+    if view == "paper":                                  # what is not on this page is on the paper's (or its record)
+        here = set(re.findall(r'\bid="([^"]+)"', main))
+        main = re.sub(r'href="#([^"]+)"', lambda m: m.group(0) if m.group(1) in here or m.group(1) == "top"
+                      else f'href="/p/{key}#{m.group(1)}"', main)
     statement = plain_text(claim.get("statement"))
     head = (f'<link rel="alternate" type="application/json" href="/p/{key}/{esc(cid)}.json">'
             f'<link rel="alternate" type="text/plain" href="/p/{key}/{esc(cid)}.txt">'
@@ -1893,10 +2105,15 @@ def write_claim_pages(directory, doc, *, base_url, scores=None, file_url=None, r
     for old in directory.glob("C*.html") if directory.exists() else []:
         if CLAIM_ID.fullmatch(old.stem) and old.stem not in cids:
             old.unlink()
+    for old in directory.glob("C*/record.html") if directory.exists() else []:
+        if CLAIM_ID.fullmatch(old.parent.name) and old.parent.name not in cids:
+            old.unlink()
+            if not any(old.parent.iterdir()):
+                old.parent.rmdir()
     for cid in cids:
-        _write(directory / f"{cid}.html", claim_page(doc, cid, base_url=base_url, scores=scores, file_url=file_url,
-                                                     ref_text=ref_text, published=published,
-                                                     trail=(trails or {}).get(cid)))
+        for view, path in (("paper", directory / f"{cid}.html"), ("record", directory / cid / "record.html")):
+            _write(path, claim_page(doc, cid, base_url=base_url, scores=scores, file_url=file_url, ref_text=ref_text,
+                                    published=published, trail=(trails or {}).get(cid), view=view))
 
 
 def write_listings(published_dir, base_url, docs, corrected=None):
