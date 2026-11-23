@@ -116,9 +116,15 @@ def test_your_submissions(app_client):
     assert '<article class="cs-body" data-open>' in page
     menu = page[page.index('<nav class="cs-toc"'):page.index("</nav>", page.index('class="cs-toc'))]
     assert "On this page" in menu and 'href="#top">\u2191 Top</a>' in menu
-    for sid, title in (("waiting", "Waiting for you"), ("published", "Published"),
-                       ("closed", "Closed in the last 14 days")):
-        assert f'<a href="#{sid}">{title}</a> <span class="count">1</span>' in menu
+    assert '<a href="#closed">Closed in the last 14 days</a> <span class="count">1</span>' in menu
+    # Waiting for you and Published open the list of their papers by name; the arrow leads to the section
+    for sid, title in (("waiting", "Waiting for you"), ("published", "Published")):
+        assert (f'<li class="pv-toc-sec"><details><summary>{title} <span class="count">1</span></summary>'
+                '<ol class="pv-toc pub-toc">') in menu
+        assert f'<a class="pv-toc-go" href="#{sid}"' in menu
+    [waiting] = re.findall(r'<section class="pending" id="([^"]+)"><h2>([^<]*)</h2>', page)
+    assert f'<a href="#{waiting[0]}">{waiting[1]}</a>' in menu
+    assert '<li id="pub-2026.000001">' in page and '<a href="#pub-2026.000001">' in menu
     assert 'src="/page.js' in page
     # a published paper: identifier, version, date, claims, and its links
     row = page[page.index('<ul class="pub-list">'):page.index("</ul>", page.index('<ul class="pub-list">'))]
