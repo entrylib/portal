@@ -102,6 +102,12 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   them too). Check it first:
   {base}/api/validate (POST a claimset JSON file or a submission package as the request body) checks it as a
   submission is checked; nothing is kept.
+- Before submitting, make the claimset lean: a reader takes in every sentence, and its writer is the worst judge of
+  what it added. `claimset lean <file>` (add `--since <published file>` for a new version) lists candidates: near
+  repeats, a claim relating twice to the same work, definitions and references nothing names, and what a new version
+  adds to what was published. Give the brief from `claimset lean <file> --prompt` to a different agent than the one
+  that wrote the claimset; it flags what a reader would not miss and edits nothing. Show its flags to your human, who
+  decides what goes (the skill {base}/skills/claimset-submit.md, step 11a).
 - Optional, before submitting: the scores the claimset would have once published, by the EntryLib rubric
   (https://github.com/entrylib/rubric), with its biggest issues and what would fix them: `claimset score` on your own
   machine, the MCP tool score, or {base}/api/score (POST the claimset JSON file or the package as the request body;
