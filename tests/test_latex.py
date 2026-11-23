@@ -39,7 +39,7 @@ def test_the_zip():
     name, f, names = files(published())
     assert name == "entrylib-2026.000007-v2-latex.zip"
     assert all(n.startswith("entrylib-2026.000007-v2/") for n in names)
-    assert {"paper.tex", "references.bib", "traceability.csv", "GAPS.md", "README.md"} <= set(f)
+    assert {"paper.tex", "supplement.tex", "references.bib", "traceability.csv", "GAPS.md", "README.md"} <= set(f)
     assert "pdflatex paper" in f["README.md"] and not any(n.endswith(".pdf") for n in names)     # no PDF
     assert latex.build(published(), BASE) == latex.build(published(), BASE)                      # the same every time
 
@@ -49,7 +49,8 @@ def test_it_names_its_claimset_three_times():
     tex = f["paper.tex"]
     title = tex[tex.index("\\title{"):tex.index("\\author{")]
     assert "\\thanks{This paper is the human edition of the claimset" in title and "entrylib:2026.000007@v2" in title
-    intro = tex[tex.index("\\section{Introduction}"):tex.index("\\section{Terms")]
+    start = tex.index("\\section{Introduction}")
+    intro = tex[start:tex.index("\\section{", start + 1)]
     assert "\\citep{entrylib2026.000007v2}" in intro
     assert "\\section*{Data, materials and provenance}" in tex
     assert f["references.bib"].startswith("@misc{entrylib2026.000007v2,")                    # the first entry
@@ -60,8 +61,8 @@ def test_it_sets_out_the_claimset_and_marks_what_is_missing():
     _, f, _ = files(published())
     tex = f["paper.tex"]
     assert "\\begin{abstract}\nMethod M forecasts" in tex
-    assert "\\label{claim:C2}" in tex and "\\section{Assumptions}" in tex and "\\label{claim:C1}" in tex
-    assert "All 1,200 series come from one retailer" in tex                                  # the limitation
+    assert "\\label{claim:C2}" in tex and "\\begin{assumption}\\label{asm:C1}" in tex      # a claim, its assumption
+    assert "\\subsection{Limitations}" in tex and "All 1,200 series come from one retailer" in tex
     assert "A.~Researcher" not in tex and "A. Researcher" in tex                             # the human author
     assert "Example research agent" not in tex[tex.index("\\author{"):tex.index("\\date{")]   # agents are not authors
     assert "Example provider Example model 1.0" in tex                                       # named in Use of AI
@@ -79,7 +80,8 @@ def test_each_line_says_where_it_comes_from():
     _, f, _ = files(published())
     lines = f["paper.tex"].split("\n")
     rows = list(csv.DictReader(io.StringIO(f["traceability.csv"])))
-    statement = [r for r in rows if r["object"] == "C2" and r["field"] == "statement"]
+    assert {r["file"] for r in rows} == {"paper.tex", "supplement.tex"}
+    statement = [r for r in rows if r["file"] == "paper.tex" and r["object"] == "C2" and r["field"] == "statement"]
     assert statement
     text = "\n".join(lines[int(statement[0]["first_line"]) - 1:int(statement[0]["last_line"])])
     assert "improves forecast skill over the seasonal naive method" in text
@@ -155,25 +157,27 @@ def test_figures_are_included(tmp_path):
     doc["claims"][2]["support"][0]["artefacts"] = ["A2", "A3"]
     name, data = latex.build(doc, BASE, figure_file=lambda a: png if a["id"] == "A3" else None)
     z = zipfile.ZipFile(io.BytesIO(data))
-    assert "entrylib-2026.000007-v2/figures/A3.png" in z.namelist()
+    assert "entrylib-2026.000007-v2/figures/figure-1.png" in z.namelist()              # numbered, not by its ID
     tex = z.read("entrylib-2026.000007-v2/paper.tex").decode()
-    assert "\\includegraphics[width=\\linewidth]{figures/A3.png}" in tex
+    assert "\\includegraphics[width=\\linewidth]{figures/figure-1.png}" in tex
+    assert "\\caption{Skill by horizon}" in tex and "Figure~\\ref{fig:A3}" in tex      # no ID in the caption
     _, f, _ = files(doc)
-    assert "\\gap{figure A3" in f["paper.tex"]                              # a figure not stored here is a gap
+    assert "\\gap{this figure, from https://entrylib.test/x.png}" in f["paper.tex"]  # not stored here: a gap
 
 
 @pytest.mark.skipif(not shutil.which("pdflatex") or not shutil.which("bibtex"), reason="no TeX installed")
 def test_it_compiles(tmp_path):
-    for i, doc in enumerate((published(), _hostile())):
+    for i, doc in enumerate((published(), _hostile(), theorems())):
         _, data = latex.build(doc, BASE)
         zipfile.ZipFile(io.BytesIO(data)).extractall(tmp_path / str(i))
         work = next((tmp_path / str(i)).iterdir())
-        for cmd in (["pdflatex", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "paper"],
-                    ["bibtex", "paper"],
-                    ["pdflatex", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "paper"]):
-            r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=120)
-            assert r.returncode == 0 or cmd[0] == "bibtex", r.stdout[-2000:]
-        assert (work / "paper.pdf").exists()
+        for name in ("paper", "supplement"):
+            for cmd in (["pdflatex", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", name],
+                        ["bibtex", name],
+                        ["pdflatex", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", name]):
+                r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=120)
+                assert r.returncode == 0 or cmd[0] == "bibtex", r.stdout[-2000:]
+            assert (work / f"{name}.pdf").exists()
 
 
 def _hostile():
@@ -260,3 +264,113 @@ def test_someone_else_gets_no_draft(app_client):
     signed_in(app_client, as_orcid="0000-0002-1825-0097")
     assert app_client.get("/submissions/draft/2026.000001").status_code == 404
     assert app_client.post("/submissions/draft/2026.000001").status_code == 404
+
+
+# ---------- a paper, not the claimset's objects (design §4.6, revised 23 November 2026) ----------
+
+def theorems():
+    """A small paper of theorems and findings: a short proof, a long one, a numerical check, two findings in one
+    section, and two claims that relate to the same work with the same note."""
+    doc = published()
+    doc["definitions"].append({"id": "D6", "term": "mean", "kind": "concept", "symbol": "$\\mu$",
+                               "definition": "The expectation $\\mu = \\mathrm{E}[y]$ of a variable $y$."})
+    note = "Smith (2001) defines the mean for every distribution with a finite first moment."
+    short = [{"id": "S1", "statement": "\\mathrm{E}[a y] = a\\,\\mathrm{E}[y]", "by": ["D6"]},
+             {"id": "S2", "statement": "Hence the mean scales with the variable.", "by": []}]
+    long_ = [{"id": f"S{i}", "statement": f"x_{i} = x_{i - 1} + 1", "by": ["C4"]} for i in range(1, 9)]
+    doc["evidence"] += [
+        {"id": "E2", "profile": "formal", "foundation": "probability", "steps": short},
+        {"id": "E3", "profile": "formal", "foundation": "probability", "steps": long_},
+        {"id": "E4", "profile": "simulation", "description": "Numerical checks at 40-digit precision (proofs.md, run "
+         "RN6): each statement evaluated by numerical integration.",
+         "results": [{"id": "R1", "variable": "largest relative error", "value": 3e-41}]},
+    ]
+    doc["evidence"][0]["description"] = "Lab runs RN1 under plan PL1. Design: " + doc["evidence"][0]["description"]
+    doc["claims"] += [
+        {"id": "C4", "statement": "For a [[D6:mean]], $\\mathrm{E}[a y] = a\\,\\mathrm{E}[y]$.", "type": "formal",
+         "role": "principal", "name": "The mean is linear (in [0, 1] too)",
+         "support": [{"kind": "formal_proof", "evidence": "E2"}, {"kind": "simulation", "evidence": "E4",
+                                                                  "results": ["E4.R1"]}],
+         "relations": [{"type": "extends", "id_type": "doi", "target": "10.1000/x", "reference": "B1", "note": note}]},
+        {"id": "C5", "statement": "A long chain ends where it should.", "type": "formal", "role": "secondary",
+         "name": "A long chain", "support": [{"kind": "formal_proof", "evidence": "E3"}]},
+        {"id": "C6", "statement": "Method M is quick to compute.", "type": "descriptive", "role": "secondary",
+         "name": "Speed", "support": [{"kind": "expert_judgement", "holder": "the authors"}]},
+    ]
+    c2 = next(c for c in doc["claims"] if c["id"] == "C2")
+    c2["name"] = "Skill"
+    c2["relations"] = [{"type": "extends", "id_type": "doi", "target": "10.1000/x", "reference": "B1", "note": note}]
+    doc["paper"]["sections"] = [{"title": "Theory", "claims": ["C4", "C5"]},
+                                {"title": "Findings", "claims": ["C2", "C6"]}]
+    doc["paper"]["contributions"] = ["C4", "C2"]
+    return doc
+
+
+def test_formal_claims_are_theorems_titled_by_their_names():
+    tex = files(theorems())[1]["paper.tex"]
+    assert "\\begin{theorem}[{The mean is linear (in [0, 1] too)}]\\label{thm:C4}" in tex     # a bracket cannot end it
+    assert "\\begin{proposition}[{A long chain}]\\label{thm:C5}" in tex                      # secondary: a proposition
+    assert "\\newtheorem{proposition}[theorem]{Proposition}" in tex                           # one counter
+    assert "\\begin{definition}[{mean, $\\mu$}]\\label{def:D6}" in tex                       # before its first use
+    assert tex.index("\\label{def:D6}") < tex.index("\\label{thm:C4}")
+
+
+def test_a_short_proof_follows_its_theorem_and_a_long_one_goes_to_the_appendix():
+    tex = files(theorems())[1]["paper.tex"]
+    after = tex[tex.index("\\label{thm:C4}"):tex.index("\\label{thm:C5}")]
+    assert "\\begin{proof}\n" in after and "\\tag*{by Definition~\\ref{def:D6}}" in after     # the step's `by`
+    assert "The proof is in Appendix~\\ref{app:proofs}." in tex
+    appendix = tex[tex.index("\\appendix"):]
+    assert "\\begin{proof}[Proof of Proposition~\\ref{thm:C5}]" in appendix
+    assert "by Theorem~\\ref{thm:C4}" in appendix                                             # a claim, by its number
+    assert "The longer proofs are in Appendix~\\ref{app:proofs}." in tex                      # said in the roadmap
+
+
+def test_the_paper_names_no_id_of_the_record():
+    _, f, _ = files(theorems())
+    tex = f["paper.tex"]
+    prose = re.sub(r"\\(label|ref|hyperref|citep|citet)(\[[^]]*\])?\{[^}]*\}", "", tex)
+    for word in ("Claim C", "Claim~C", "Evidence E", "RN1", "PL1", "run RN6", "(hypothesis"):
+        assert word not in prose, word
+    assert "\\paragraph{Design.} Benchmark of method M" in tex                                # the lab's words gone
+    sup = f["supplement.tex"]
+    assert "\\paragraph{Claim C4 (Theorem 1 in the paper): The mean is linear" in sup          # the record keeps them
+    assert "\\paragraph{Evidence E4.}" in sup and "Proof (in probability)" in sup
+
+
+def test_numerical_checks_are_said_once_in_the_appendix():
+    tex = files(theorems())[1]["paper.tex"]
+    checks = tex[tex.index("\\section{Numerical checks}"):]
+    assert "Numerical checks at 40-digit precision: each statement" in checks                # the run's file left out
+    assert "These checks were made of Theorem~\\ref{thm:C4}." in checks
+    assert "largest relative error is at most 3e-41" in checks
+    body = tex[tex.index("\\section{Theory}"):tex.index("\\section{Discussion}")]
+    assert "3e-41" not in body and "relative error" not in body
+
+
+def test_findings_have_run_in_headings_and_are_named_by_their_section():
+    tex = files(theorems())[1]["paper.tex"]
+    assert "\\paragraph{Skill.}\\label{claim:C2}" in tex and "\\paragraph{Speed.}\\label{claim:C6}" in tex
+    one = published()
+    next(c for c in one["claims"] if c["id"] == "C2")["name"] = "Skill"
+    one["paper"]["sections"] = [{"title": "Findings", "claims": ["C2"]}]
+    alone = files(one)[1]["paper.tex"]
+    assert "\\paragraph{Skill.}" not in alone and "\\label{claim:C2} Method M improves" in alone   # alone: none
+    intro = tex[tex.index("\\section{Introduction}"):tex.index("\\section{Theory}")]
+    assert "(Section~\\ref{sec:part-2})" in intro and "(Theorem~\\ref{thm:C4})" in intro
+
+
+def test_earlier_work_says_each_work_once():
+    tex = files(theorems())[1]["paper.tex"]
+    work = tex[tex.index("\\subsection{Earlier work}"):tex.index("\\section{Theory}")]
+    assert work.count("Smith (2001) defines the mean") == 1                                   # the note once
+    assert "Theorem~\\ref{thm:C4} and Section~\\ref{sec:part-2} extend \\citet{B1}." in work         # one sentence
+
+
+def test_each_gap_comes_with_what_the_claimset_gives():
+    _, f, _ = files(theorems())
+    gaps = f["GAPS.md"]
+    assert "## What the claimset gives towards them" in gaps
+    assert "Smith (2001) defines the mean" in gaps                                            # for the earlier work
+    assert "Theorem 1: The mean is linear" in gaps                                            # for the discussion
+    assert "a sentence leading into this section (Theory)" in gaps

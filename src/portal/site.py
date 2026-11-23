@@ -1949,14 +1949,18 @@ def draft_page(x):
     title = f"LaTeX draft of {x['title']}"
     items = ["A plain <code>article</code> in LaTeX, made from version "
              f"{esc(x['version'])} of the claimset by a program, not a model: it sets out what the claimset holds "
-             "and adds nothing.",
-             "What a paper needs and the claimset does not hold (the motivation, a discussion, a conclusion, "
-             "acknowledgements, an affiliation that is missing) is marked in red as a gap for you to write, and "
-             "listed with its line in <code>GAPS.md</code>.",
+             "as a paper and adds nothing. Formal claims are theorems, titled by their names, with the short proofs "
+             "after them and the longer ones in an appendix; the other claims are paragraphs in the paper's sections. "
+             "The paper names no ID of the record: a supplement sets it out claim by claim.",
+             "What a paper needs and the claimset does not hold (the motivation, the earlier work, a sentence leading "
+             "into each section, a discussion, a conclusion, acknowledgements, an affiliation that is missing) is "
+             "marked in red as a gap for you to write, and listed with its line in <code>GAPS.md</code>, with what "
+             "the claimset gives towards it.",
              "The paper names its claimset in a footnote on the title, cites it in the introduction and links it in "
              "the statement on data, materials and provenance. Please keep them: they let a reader find each claim "
              "with its evidence.",
-             "A zip of <code>paper.tex</code>, <code>references.bib</code>, the result tables as CSV files, the "
+             "A zip of <code>paper.tex</code>, <code>supplement.tex</code>, <code>references.bib</code>, the result "
+             "tables as CSV files, the "
              "figures stored with the claimset, <code>traceability.csv</code> (which line comes from which part of "
              "the claimset) and a README on compiling it. No PDF: compile it with <code>pdflatex</code> or "
              "<code>latexmk</code>."]
