@@ -27,7 +27,7 @@ class Limit:
 #: The limits per address (initial values, design §8).
 LIMITS = {
     "read": Limit(120, 60),         # search, submission status, every MCP request
-    "validate": Limit(30, 3600),    # POST /api/validate and /api/score, MCP validate and score
+    "validate": Limit(30, 3600),    # POST /api/validate and /api/score, MCP validate and score, a LaTeX draft
     "submit": Limit(20, 3600),      # POST /api/submissions, MCP submit
     "fetch": Limit(10, 3600),       # submission by URL: the server downloads up to 210 MB
     "upload": Limit(10, 3600),      # MCP upload_url, each file sent to an upload address, a package attached at consent
@@ -94,6 +94,8 @@ def kind_of(method, path):
     attach = path == "/confirm/package" or (path.startswith("/consent/") and path.endswith("/package"))
     if method == "POST" and attach:                         # a package attached at consent (design §4.4)
         return "upload"
+    if method == "POST" and path.startswith("/submissions/draft/"):    # a LaTeX draft, built on request (§4.6)
+        return "validate"
     if method == "POST":
         return {"/api/validate": "validate", "/api/score": "validate", "/api/submissions": "submit",
                 "/api/submissions/from-url": "fetch", "/removal": "request"}.get(path)

@@ -775,3 +775,16 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   details.pv-proof > summary::-webkit-details-marker { display: none; }
   .fold:not(.open) > .fold-body { display: block !important; }
 }
+/* Your submissions (design §4.2): its sections beside a menu, as a specification's; a published paper's row. */
+.submissions .spec-body h2:first-child { margin-top: 0; }
+.submissions section > h2 { margin-top: 32px; }
+.submissions section:first-child > h2 { border-top: 0; padding-top: 0; margin-top: 0; }
+.pub-list { list-style: none; padding: 0; margin: 0; }
+.pub-list li { padding: 14px 0; border-bottom: 1px solid var(--rule-light); }
+.pub-title { font-weight: 600; font-size: 18px; }
+.pub-facts { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
+.pub-links { margin: 4px 0 0; font-size: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.pub-action { margin-left: auto; }
+.pub-nodraft { color: var(--muted); font-size: 14px; }
+.draft-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.draft-actions .button-quiet { min-height: 44px; padding: 0 16px; font-size: inherit; font-weight: 600; }

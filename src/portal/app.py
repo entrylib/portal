@@ -30,6 +30,7 @@ from . import (
     history,
     ids,
     indexer,
+    latex,
     mcp_server,
     notices,
     pages,
@@ -230,6 +231,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         body = {"portal": __version__, "claimset": claimset.__version__, "spec": claimset.SPEC_VERSION}
         if indexer.REBUILDING.is_set():                 # after an update: the pages are being written again
             body["rebuilding"] = True
+            if indexer.PROGRESS.get("total"):
+                body["pages_updated"] = f"{indexer.PROGRESS.get('done', 0)} of {indexer.PROGRESS['total']}"
         try:
             with pool.connection(timeout=2) as conn:
                 conn.execute("SELECT 1")
@@ -306,13 +309,10 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             q = read.Query.parse(params)
             return RedirectResponse(q.url().replace("&amp;", "&"), status_code=301)
         q = read.Query.parse(params)
-        with pool.connection() as conn:
-            docs = [r[0] for r in conn.execute(
-                "SELECT v.file FROM papers p JOIN versions v ON v.concept_id = p.concept_id"
-                " AND v.version = p.current_version ORDER BY p.updated DESC, p.concept_id").fetchall()]
+        with pool.connection() as conn:                     # from the index: the papers shown alone are read
             corrected = history.corrected_concepts(conn)
-        return HTMLResponse(read.page(docs, q, settings.base_url, corrected, published_dir=settings.published_dir),
-                            headers={"Content-Security-Policy": PAGE_CSP})
+            html_ = read.page_from_db(conn, q, settings.base_url, corrected, published_dir=settings.published_dir)
+        return HTMLResponse(html_, headers={"Content-Security-Policy": PAGE_CSP})
 
     @app.get("/submit", response_class=HTMLResponse, include_in_schema=False)
     def upload_page():
@@ -475,7 +475,8 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             def listing():
                 with pool.connection() as conn:
                     items = consent.listing(conn, state, who, settings.submissions_dir)
-                    return items, (consent.history(conn, who) if items is not None else None)
+                    return items, (consent.history(conn, who, published_dir=settings.published_dir)
+                                   if items is not None else None)
             items, past = await run_in_threadpool(listing)
             if items is None:
                 return _page(site.message_page("Sign-in expired", "This sign-in has expired or was already used. "
@@ -538,7 +539,7 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
             if who is None:
                 return _page(site.submissions_page(orcid.configured))
             items = consent.listing_for(conn, who[0], settings.submissions_dir)
-            past = consent.history(conn, who[0])
+            past = consent.history(conn, who[0], published_dir=settings.published_dir)
         return _page(site.submissions_list(items, past, who[0], who[1], session=True))
 
     @app.get("/submissions/{submission}/preview", response_class=HTMLResponse, include_in_schema=False)
@@ -559,6 +560,57 @@ def create_app(settings=None, pool=None, run_expiry=True, orcid=None, publisher=
         html_ = pages.session_preview(ctx, scores=preview_scores, base_url=settings.base_url, view=view,
                                       views=(base, f"{base}?view=record"))
         return HTMLResponse(html_, headers={"Content-Security-Policy": removal_csp + "; script-src 'self'"})
+
+    def _draftable(conn, who, key):
+        """The current version of the paper at `key` that the person signed in guarantees and may make a LaTeX draft
+        of (design §4.6): {id, version, title, status, file}, or None."""
+        if not re.fullmatch(r"\d{4}\.\d{6,}", key):
+            return None
+        row = conn.execute(
+            "SELECT p.concept_id, p.current_version, p.title, p.status, v.file FROM papers p JOIN versions v"
+            " ON v.concept_id = p.concept_id AND v.version = p.current_version"
+            " WHERE p.url_key = %s AND %s = ANY(p.guarantors)", (key, who)).fetchone()
+        if row is None or row[3] not in site.DRAFTABLE:
+            return None
+        return dict(zip(("id", "version", "title", "status", "file"), row, strict=True))
+
+    def _no_draft(x=None):
+        """No draft: the reason, for a paper of this guarantor that restates a published paper (§4.6)."""
+        reason = latex.refusal(x["file"]) if x else None
+        if reason:
+            return _page(site.message_page("No LaTeX draft", latex.NO_DRAFT[reason][1],
+                                           ("/submissions#published", "Your submissions")), 403)
+        return _page(site.message_page("Not available", "There is no paper at this address that you guarantee and "
+                                       "can make a LaTeX draft of: it is retracted or withdrawn, or it names someone "
+                                       "else as its guarantor.", ("/submissions", "Your submissions")), 404)
+
+    @app.get("/submissions/draft/{key}", response_class=HTMLResponse, include_in_schema=False)
+    def draft_page(request: Request, key: str):
+        """What the LaTeX draft of a published paper is, and its Build button (design §4.6). Signed in, its
+        guarantor."""
+        with pool.connection() as conn:
+            who = consent.session(conn, request.cookies.get(SESSION_COOKIE))
+            if who is None:
+                return RedirectResponse("/submissions", status_code=303)
+            x = _draftable(conn, who[0], key)
+        return _page(site.draft_page(x)) if x and not latex.refusal(x["file"]) else _no_draft(x)
+
+    @app.post("/submissions/draft/{key}", include_in_schema=False)
+    def draft_build(request: Request, key: str):
+        """The LaTeX draft of a published paper, built now and sent as a zip; nothing is kept (design §4.6)."""
+        with pool.connection() as conn:
+            who = consent.session(conn, request.cookies.get(SESSION_COOKIE))
+            if who is None:
+                return RedirectResponse("/submissions", status_code=303)
+            x = _draftable(conn, who[0], key)
+            if x is None or latex.refusal(x["file"]):
+                return _no_draft(x)
+            refs = latex.known_references(conn, x["file"], settings.base_url)
+        name, data = latex.build(x["file"], settings.base_url, refs,
+                                 latex.figure_files(settings.published_dir, settings.base_url))
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                 "Cache-Control": "no-store"})
 
     @app.post("/signout", include_in_schema=False)
     def signout(request: Request):
