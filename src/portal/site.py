@@ -24,39 +24,35 @@ from pathlib import Path
 
 from claimset.claim import claim_bundle
 
-from . import areas, ids, indexnow, limits, planning, score_html, skills, source, specs
+from . import areas, chrome, ids, indexnow, limits, planning, score_html, skills, source, specs
 from . import page as pageview
 from . import paper as paperview
 from . import scores as score_data
+from .chrome import (  # noqa: F401 - the shell and its constants, used here and by site's callers
+    BUTTON,
+    CARET,
+    CLAIMSET_REPO,
+    CONTACT,
+    FEED_ENTRIES,
+    FOOTER,
+    ICONS,
+    MARK,
+    NAV,
+    PUBLISH,
+    RECENT,
+    SITE,
+    SOURCE_CODE,
+    _footer,
+    _header,
+    _static,
+    asset,
+    esc,
+    shell,
+)
 from .history import claims_changed
 from .text import html as plain_html
 from .text import one_line as plain_text
 from .text import plain, readable
-
-SITE = "EntryLib"
-CONTACT = "mail@entrylib.org"
-SOURCE_CODE = "https://github.com/entrylib/portal"
-CLAIMSET_REPO = "https://github.com/entrylib/claimset"
-
-#: How many claimsets the home page lists.
-RECENT = 10
-#: How many entries the feed carries.
-FEED_ENTRIES = 30
-
-NAV = [("/read", "Read", "read"), ("/lab", "Lab", "lab"), ("/agents", "For agents", "agents"),
-       ("/about", "About", "about")]
-#: The header's Publish menu (design §7.4): everything an author needs, under one button.
-PUBLISH = [("/submit", "Publish a paper", "Submit a paper your AI agent has prepared", "submit"),
-           ("/convert", "Convert your paper", "Turn a paper you have already written into one", "convert"),
-           ("/before-you-submit", "Before you publish", "What the responsible researcher checks", "before"),
-           ("/submissions", "Your submissions", "Papers waiting for your confirmation", "submissions")]
-BUTTON = ' class="button"'
-CARET = ('<svg class="caret" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">'
-         '<path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>')
-FOOTER = [("/about", "About"), ("/submissions", "Your submissions"),
-          ("/privacy", "Privacy"),
-          ("/removal", "Removal requests"), ("/spec/", "Specification"), ("/llms.txt", "llms.txt, for AI agents"),
-          (SOURCE_CODE, "Source code"), (f"mailto:{CONTACT}", CONTACT)]
 
 #: The fixed pages: address -> (file under static/pages, title, active nav item, description).
 PAGES = {
@@ -105,20 +101,39 @@ STATUS_CLASS = {"active": "ok", "corrected": "neutral", "retracted": "bad", "rem
 
 
 
-def esc(x):
-    return html.escape("" if x is None else str(x), quote=True)
+#: Under the published directory: the content of each paper's pages, as shell was given it (design §7.1).
+PARTS = ".parts"
 
 
-def _static(name):
-    return resources.files("portal") / "static" / name
+def parts_path(path):
+    """Where the parts of a page under p/ are kept (PARTS), or None for a page elsewhere."""
+    path = Path(path)
+    names = path.parts
+    if "p" not in names:
+        return None
+    i = len(names) - 1 - names[::-1].index("p")
+    return Path(*names[:i]) / PARTS / Path(*names[i:]).with_name(path.name + ".json")
 
 
 def _write(path, text):
+    """Write a file, unless it already holds exactly this (design §7.1: a page is written only when it changes).
+    A paper's page (a chrome.Page under p/) keeps its parts too, so that a change to the chrome alone re-wraps it."""
     path = Path(path)
+    args = getattr(text, "args", None)
+    if args is not None:
+        kept = parts_path(path)
+        if kept is not None:
+            _write(kept, json.dumps(args, ensure_ascii=False, sort_keys=True))
+    try:
+        if path.read_text(encoding="utf-8") == text:
+            return False
+    except (OSError, UnicodeDecodeError):
+        pass
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+    return True
 
 
 #: The portal's modules that only serve requests, publish, check or configure: they shape no page, so a change to them
@@ -130,17 +145,14 @@ NOT_RENDERING = {"__init__.py", "__main__.py", "app.py", "archive.py", "check.py
 
 
 def fingerprint():
-    """A hash of everything here that shapes a page: the portal's modules but those of NOT_RENDERING, the rubric's
-    version, and the templates, styles, scripts and fixed pages. When it changes, the pages are written again."""
+    """A hash of everything here that draws a paper's pages: the portal's modules but those of NOT_RENDERING and the
+    chrome's (chrome.py, page_css.py: chrome.fingerprint), and the rubric's version. When it changes, papers are drawn
+    again; when only the chrome changes, their pages are re-wrapped (design §7.1)."""
     h = hashlib.sha256()
     for f in sorted(Path(__file__).parent.glob("*.py")):
-        if f.name not in NOT_RENDERING:
+        if f.name not in NOT_RENDERING and f.name not in chrome.CHROME_MODULES:
             h.update(f.name.encode() + b"\0" + f.read_bytes())
     h.update(f"rubric {score_data.version()}".encode())        # pages follow the rubric (design §7.6)
-    for name in ("site.css", "page.js", "fonts/fonts.css"):
-        h.update(_static(name).read_bytes())
-    for f in sorted((Path(str(_static("pages")))).glob("*.html")):
-        h.update(f.read_bytes())
     return h.hexdigest()[:16]
 
 
@@ -171,73 +183,6 @@ def claimset_fingerprint():
             text = re.sub(rb"(?m)^__version__\s*=.*$", b"", text)
         h.update(rel.encode() + b"\0" + text)
     return h.hexdigest()[:16]
-
-
-# --- the shell --------------------------------------------------------------------------------------------------------
-
-#: The mark (static/img/entrylib-mark.svg) inline, its brackets in the text's colour so that it follows the theme.
-MARK = ('<svg class="logo-mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" focusable="false">'
-        '<path d="M11 5H6v22h5M21 5h5v22h-5" fill="none" stroke="currentColor" stroke-width="3.2" '
-        'stroke-linecap="square"/><circle cx="16" cy="16" r="4" fill="#2e8b57"/></svg>')
-#: The icons a browser, a phone's home screen and an installed site use (static/icons, written at the site's root).
-ICONS = ('<link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml">'
-         '<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest">')
-
-
-def _header(active):
-    """The site's header: four links and the Publish menu (a <details>: it works without scripts and from the
-    keyboard); on a phone, one Menu with the same links and the Publish group."""
-    def cur(key):
-        return ' aria-current="page"' if key == active else ""
-    links = "".join(f'<a href="{href}"{cur(key)}>{label}</a>' for href, label, key in NAV)
-    items = "".join(f'<a class="publish-item" href="{href}"{cur(key)}><strong>{label}</strong><span>{what}</span></a>'
-                    for href, label, what, key in PUBLISH)
-    mine = any(key == active for *_rest, key in PUBLISH)
-    publish = (f'<details class="publish-menu"><summary class="button{" current" if mine else ""}">Publish{CARET}'
-               f'</summary><div class="publish-list">{items}</div></details>')
-    phone = "".join(f'<a{BUTTON if i == 0 else ""} href="{href}"{cur(key)}>{label}</a>'
-                    for i, (href, label, _what, key) in enumerate(PUBLISH))
-    return (f'<header class="site-header"><div class="wrap">'
-            f'<a class="logo" href="/">{MARK}<span>{SITE}</span></a>'
-            f'<nav class="site-nav" aria-label="Site">{links}{publish}</nav>'
-            f'<details class="site-menu"><summary>Menu</summary><nav aria-label="Site">{links}'
-            f'<p class="menu-group">Publish</p>{phone}</nav></details>'
-            "</div></header>")
-
-
-def _footer():
-    links = "".join(f'<a href="{esc(href)}">{esc(label)}</a>' for href, label in FOOTER)
-    return f'<footer class="site-footer"><div class="wrap">{links}</div></footer>'
-
-
-@functools.cache
-def asset(path):
-    """A stylesheet's or script's address with a version from its content (/site.css?v=1a2b3c4d), so that a browser
-    or Cloudflare never pairs a new page with an old stylesheet."""
-    if path == "/claimset.css":
-        data = pageview.stylesheet().encode()
-    else:
-        data = _static(path.lstrip("/")).read_bytes()
-    return f"{path}?v={hashlib.sha256(data).hexdigest()[:10]}"
-
-
-def shell(title, main, *, active=None, description="", head="", canonical=None, script=None):
-    """A whole page: head, site header, `main` (HTML), footer."""
-    full = title if title == SITE else f"{title} · {SITE}"
-    meta = f'<meta name="description" content="{esc(description)}">' if description else ""
-    canon = f'<link rel="canonical" href="{esc(canonical)}">' if canonical else ""
-    return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            f"<title>{esc(full)}</title>{meta}{canon}{ICONS}"
-            f'<link rel="stylesheet" href="{asset("/fonts/fonts.css")}">'
-            f'<link rel="stylesheet" href="{asset("/claimset.css")}">'
-            f'<link rel="stylesheet" href="{asset("/site.css")}">'
-            f'<link rel="alternate" type="application/atom+xml" title="{SITE}: recently published" href="/feed.xml">'
-            f'{head}</head>\n<body id="top"><a class="skip-link" href="#content">Skip to content</a>{_header(active)}'
-            f'<main id="content">{main}</main>{_footer()}'
-            + "".join(f'<script src="{asset(s)}" defer></script>' for s in ([script] if isinstance(script, str)
-                                                                             else script or []))
-            + "</body></html>\n")
 
 
 # --- facts about a claimset -------------------------------------------------------------------------------------------
