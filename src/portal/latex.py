@@ -34,6 +34,25 @@ FIGURE_TYPES = {".png", ".jpg", ".jpeg", ".pdf"}
 #: prints breaks across pages.
 LONG_TABLE = 40
 
+#: A proof longer than this, in steps or in characters, goes to the appendix; a shorter one follows its theorem.
+PROOF_STEPS = 6
+PROOF_CHARS = 600
+#: How the paper names a claim set out as a theorem, proposition or lemma.
+ENV_NAME = {"theorem": "Theorem", "proposition": "Proposition", "lemma": "Lemma"}
+#: The kinds of definition set out as a numbered `definition` when their text holds a formula.
+FORMAL_KINDS = {"concept", "method", "model", "variable"}
+#: The lab record's words for an evidence object's runs and plan, which the paper's design paragraph leaves out.
+LAB_RUNS = re.compile(r"^Lab runs? [A-Z0-9, and]+ under plans? [A-Z0-9, and]+\.\s*")
+#: A parenthesis that names a run or a file of the record, left out where checks of the same kind are said once.
+PARENTHESIS = re.compile(r"\s*\((?=[^()]*(?:\brun\b|\bRN\d+|\.md\b|\.py\b))[^()]*\)")
+
+#: A table description's reference to another table of the record ("Summary of T1: ").
+SUMMARY_OF = re.compile(r"^Summary of T\d+:\s*")
+#: A table description's naming of the hypothesis it decided ("; hypothesis: H18"), the record's.
+HYPOTHESIS_IN = re.compile(r"[;,]?\s*\bhypothesis: H\d+\b")
+#: Conditions of a table that belong to the record, left out of the paper's captions.
+RECORD_CONDITIONS = {"hypothesis", "lab_plan", "lab_run", "plan", "run"}
+
 #: A formula, a term mark or code (paper.SEGMENT), for splitting a text.
 SEGMENT = re.compile(r"\$\$.+?\$\$|\$[^$\s][^$]*?\$|\\\(.+?\\\)|\[\[[^\]]+\]\]|`[^`]+`", re.S)
 FENCED = re.compile(r"```[^\n]*\n(.*?)```", re.S)
@@ -151,6 +170,7 @@ class _Draft:
     def __init__(self):
         self.lines, self.trace, self.gaps, self._pending = [], [], [], []
         self.unknown = set()
+        self.refer = None                                 # how a claim's ID in a text is written, or a link to it
 
     # ----- text -----
     def esc(self, s):
@@ -187,7 +207,7 @@ class _Draft:
             if word.startswith("http"):
                 out.append(self.url(word))
             elif word in claims:
-                out.append(f"\\hyperref[claim:{word}]{{{word}}}")
+                out.append(self.refer(word) if self.refer else f"\\hyperref[claim:{word}]{{{word}}}")
             else:
                 out.append(self.esc(word))
             last = m.end()
@@ -238,9 +258,10 @@ class _Draft:
         return "\n\n".join(self.plain(p, claims) for p in parts)
 
     # ----- lines -----
-    def gap(self, what):
-        """A visible gap for people to fill: what a paper needs that the claimset does not hold."""
-        self._pending.append(what)
+    def gap(self, what, material=()):
+        """A visible gap for people to fill: what a paper needs that the claimset does not hold; `material`, what the
+        claimset gives towards it, listed under it in GAPS.md."""
+        self._pending.append((what, [m for m in material if m]))
         return f"\\gap{{{self.esc(what)}}}"
 
     def add(self, tex="", obj=None, field=None):
@@ -250,7 +271,7 @@ class _Draft:
             n = len(self.lines)
             for _ in range(line.count("\\gap{")):
                 if self._pending:
-                    self.gaps.append((n, self._pending.pop(0)))
+                    self.gaps.append((n, *self._pending.pop(0)))
         if obj is not None:
             self.trace.append((start, len(self.lines), obj, field or ""))
 
@@ -291,6 +312,15 @@ def _list(items):
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+def _sentence_tex(s):
+    return s[:1].upper() + s[1:]
+
+
+def json_key(x):
+    """A value as a key that compares equal for equal values of any kind."""
+    return repr(x)
+
+
 def _label(s):
     return re.sub(r"[^A-Za-z0-9.:-]", "-", str(s))
 
@@ -319,10 +349,14 @@ BYLINE = ("guarantor", "coauthor", "supervisor")
 
 
 class _Paper:
+    """The draft: the paper (`paper.tex`), set out as a paper with gaps, and its supplement (`supplement.tex`), the
+    claimset as a record (design §4.6)."""
+
     def __init__(self, doc, base_url, references, figure_file):
         self.doc, self.base = doc, base_url.rstrip("/")
         self.p = doc.get("paper") or {}
         self.D = _Draft()
+        self.mode = "paper"
         self.refs_known = references or {}
         self.figure_file = figure_file
         self.files = {}                                   # name in the zip -> bytes
@@ -343,6 +377,54 @@ class _Paper:
         self.tables_placed = set()
         self.cited = []                                   # bib keys cited, in order
         self.bib = {}                                     # reference ID -> bib key
+        # the paper's numbering, as LaTeX gives it: theorems, propositions and lemmas share one counter
+        self.env = {cid: self.env_of(c) for cid, c in self.claims.items()
+                    if not P.is_assumption(c) and self.is_formal(c)}
+        self.number = {}                                  # claim, definition or assumption ID -> "Theorem 3"
+        self.counters = {"theorem": 0, "definition": 0, "assumption": 0, "table": 0, "figure": 0}
+        self.def_ref = {}                                 # definition ID -> how the paper names it
+        self.table_number, self.figure_number = {}, {}    # table or figure -> its number in the paper
+        self.figure_name = {}                             # figure artefact -> its file in the zip
+        self.designs_placed = set()
+        self.deferred = []                                # (claim, proof evidence): proofs in the appendix
+        self.checks = self.verification()                 # evidence that only checks proved claims by computation
+        self.part_of = {cid: i for i, (_t, cids) in enumerate(self.parts(), 1) for cid in cids}
+        self.file_said = set()                            # tables held in a file, named once
+        self.held = []                                    # those a claim names, said after it
+
+    # ----- what a claim is -----
+    def is_formal(self, c):
+        """A formal claim (claimset §3.3.1) or a proved one: set out as a theorem."""
+        if c.get("type") == "formal":
+            return True
+        return any(sp.get("kind") == "formal_proof" for sp in _dicts(c.get("support")))
+
+    def env_of(self, c):
+        return {"principal": "theorem", "secondary": "proposition"}.get(c.get("role"), "lemma")
+
+    def proof_of(self, c):
+        for sp in _dicts(c.get("support")):
+            e = self.evidence.get(sp.get("evidence")) if isinstance(sp.get("evidence"), str) else None
+            if sp.get("kind") == "formal_proof" and e is not None:
+                return e
+        return None
+
+    def long_proof(self, e):
+        steps = _dicts(e.get("steps"))
+        size = sum(len(st.get("statement") or "") for st in steps if isinstance(st.get("statement"), str))
+        return len(steps) > PROOF_STEPS or size > PROOF_CHARS
+
+    def verification(self):
+        """The evidence that only checks proved claims by computation: cited by formal claims, never as their
+        proof, and by no other claim. The paper says once, in its appendix, what these checks were."""
+        by_formal, by_other = set(), set()
+        for c in self.claims.values():
+            for sp in _dicts(c.get("support")):
+                eid = sp.get("evidence")
+                if not isinstance(eid, str) or eid not in self.evidence or sp.get("kind") == "formal_proof":
+                    continue
+                (by_formal if c["id"] in self.env else by_other).add(eid)
+        return [e for e in self.evidence if e in by_formal - by_other]
 
     # ----- helpers -----
     def t(self, s):
@@ -370,11 +452,32 @@ class _Paper:
         return f"\\citet{loc}{{{key}}}" if text else f"\\citep{loc}{{{key}}}"
 
     def xref(self, cid):
-        return f"\\hyperref[claim:{cid}]{{Claim~{cid}}}" if cid in self.claims else self.D.esc(cid)
+        """A claim as the paper names it ("Theorem~3", "Assumption~1", "Section~8"), or as the supplement does
+        ("Claim~C5")."""
+        if cid not in self.claims:
+            return self.D.esc(cid)
+        if self.mode == "supplement":
+            return f"\\hyperref[claim:{cid}]{{Claim~{cid}}}"
+        if cid in self.env:
+            return f"{ENV_NAME[self.env[cid]]}~\\ref{{thm:{cid}}}"
+        if self.P.is_assumption(self.claims[cid]):
+            return f"Assumption~\\ref{{asm:{cid}}}"
+        if cid in self.part_of:
+            return f"Section~\\ref{{sec:part-{self.part_of[cid]}}}"
+        name = self.claim_name(self.claims[cid])
+        return f"\\emph{{{self.D.esc(name)}}}" if name else self.D.esc(cid)
+
+    def in_paper(self, cid):
+        """How the supplement names a claim's place in the paper."""
+        return self.number.get(cid, "")
 
     def claim_name(self, c):
         n = c.get("name")
         return " ".join(n.split()) if isinstance(n, str) and n.strip() else ""
+
+    def title_arg(self, s):
+        """An environment's optional title, in braces so that a bracket in it cannot end it."""
+        return f"[{{{s}}}]" if s else ""
 
     # ----- references -----
     def references(self):
@@ -471,6 +574,12 @@ class _Paper:
             "\\setlength{\\emergencystretch}{3em}",
             "\\usepackage[round,authoryear]{natbib}",
             "\\usepackage[hidelinks]{hyperref}",
+            "\\newtheorem{theorem}{Theorem}",
+            "\\newtheorem{proposition}[theorem]{Proposition}",
+            "\\newtheorem{lemma}[theorem]{Lemma}",
+            "\\theoremstyle{definition}",
+            "\\newtheorem{definition}{Definition}",
+            "\\newtheorem{assumption}{Assumption}",
             "\\newcommand{\\gap}[1]{{\\color{red}\\textbf{[To write: #1]}}}",
             "\\newcommand{\\unknownchar}[1]{\\text{[U+#1]}}",
             *ops,
@@ -485,8 +594,7 @@ class _Paper:
                   "evidence, assumptions and limitations it rests on.")
         self.cited.append(self.self_key)
         D.add(f"\\title{{{D.text(p.get('title') or '')}\\thanks{{{thanks}}}}}", "paper", "title")
-        people = [c for c in _dicts(self.doc.get("contributors")) if c.get("type") == "human"
-                  and set(_strs(c.get("positions"))) & set(BYLINE)]
+        people = self.byline()
         blocks = []
         for c in people:
             lines = [D.esc(c.get("name") or "")]
@@ -502,6 +610,10 @@ class _Paper:
               "paper", "date")
         D.add("")
 
+    def byline(self):
+        return [c for c in _dicts(self.doc.get("contributors")) if c.get("type") == "human"
+                and set(_strs(c.get("positions"))) & set(BYLINE)]
+
     def abstract(self):
         D, p = self.D, self.p
         D.add("\\begin{abstract}")
@@ -516,193 +628,266 @@ class _Paper:
                   "classification.keywords")
         D.blank()
 
+    def parts(self):
+        """[(title, claim IDs)]: the paper's sections, or one *Results*."""
+        return self.view.parts or [("Results", list(self.view.shown))]
+
     def introduction(self):
         D, p = self.D, self.p
         D.add("\\section{Introduction}\\label{sec:introduction}")
-        D.add(D.gap("the motivation: why the question matters, and to whom"))
+        contributions = [self.claims[c] for c in _strs(p.get("contributions")) if c in self.claims]
+        given = []
+        for c in contributions:
+            name = self.claim_name(c)
+            summary = c.get("summary") if isinstance(c.get("summary"), str) and c["summary"].strip() else ""
+            given.append(": ".join(x for x in (name, summary) if x) or str(c.get("statement") or ""))
+        # what the paper finds is the results' to state; the introduction says why it matters, so the contributions
+        # are what GAPS.md gives towards the motivation, not claims set out here
+        D.add(D.gap("the motivation: why the question matters, to whom, and what this paper contributes",
+                    [f"A contribution: {g}" for g in given]))
         D.blank()
-        contributions = [c for c in _strs(p.get("contributions")) if c in self.claims]
-        if contributions:
-            D.add("The contributions of this paper are the following.")
-            D.add("\\begin{enumerate}")
-            for cid in contributions:
-                c = self.claims[cid]
-                name = self.claim_name(c)
-                lead = f"\\textbf{{{D.esc(name)}.}} " if name else ""
-                body = c.get("summary") if isinstance(c.get("summary"), str) and c["summary"].strip() \
-                    else c.get("statement")
-                D.add(f"\\item {lead}{self.t(body)} ({self.xref(cid)})", cid,
-                      "name, summary" if c.get("summary") else "name, statement")
-            D.add("\\end{enumerate}")
-        terms = [d for d in _strs(p.get("highlights")) if d in self.defs]
-        if terms:
-            D.add("The paper introduces " + _list([f"\\emph{{{self.term(d)}}}" for d in terms]) + " (Section~"
-                  "\\ref{sec:terms}).", "paper", "highlights")
+        parts = self.parts()
+        roadmap = [f"Section~\\ref{{sec:part-{i}}} ({D.esc(title)})" for i, (title, _) in enumerate(parts, 1)]
+        tail = ("Section~\\ref{sec:discussion} discusses the results and Section~\\ref{sec:conclusion} concludes.")
+        if self.has_long_proofs():
+            tail += " The longer proofs are in Appendix~\\ref{app:proofs}."
+        D.add("The paper is set out as follows: " + "; ".join(roadmap) + ". " + tail, "paper", "sections")
         D.blank()
         D.add(f"The claims of this paper, with the evidence, assumptions and limitations each rests on, are recorded "
               f"in a claimset \\citep{{{self.self_key}}}; Section~\\ref{{sec:provenance}} says where.")
         D.blank()
-        related = []
-        for c in self.claims.values():
-            for r in _dicts(c.get("relations")):
+        self.earlier_work()
+
+    def has_long_proofs(self):
+        for cid in self.env:
+            e = self.proof_of(self.claims[cid])
+            if e is not None and _dicts(e.get("steps")) and self.long_proof(e):
+                return True
+        return False
+
+    def earlier_work(self):
+        """One paragraph per work the claims relate to: the claims, as the paper names them, then each note once."""
+        D = self.D
+        works, order = {}, []
+        for cid in self.view.shown:
+            for r in _dicts(self.claims[cid].get("relations")):
                 if r.get("id_type") == "local":
                     continue
-                target = (self.cite(r["reference"], r.get("locator"), text=True) if r.get("reference") in self.bib
-                          else self.D.esc(f"{r.get('id_type', '')}: {r.get('target', '')}"))
+                key = r.get("reference") if r.get("reference") in self.bib else f"{r.get('id_type')}:{r.get('target')}"
+                if key not in works:
+                    works[key] = {"r": r, "by": {}, "notes": []}
+                    order.append(key)
                 verb = paperview.RELATION.get(r.get("type"), _words(r.get("type")))
-                note = f" {self.t(r['note'])}" if isinstance(r.get("note"), str) else ""
-                related.append((c["id"], f"\\item {self.xref(c['id'])} {verb.lower()} {target}.{note}"))
+                works[key]["by"].setdefault(verb, [])
+                if cid not in works[key]["by"][verb]:
+                    works[key]["by"][verb].append(cid)
+                note = r.get("note") if isinstance(r.get("note"), str) and r["note"].strip() else None
+                if note and note not in works[key]["notes"]:
+                    works[key]["notes"].append(note)
         D.add("\\subsection{Earlier work}")
-        D.add(D.gap("the earlier work this paper builds on, and what it leaves open"))
-        if related:
+        material = []
+        for key in order:
+            w = works[key]
+            r = w["r"]
+            claims = "; ".join(f"{self.claim_name(self.claims[c]) or c} ({verb.lower()})"
+                               for verb, cids in w["by"].items() for c in cids)
+            material.append(f"{r.get('reference') or r.get('target')}: {claims}")
+        D.add(D.gap("the earlier work this paper builds on, and what it leaves open", material))
+        for key in order:
+            w = works[key]
+            if not w["notes"]:
+                continue                                 # a work related without a note is listed in GAPS.md only
+            r = w["r"]
+            cite = (self.cite(r["reference"], r.get("locator")) if r.get("reference") in self.bib
+                    else "(" + D.esc(f"{r.get('id_type', '')}: {r.get('target', '')}") + ")")
+            text = " ".join(self.t(n).strip() for n in w["notes"])
+            text = (text[:-1] if text.endswith(".") else text) + f" {cite}."
             D.blank()
-            D.add("The claims of this paper stand in these relations to earlier work.")
-            D.add("\\begin{itemize}")
-            for cid, line in related:
-                D.add(line, cid, "relations")
-            D.add("\\end{itemize}")
+            D.add(text, ",".join(c for cids in w["by"].values() for c in cids), "relations")
         D.blank()
 
-    def terms(self):
+    def body(self):
+        for i, (title, cids) in enumerate(self.parts(), 1):
+            D = self.D
+            D.add(f"\\section{{{D.esc(title)}}}\\label{{sec:part-{i}}}", "paper", "sections")
+            D.add(D.gap(f"a sentence leading into this section ({title})",
+                        [self.claim_name(self.claims[c]) or c for c in cids]))
+            D.blank()
+            plain = [c for c in cids if c not in self.env]
+            for cid in cids:
+                self.paper_claim(self.claims[cid], runin=len(plain) > 1)
+
+    def before(self, c):
+        """What a claim needs set out just before it: its assumptions, the definitions it is the first to use, the
+        design of the evidence it is the first to cite."""
+        own = [a for a in _strs(c.get("assumptions")) if a in self.claims and a not in self.view.assumes(c)]
+        for a in self.view.assumes(c) + own:
+            if a not in self.number:
+                self.assumption(self.claims[a])
+        new = self.view.new_terms(c)
+        e = self.proof_of(c)
+        for st in _dicts((e or {}).get("steps")):
+            for b in _strs(st.get("by")):
+                if b in self.defs and b not in self.view.introduced and b not in new:
+                    new.append(b)
+                    self.view.introduced.append(b)
+        for did in new:
+            self.definition(self.defs[did])
+        for sp in _dicts(c.get("support")):
+            eid = sp.get("evidence")
+            e = self.evidence.get(eid) if isinstance(eid, str) else None
+            if e is None or sp.get("kind") == "formal_proof" or eid in self.checks or eid in self.designs_placed:
+                continue
+            self.designs_placed.add(eid)
+            self.design_paragraph(e)
+
+    def assumption(self, c):
         D = self.D
-        if not self.defs:
-            return
-        D.add("\\section{Terms and methods}\\label{sec:terms}")
-        groups = {}
-        for d in self.defs.values():
-            groups.setdefault(d.get("kind") or "other", []).append(d)
-        order = [k for k, _ in KINDS if k in groups] + sorted(k for k in groups if k not in dict(KINDS))
-        for kind in order:
-            if len(groups) > 1:
-                D.add(f"\\subsection{{{D.esc(dict(KINDS).get(kind, _sentence(kind)))}}}")
-            D.add("\\begin{description}[style=unboxed]")
-            for d in groups[kind]:
-                sym = f" ({self.t(d['symbol'])})" if isinstance(d.get("symbol"), str) and d["symbol"].strip() else ""
-                src = self.source(d.get("source")) if d.get("source") else ""
-                D.add(f"\\item[{{{self.t(d.get('term') or d['id'])}}}]{sym} {self.t(d.get('definition'))}"
-                      + (f" {src}." if src and not src.startswith("\\cite") else (f" {src}" if src else "")),
-                      d["id"], "term, symbol, definition, source")
-            D.add("\\end{description}")
+        self.counters["assumption"] += 1
+        self.number[c["id"]] = f"Assumption {self.counters['assumption']}"
+        D.add(f"\\begin{{assumption}}\\label{{asm:{c['id']}}}\n{self.t(c.get('statement'))}\n\\end{{assumption}}",
+              c["id"], "statement")
         D.blank()
 
-    def design(self):
+    def definition(self, d):
         D = self.D
-        shown = [e for e in self.evidence.values() if e.get("profile") != "formal"]
-        if not shown:
-            return
-        D.add("\\section{Data and design}\\label{sec:design}")
-        for e in shown:
-            facts = []
-            for key in ("design", "data_origin", "analytic_approach", "sampling"):
-                if isinstance(e.get(key), str) and e[key] != "other":
-                    facts.append(_sentence(e[key]) if not facts else _words(e[key]))
-            if e.get("n") is not None:
-                facts.append(f"$n = {number(e['n'])}$" if isinstance(e["n"], int) else D.esc(f"n {e['n']}"))
-            if e.get("preregistered") is True:
-                facts.append("preregistered")
-            line = (f"\\paragraph{{Evidence {D.esc(e['id'])}.}}\\label{{ev:{_label(e['id'])}}} "
-                    f"{self.t(e.get('description'))}")
-            if facts:
-                line += " " + D.esc("; ".join(f for f in facts if not f.startswith("$"))).rstrip()
-                line += "".join(f"; {f}" for f in facts if f.startswith("$"))
-                line += "."
-            arts = [a for a in _strs(e.get("artefacts")) if a in self.arts]
-            listed = [a for a in arts if self.arts[a].get("kind") not in ("figure", "lab_record")]
-            if listed:
-                line += (f" Its materials: {_list([self.art_link(a) for a in listed])}"
-                         " (Section~\\ref{sec:provenance}).")
-            D.add(line, e["id"], "description, design, n, artefacts")
-        D.blank()
-
-    def art_link(self, aid):
-        return f"\\hyperref[art:{_label(aid)}]{{{self.D.esc(aid)}}}"
-
-    def artefact_ref(self, aid):
-        a = self.arts.get(aid) or {}
-        kind = _words(a.get("kind") or "artefact")
-        uri = a.get("uri")
-        return f"{self.D.esc(aid)} ({self.D.esc(kind)}{', ' + self.D.url(uri) if isinstance(uri, str) else ''})"
-
-    def results(self):
-        D, v = self.D, self.view
-        D.add("\\section{Results}\\label{sec:results}")
-        if v.parts:
-            for title, cids in v.parts:
-                D.add(f"\\subsection{{{D.esc(title)}}}", "paper", "sections")
-                for cid in cids:
-                    self.claim(self.claims[cid])
+        text = d.get("definition") if isinstance(d.get("definition"), str) else ""
+        term = self.t(d.get("term") or d["id"])
+        sym = f", {self.t(d['symbol'])}" if isinstance(d.get("symbol"), str) and d["symbol"].strip() else ""
+        src = self.source(d.get("source")) if d.get("source") else ""
+        tail = (f" {src}." if src and not src.startswith("\\cite") else (f" {src}" if src else ""))
+        label = f"\\label{{def:{_label(d['id'])}}}"
+        if d.get("kind") in FORMAL_KINDS and ("$" in text or "\\(" in text):
+            self.counters["definition"] += 1
+            self.number[d["id"]] = f"Definition {self.counters['definition']}"
+            self.def_ref[d["id"]] = f"Definition~\\ref{{def:{_label(d['id'])}}}"
+            D.add(f"\\begin{{definition}}{self.title_arg(term + sym)}{label}\n{self.t(text)}{tail}\n"
+                  "\\end{definition}", d["id"], "term, symbol, definition, source")
         else:
-            for cid in v.shown:
-                self.claim(self.claims[cid])
+            self.def_ref[d["id"]] = f"\\emph{{{term}}}"
+            D.add(f"\\paragraph{{{_sentence_tex(term)}{sym}.}}{label} {self.t(text)}{tail}", d["id"],
+                  "term, symbol, definition, source")
         D.blank()
 
-    def claim(self, c):
+    def design_paragraph(self, e):
+        desc = e.get("description") if isinstance(e.get("description"), str) else ""
+        desc = LAB_RUNS.sub("", desc, count=1)
+        desc = re.sub(r"^Design:\s*", "", desc)
+        if not desc.strip():
+            return
+        self.D.add(f"\\paragraph{{Design.}} {self.t(desc)}", e["id"], "description")
+        self.D.blank()
+
+    def paper_claim(self, c, runin):
         D, cid = self.D, c["id"]
+        self.before(c)
         name = self.claim_name(c)
-        D.blank()
-        D.add(f"\\paragraph{{Claim {D.esc(cid)}{': ' + D.esc(name) if name else ''}.}}\\label{{claim:{cid}}}",
-              cid, "name")
-        D.add(self.statement(c.get("statement")), cid, "statement")
+        if cid in self.env:
+            env = self.env[cid]
+            self.counters["theorem"] += 1
+            self.number[cid] = f"{ENV_NAME[env]} {self.counters['theorem']}"
+            D.add(f"\\begin{{{env}}}{self.title_arg(D.esc(name))}\\label{{thm:{cid}}}", cid, "name")
+            D.add(self.statement(c.get("statement"), emph=False), cid, "statement")
+            D.add(f"\\end{{{env}}}")
+            for sp in _dicts(c.get("support")):
+                self.formal_support(c, sp)
+            D.blank()
+            return
+        head = f"\\paragraph{{{D.esc(name)}.}}" if runin and name else ""
+        text = self.statement(c.get("statement"), emph=False)
+        D.add(f"{head}\\label{{claim:{cid}}} {text}".strip(), cid, "name, statement" if head else "statement")
         scope = c.get("scope") if isinstance(c.get("scope"), dict) else {}
         conds = _strs(scope.get("conditions"))
         if conds:
             D.add("It holds for " + "; ".join(self.t(x) for x in conds) + ".", cid, "scope")
         for sp in _dicts(c.get("support")):
-            self.support(c, sp)
-        assumed = [a for a in _strs(c.get("assumptions")) if a in self.claims]
-        if assumed:
-            D.add(f"It assumes {_list([self.xref(a) for a in assumed])} (Section~\\ref{{sec:assumptions}}).", cid,
-                  "assumptions")
-        lims = [x for x in _strs(c.get("limitations"))]
-        if lims:
-            D.add(f"Limitation{'s' if len(lims) > 1 else ''} {_list([D.esc(x) for x in lims])} "
-                  f"{'apply' if len(lims) > 1 else 'applies'} (Section~\\ref{{sec:limitations}}).", cid, "limitations")
-        local = []
-        for r in _dicts(c.get("relations")):
-            if r.get("id_type") == "local" and r.get("target") in self.claims:
-                local.append(f"{paperview.RELATION.get(r.get('type'), _words(r.get('type')))} "
-                             f"{self.xref(r['target'])}")
-        if local:
-            D.add("; ".join(local) + ".", cid, "relations")
+            self.plain_support(c, sp)
+        D.blank()
 
-    def statement(self, s):
-        """A statement, its parts (a), (b), … as a list (claimset §8 rule 11)."""
-        if not isinstance(s, str):
-            return ""
-        spans = [(m.start(), m.end()) for m in SEGMENT.finditer(s)]
-        marks, want = [], "a"
-        for m in paperview.PART.finditer(s):
-            if m.group(1) == want and not any(a <= m.start() < b for a, b in spans):
-                marks.append(m)
-                want = chr(ord(want) + 1)
-        if len(marks) < 2:
-            return f"\\emph{{{self.t(s)}}}" if "$$" not in s and "```" not in s else self.t(s)
-        items = []
-        for i, m in enumerate(marks):
-            end = marks[i + 1].start() if i + 1 < len(marks) else len(s)
-            part = s[m.end():end].strip().rstrip(";")
-            items.append(f"\\item[({m.group(1)})] {self.t(part)}")
-        lead = s[:marks[0].start()].strip()
-        return (self.t(lead) + "\n" if lead else "") + "\\begin{itemize}\n" + "\n".join(items) + "\n\\end{itemize}"
-
-    def support(self, c, sp):
+    def formal_support(self, c, sp):
         D, cid, kind = self.D, c["id"], sp.get("kind")
         e = self.evidence.get(sp.get("evidence")) if isinstance(sp.get("evidence"), str) else None
         if kind == "formal_proof" and e is not None:
-            self.proof(cid, e)
-        elif kind in ("empirical_quant", "empirical_qual", "empirical_obs", "simulation") and e is not None:
-            self.evidence_of(cid, sp, e)
-        elif kind == "argument":
-            w = self.warrants.get(sp.get("warrant"))
-            if w is not None:
-                premises = [p for p in _strs(w.get("premises")) if p in self.claims]
-                lead = f"The argument ({_words(w.get('reasoning'))}" + (
-                    f", from {_list([self.xref(p) for p in premises])}" if premises else "") + "): "
-                D.add(lead + self.t(w.get("text")), w["id"], "text, premises")
+            if not _dicts(e.get("steps")):
+                where = e.get("proof_artefact")
+                a = self.arts.get(where) or {}
+                uri = a.get("uri")
+                D.add("The proof is given in " + (D.url(uri) if isinstance(uri, str) else "the source") + ".",
+                      e["id"], "proof_artefact")
+            elif self.long_proof(e):
+                D.add("The proof is in Appendix~\\ref{app:proofs}.", e["id"], "steps")
+                self.deferred.append((cid, e))
+            else:
+                self.proof_block(cid, e)
         elif kind == "cited":
             ref = sp.get("reference")
             where = self.cite(ref, sp.get("locator"), text=True) if ref in self.bib else self.source(sp)
-            D.add(f"It is a result of {where}.", cid, "support")
+            if self.proof_of(c) is not None:
+                D.add(f"See also {where}.", cid, "support")
+            else:
+                D.add(f"This is a result of {where}.", cid, "support")
+        elif kind == "argument":
+            self.argument(sp)
+        # evidence that checks it by computation is in the appendix (verification)
+
+    def argument(self, sp):
+        w = self.warrants.get(sp.get("warrant"))
+        if w is not None:
+            self.D.add(self.t(w.get("text")), w["id"], "text")
+
+    def proof_block(self, cid, e, appendix=False):
+        D = self.D
+        head = f"[Proof of {self.xref(cid)}]" if appendix else ""
+        D.add(f"\\begin{{proof}}{head}", e["id"], "steps")
+        for st in _dicts(e.get("steps")):
+            s = st.get("statement", "")
+            refs = _list([self.xref(b) if b in self.claims else self.def_ref.get(b, self.term(b))
+                          for b in _strs(st.get("by")) if b in self.claims or b in self.defs])
+            safe = safe_math(s.strip()) if isinstance(s, str) and pageview.bare_formula(s) else None
+            if safe is not None:
+                tag = f"\\tag*{{by {refs}}}" if refs else ""
+                D.add(f"\\[{safe}{tag}\\]", e["id"], f"steps.{st.get('id', '')}")
+            else:
+                text = self.t(s).rstrip()
+                if refs:
+                    text = text.rstrip(".") + f" (by {refs})."
+                D.add(text, e["id"], f"steps.{st.get('id', '')}")
+        D.add("\\end{proof}")
+
+    def plain_support(self, c, sp):
+        D, cid, kind = self.D, c["id"], sp.get("kind")
+        e = self.evidence.get(sp.get("evidence")) if isinstance(sp.get("evidence"), str) else None
+        if kind in ("empirical_quant", "empirical_qual", "empirical_obs", "simulation") and e is not None:
+            cited = _strs(sp.get("results"))
+            wanted = {x.split(".")[1] for x in cited if x.startswith(e["id"] + ".") and x.count(".") >= 1}
+            said = []
+            if e.get("estimate") is not None and not cited:
+                said.append(f"{D.esc(e.get('estimand') or 'the estimate')} is {D.esc(number(e['estimate']))}"
+                            + "".join(f", {D.esc(x)}" for x in (uncertainty(e.get("uncertainty")),
+                                                                interval(e.get("interval"))) if x))
+            said += [self.result(r) for r in _dicts(e.get("results")) if r.get("id") in wanted]
+            if said:
+                D.add("The estimates: " + "; ".join(said) + ".", e["id"], "estimate, results")
+            refs, self.held = [], []
+            for t in _dicts(e.get("tables")):
+                if t.get("id") in wanted:
+                    ref = self.paper_table(e, t)
+                    if ref:
+                        refs.append(ref)
+            for a in self.figures_of(sp, e):
+                refs.append(self.figure(a))
+            if refs:
+                D.add("See " + _list(list(dict.fromkeys(refs))) + ".", cid, "support")
+            if self.held:
+                many = len(self.held) > 1
+                D.add(f"The full table{'s are' if many else ' is'} at " + _list([D.url(u) for _t, u in self.held])
+                      + ".", ",".join(t for t, _u in self.held), "rows_file")
+        elif kind == "argument":
+            self.argument(sp)
+        elif kind == "cited":
+            ref = sp.get("reference")
+            where = self.cite(ref, sp.get("locator"), text=True) if ref in self.bib else self.source(sp)
+            D.add(f"This is a result of {where}.", cid, "support")
         elif kind == "consensus":
             srcs = [self.source(s) for s in sp.get("sources") or []]
             D.add("It is established knowledge" + (f" {', '.join(s for s in srcs if s)}" if srcs else "") + ".",
@@ -711,74 +896,38 @@ class _Paper:
             D.add("It is the judgement of " + D.esc(sp.get("holder") or "its authors") + ".", cid, "support")
         elif kind == "demonstration":
             arts = [a for a in _strs(sp.get("artefacts")) if a in self.arts]
-            D.add("It is shown by construction in " + _list([self.artefact_ref(a) for a in arts]) + ".", cid,
-                  "support")
+            uris = [D.url(self.arts[a]["uri"]) for a in arts if isinstance(self.arts[a].get("uri"), str)]
+            D.add("It is shown by construction" + (f" in {_list(uris)}" if uris else "") + ".", cid, "support")
+
+    def figures_of(self, sp, e):
+        """The figures a support names, and those of its evidence that show what it cites (as the paper view)."""
         figs = [a for a in _strs(sp.get("artefacts")) if (self.arts.get(a) or {}).get("kind") == "figure"]
         cited = _strs(sp.get("results"))
         if e is not None and cited:
-            # the figures of the evidence that show what the claim cites, as the paper view shows them
             named = set(cited) | {".".join(x.split(".")[:2]) for x in cited if x.count(".") == 2}
             figs += [a for a in _strs(e.get("artefacts")) if (self.arts.get(a) or {}).get("kind") == "figure"
                      and named & set(_strs(self.arts[a].get("shows")))]
-        for a in list(dict.fromkeys(figs))[:paperview.SHOWN_FIGURES]:
-            self.figure(cid, a)
+        return list(dict.fromkeys(figs))[:paperview.SHOWN_FIGURES]
 
-    def proof(self, cid, e):
-        D = self.D
-        steps = _dicts(e.get("steps"))
-        if not steps:
-            where = e.get("proof_artefact")
-            D.add("Its proof is " + (f"in {self.artefact_ref(where)}" if where in self.arts else "in the source")
-                  + ".", e["id"], "proof_artefact")
-            return
-        lead = f" (in {D.esc(e['foundation'])})" if isinstance(e.get("foundation"), str) else ""
-        D.add(f"\\begin{{proof}}[Proof{lead}]", e["id"], "foundation")
-        D.add("\\leavevmode\n\\begin{enumerate}")
-        for st in steps:
-            s = st.get("statement", "")
-            shown = (D.math(s.strip(), display=True) if pageview.bare_formula(s) else self.t(s))
-            by = [b for b in _strs(st.get("by")) if b in self.claims or b in self.defs]
-            tail = f" (by {_list([self.xref(b) if b in self.claims else D.esc(b) for b in by])})" if by else ""
-            D.add(f"\\item {shown}{tail}", e["id"], f"steps.{st.get('id', '')}")
-        D.add("\\end{enumerate}")
-        D.add("\\end{proof}")
-
-    def evidence_of(self, cid, sp, e):
-        D, eid = self.D, e["id"]
-        cited = _strs(sp.get("results"))
-        parts = [f"Evidence \\hyperref[ev:{_label(eid)}]{{{D.esc(eid)}}}"]
-        if e.get("estimate") is not None and not cited:
-            est = (f"{D.esc(e.get('estimand') or 'the estimate')} is {D.esc(number(e['estimate']))}"
-                   + "".join(f", {D.esc(x)}" for x in (uncertainty(e.get("uncertainty")),
-                                                       interval(e.get("interval"))) if x))
-            parts.append(est)
-        wanted = {x.split(".")[1] for x in cited if x.startswith(eid + ".") and x.count(".") >= 1}
-        for r in _dicts(e.get("results")):
-            if r.get("id") in wanted:
-                parts.append(self.result(r))
-        line = parts[0] + (": " + "; ".join(parts[1:]) if len(parts) > 1 else "") + "."
-        tables = [t for t in _dicts(e.get("tables")) if t.get("id") in wanted]
-        if tables:
-            line += " " + "; ".join(self.table_ref(eid, t) for t in tables) + "."
-        D.add(line, eid, "estimate, results")
-        for t in tables:
-            self.table(e, t)
-
-    def printed_rows(self, tid, t):
-        """The rows of a table the paper prints: all, or of a long table those its claims cite."""
-        rows = _dicts(t.get("rows"))
-        if len(rows) > LONG_TABLE:
-            rows = [r for r in rows if f"{tid}.{r.get('id')}" in self.P.cited_rows]
-        return rows
-
-    def table_ref(self, eid, t):
-        tid = f"{eid}.{t.get('id')}"
-        if self.printed_rows(tid, t):
-            return f"Table~\\ref{{tab:{_label(tid)}}}"
+    def paper_table(self, e, t):
+        """A table where a claim first cites it ("Table~\\ref{…}"), or, held in a file, its address once."""
+        tid = f"{e['id']}.{t.get('id')}"
+        if _dicts(t.get("rows")):
+            if tid not in self.tables_placed:
+                self.table(e, t)
+            return f"Table~\\ref{{tab:{_label(tid)}}}" if self.printed_rows(tid, t) else ""
         src = t.get("rows_file")
-        where = (self.artefact_ref(src) if src in self.arts else f"\\texttt{{tables/{self.D.esc(tid)}.csv}}") \
-            if src or _dicts(t.get("rows")) else "the claimset"
-        return f"table {self.D.esc(tid)}, in {where}"
+        a = self.arts.get(src) or {}
+        if tid not in self.file_said and isinstance(a.get("uri"), str):
+            self.file_said.add(tid)
+            self.held.append((tid, a["uri"]))
+        return ""
+
+    def caption(self, s):
+        """A table's description as a caption: without the record's words for its runs and other tables."""
+        s = s if isinstance(s, str) else ""
+        s = HYPOTHESIS_IN.sub("", SUMMARY_OF.sub("", PARENTHESIS.sub("", s)))
+        return self.t(s[:1].upper() + s[1:])
 
     def result(self, r):
         D = self.D
@@ -791,6 +940,34 @@ class _Paper:
                 f"{'about ' if r.get('approximate') is True else ''}{D.esc(value(r.get('value')))}"
                 f"{' ' + D.esc(extra) if extra else ''}{' (' + cond + ')' if cond else ''}")
 
+    def statement(self, s, emph=True):
+        """A statement, its parts (a), (b), … as a list (claimset §8 rule 11)."""
+        if not isinstance(s, str):
+            return ""
+        spans = [(m.start(), m.end()) for m in SEGMENT.finditer(s)]
+        marks, want = [], "a"
+        for m in paperview.PART.finditer(s):
+            if m.group(1) == want and not any(a <= m.start() < b for a, b in spans):
+                marks.append(m)
+                want = chr(ord(want) + 1)
+        if len(marks) < 2:
+            plain = "$$" not in s and "```" not in s
+            return f"\\emph{{{self.t(s)}}}" if emph and plain else self.t(s)
+        items = []
+        for i, m in enumerate(marks):
+            end = marks[i + 1].start() if i + 1 < len(marks) else len(s)
+            part = s[m.end():end].strip().rstrip(";")
+            items.append(f"\\item[({m.group(1)})] {self.t(part)}")
+        lead = s[:marks[0].start()].strip()
+        return (self.t(lead) + "\n" if lead else "") + "\\begin{itemize}\n" + "\n".join(items) + "\n\\end{itemize}"
+
+    def printed_rows(self, tid, t):
+        """The rows of a table the paper prints: all, or of a long table those its claims cite."""
+        rows = _dicts(t.get("rows"))
+        if len(rows) > LONG_TABLE:
+            rows = [r for r in rows if f"{tid}.{r.get('id')}" in self.P.cited_rows]
+        return rows
+
     def column(self, c):
         if isinstance(c, dict):
             out = self.term(c.get("variable"))
@@ -800,27 +977,56 @@ class _Paper:
             return out + self.D.esc(note)
         return self.term(c)
 
+    def headers(self, columns):
+        """The columns' headers, and what they all share (their variable, the conditions every one of them has), said
+        once in the caption instead: a header names what sets its column apart, and a long one wraps."""
+        dicts = [c for c in columns if isinstance(c, dict)]
+        if len(dicts) < 2 or len(dicts) != len(columns):
+            return [self.wrap(self.column(c)) for c in columns], ""
+        variables = {json_key(c.get("variable")) for c in dicts}
+        same_var = len(variables) == 1
+        conds = [c.get("conditions") if isinstance(c.get("conditions"), dict) else {} for c in dicts]
+        common = {k: v for k, v in conds[0].items() if all(json_key(x.get(k)) == json_key(v) and k in x for x in conds)}
+        out = []
+        for c, cd in zip(dicts, conds, strict=True):
+            rest = {k: v for k, v in cd.items() if k not in common}
+            head = "; ".join(f"{self.term(k)}: {self.term(v)}" for k, v in rest.items())
+            if not same_var:
+                head = self.term(c.get("variable")) + (f" ({head})" if head else "")
+            out.append(self.wrap((head or self.term(c.get("variable"))) + self.D.esc(statistic_note(c))))
+        shared = []
+        if same_var:
+            shared.append(self.term(dicts[0].get("variable")))
+        if common:
+            shared.append(self.conditions(common))
+        return out, "; ".join(shared)
+
+    def wrap(self, head):
+        """A long header in a box of its own width, so that a table of many columns is not shrunk to nothing."""
+        return f"\\parbox[b]{{2.6cm}}{{\\raggedright {head}}}" if len(head) > 22 else head
+
     def table(self, e, t):
-        """A result table where a claim first cites it, and its values in tables/<E>.<T>.csv, exact."""
+        """A result table where a claim first cites it, its caption its description, and its values in
+        tables/<E>.<T>.csv, exact."""
         D, eid = self.D, e["id"]
         tid = f"{eid}.{t.get('id')}"
         if tid in self.tables_placed:
             return
         self.tables_placed.add(tid)
         rows = _dicts(t.get("rows"))
-        cols = [self.column(c) for c in t.get("columns") or []]
+        cols, shared = self.headers(t.get("columns") or [])
         units = t.get("units") if isinstance(t.get("units"), list) else []
         cols = [f"{c} ({D.esc(u)})" if isinstance(u, str) and u and u != "1" else c
                 for c, u in zip(cols, units + [None] * len(cols), strict=False)]
         labels = [self.term(x) for x in t.get("row_labels") or []]
-        caption = f"{D.esc(tid)}: {self.t(t.get('description', ''))}"
-        if t.get("conditions"):
-            caption += f" ({self.conditions(t['conditions'])})"
-        if not rows:
-            src = t.get("rows_file")
-            D.add(f"Table {D.esc(tid)} keeps its rows in "
-                  f"{self.artefact_ref(src) if src in self.arts else 'a file'}.", tid, "rows_file")
-            return
+        caption = (self.caption(t.get("description", "")) if self.mode == "paper" else self.t(t.get("description", "")))
+        caption = caption or D.esc(tid)
+        conds = {k: v for k, v in (t.get("conditions") or {}).items() if k not in RECORD_CONDITIONS} \
+            if isinstance(t.get("conditions"), dict) else {}
+        if conds:
+            caption += f" ({self.conditions(conds)})"
+        if shared:
+            caption = caption.rstrip(".") + f". Each column: {shared}"
         spec = "l" * max(len(labels), 1) + "r" * len(cols)
         head = (labels or ["Row"]) + cols
         shown = self.printed_rows(tid, t)                  # a paper prints the rows its claims cite; the CSV, all
@@ -838,8 +1044,7 @@ class _Paper:
             caption += (f". The {len(shown)} rows the claims cite, of {len(rows)}; all are in "
                         f"\\texttt{{{D.esc(whole)}}}")
         if not shown:
-            D.add(f"Table {D.esc(tid)}, {self.t(t.get('description', ''))}, has {len(rows)} rows, too many to print: "
-                  f"they are in \\texttt{{{D.esc(whole)}}}.", tid, "rows")
+            D.add(f"The full table, of {len(rows)} rows, is in \\texttt{{{D.esc(whole)}}}.", tid, "rows")
         elif len(shown) > LONG_TABLE:
             D.add(f"\\begin{{longtable}}{{{spec}}}")
             D.add(f"\\caption{{{caption}}}\\label{{tab:{_label(tid)}}}\\\\", tid, "description, conditions")
@@ -883,76 +1088,58 @@ class _Paper:
                        + [raw(v) for v in r.get("values") or []])
         self.files[f"tables/{tid}.csv"] = out.getvalue().encode("utf-8")
 
-    def figure(self, cid, aid):
+    def figure(self, aid):
+        """A figure where a claim first shows it, as figures/figure-<n>; "Figure~\\ref{…}"."""
         D = self.D
-        if aid in self.tables_placed:
-            return
-        self.tables_placed.add(aid)
+        ref = f"Figure~\\ref{{fig:{_label(aid)}}}"
+        if aid in self.figure_name:
+            return ref
         a = self.arts[aid]
-        caption = f"{D.esc(aid)}: {self.t(a.get('description') or '')}"
+        self.counters["figure"] += 1
+        n = self.counters["figure"]
+        caption = self.t(a.get("description") or "")
         path = self.figure_file(a) if self.figure_file else None
         if path is not None:
-            name = f"figures/{_label(aid)}{path.suffix.lower()}"
+            name = f"figures/figure-{n}{path.suffix.lower()}"
             self.files[name] = path.read_bytes()
+            self.figure_name[aid] = name
             D.add(f"\\begin{{figure}}[htbp]\n\\centering\n\\includegraphics[width=\\linewidth]{{{name}}}", aid,
                   "uri")
         else:
             uri = a.get("uri")
+            self.figure_name[aid] = ""
             D.add("\\begin{figure}[htbp]\n\\centering")
-            D.add(D.gap(f"figure {aid}" + (f", at {uri}" if isinstance(uri, str) else "")), aid, "uri")
+            D.add(D.gap("this figure" + (f", from {uri}" if isinstance(uri, str) else "")), aid, "uri")
         D.add(f"\\caption{{{caption}}}\\label{{fig:{_label(aid)}}}\n\\end{{figure}}", aid, "description")
-
-    def assumptions(self):
-        D = self.D
-        assumed = [self.claims[c] for c in self.view.assumed]
-        D.add("\\section{Assumptions}\\label{sec:assumptions}")
-        if not assumed:
-            D.add("The claims of this paper rest on no assumption of their own.")
-            D.blank()
-            return
-        D.add("\\begin{itemize}")
-        for c in assumed:
-            cat = f" ({D.esc(_words(c['assumption_category']))})" if isinstance(c.get("assumption_category"), str) \
-                else ""
-            D.add(f"\\item\\label{{claim:{c['id']}}}\\textbf{{{D.esc(c['id'])}}}{cat}. {self.t(c.get('statement'))}",
-                  c["id"], "statement, assumption_category")
-        D.add("\\end{itemize}")
-        D.blank()
-
-    def limitations(self):
-        D = self.D
-        lims = self.P.limitations
-        D.add("\\section{Limitations}\\label{sec:limitations}")
-        if not lims:
-            D.add(D.gap("the limitations of the work: the claimset records none"))
-            D.blank()
-            return
-        D.add("\\begin{itemize}")
-        for x in lims:
-            affects = _list([self.xref(a) for a in _strs(x.get("affects"))])
-            how = "; ".join(s for s in (IMPACT.get(x.get("impact"), ""), MITIGATION.get(x.get("mitigation"), "")) if s)
-            D.add(f"\\item \\textbf{{{D.esc(x['id'])}}} ({D.esc(_words(x.get('category')))}). "
-                  f"{self.t(x.get('statement'))}" + (f" It affects {affects}" if affects else "")
-                  + (f"; it {D.esc(how)}" if how else "") + ".", x["id"], "statement, affects, impact, mitigation")
-        D.add("\\end{itemize}")
-        D.blank()
+        return ref
 
     def discussion(self):
         D = self.D
+        principal = [c for c in self.view.shown if self.claims[c].get("role") == "principal"]
         D.add("\\section{Discussion}\\label{sec:discussion}")
         D.add(D.gap("the discussion: what the results mean, how they compare with earlier work, and what they are "
-                    "good for"))
+                    "good for", ["The principal results: " + "; ".join(
+                        f"{self.number.get(c, c)}: {self.claim_name(self.claims[c]) or c}" for c in principal)]))
+        D.blank()
+        lims = [x for x in self.P.limitations if x.get("category") != "deviation"]
+        D.add("\\subsection{Limitations}")
+        if lims:
+            D.add(" ".join(self.t(x.get("statement")).rstrip(".") + "." for x in lims),
+                  ",".join(x["id"] for x in lims), "statement")
+        else:
+            D.add(D.gap("the limitations of the work: the claimset records none"))
+        D.blank()
         qs = self.P.questions
         if qs:
-            D.blank()
             D.add("\\subsection{Open questions}")
             D.add("\\begin{itemize}")
             for q in qs:
                 D.add(f"\\item {self.t(q.get('question'))}", q["id"], "question")
             D.add("\\end{itemize}")
-        D.blank()
+            D.blank()
         D.add("\\section{Conclusion}\\label{sec:conclusion}")
-        D.add(D.gap("the conclusion"))
+        D.add(D.gap("the conclusion", [self.claim_name(self.claims[c]) or c for c in
+                                       _strs(self.p.get("contributions")) if c in self.claims]))
         D.blank()
 
     def back_matter(self):
@@ -964,6 +1151,9 @@ class _Paper:
             D.add("; ".join(f"{D.esc(c.get('name') or c.get('id'))}: "
                             + ", ".join(D.esc(CREDIT.get(r, _sentence(r))) for r in _strs(c.get("credit_roles")))
                             for c in humans) + ".", "contributors", "credit_roles")
+            if len(self.byline()) == 1:
+                D.add(D.gap("check the contributions listed: they are those the claimset records for its one author, "
+                            "and the writing it credits to AI"))
         else:
             D.add(D.gap("what each author did (CRediT roles)"))
         D.blank()
@@ -1038,54 +1228,308 @@ class _Paper:
               "claimset holds and adds nothing to it; the passages marked as gaps were left for the authors.")
         D.blank()
 
+    def materials(self):
+        """The artefacts a reader may want, beyond the figures, the lab record and the files of tables."""
+        files = {t.get(k) for e in self.evidence.values() for t in _dicts(e.get("tables"))
+                 for k in ("rows_file", "artefact") if _dicts(t.get("rows")) or k == "rows_file"}
+        return [a for a in self.P.artefacts if a.get("kind") not in ("figure", "lab_record") and a["id"] not in files]
+
     def provenance(self):
         D = self.D
         D.add("\\section*{Data, materials and provenance}\\label{sec:provenance}")
         D.add(f"This paper is the human edition of the claimset {D.esc(self.global_id)} \\citep{{{self.self_key}}}: "
               f"the paper at \\url{{{self.url}}}, its record of claims, evidence and limitations at "
               f"\\url{{{self.base}/p/{self.key}/record}}, and its text for AI at "
-              f"\\url{{{self.base}/p/{self.key}.txt}}.",
+              f"\\url{{{self.base}/p/{self.key}.txt}}. The supplement sets out that record claim by claim.",
               "paper", "id, version")
         lab = pageview.lab_record_uri(self.doc)
         if lab:
             D.add(f"The research was recorded as it was done, in a lab record: {D.url(lab)}.", "artefacts",
                   "lab_record")
-        arts = [a for a in self.P.artefacts if a.get("kind") not in ("figure", "lab_record")]
+        arts = self.materials()
         if arts:
             D.add("\\begin{itemize}")
             for a in arts:
-                desc = f" {self.t(a['description'])}" if isinstance(a.get("description"), str) else ""
+                desc = (self.t(PARENTHESIS.sub("", a["description"])) if isinstance(a.get("description"), str)
+                        else D.esc(_words(a.get("kind"))))
+                uri = f" {D.url(a['uri'])}" if isinstance(a.get("uri"), str) else ""
                 lic = f" Licence: {D.esc(a['licence'])}." if a.get("licence") else ""
-                D.add(f"\\item\\label{{art:{_label(a['id'])}}} {self.artefact_ref(a['id'])}.{desc}{lic}", a["id"],
-                      "kind, uri, description, licence")
+                D.add(f"\\item {desc.rstrip('.')}.{uri}{lic}", a["id"], "description, uri, licence")
             D.add("\\end{itemize}")
         D.blank()
+
+    def appendix(self):
+        D = self.D
+        if not self.deferred and not self.checks:
+            return
+        D.add("\\appendix")
+        if self.deferred:
+            D.add("\\section{Proofs}\\label{app:proofs}")
+            for cid, e in self.deferred:
+                self.proof_block(cid, e, appendix=True)
+                D.blank()
+        if self.checks:
+            D.add("\\section{Numerical checks}\\label{app:checks}")
+            groups, order = {}, []
+            for eid in self.checks:
+                e = self.evidence[eid]
+                desc = e.get("description") if isinstance(e.get("description"), str) else ""
+                key = " ".join(PARENTHESIS.sub("", desc).split())
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                groups[key].append(e)
+            for key in order:
+                es = groups[key]
+                checked = [c for c in self.view.shown if c in self.env and any(
+                    sp.get("evidence") in {e["id"] for e in es} for sp in _dicts(self.claims[c].get("support")))]
+                text = self.t(key) if key else ""
+                if checked:
+                    text += f" These checks were made of {_list([self.xref(c) for c in checked])}."
+                values = [r.get("value") for e in es for r in _dicts(e.get("results"))
+                          if isinstance(r.get("value"), (int, float)) and not isinstance(r.get("value"), bool)]
+                variables = {r.get("variable") for e in es for r in _dicts(e.get("results"))}
+                if values and len(variables) == 1:
+                    text += (f" Over these checks, {self.term(next(iter(variables)))} is at most "
+                             f"{D.esc(f'{max(values):.2g}')}.")
+                D.add(text.strip(), ",".join(e["id"] for e in es), "description, results")
+                for e in es:
+                    for t in _dicts(e.get("tables")):
+                        if _dicts(t.get("rows")):
+                            self.table(e, t)
+                D.blank()
 
     def tex(self):
         D = self.D
         bib = self.references()
+        self.D.refer = self.xref
         self.title()
         D.add("\\begin{document}")
         D.add("\\maketitle")
         self.abstract()
         self.introduction()
-        self.terms()
-        self.design()
-        self.results()
-        self.assumptions()
-        self.limitations()
+        self.body()
         self.discussion()
         self.back_matter()
         D.add("\\bibliographystyle{plainnat}")
         D.add("\\bibliography{references}")
+        self.appendix()
         D.add("\\end{document}")
+        text, trace, gaps = self.finish(D)
+        return text, bib, trace, gaps
+
+    def finish(self, D):
         head = self.preamble().split("\n")
         # the title, author and date come before \begin{document}: the preamble is put before them
         shift = len(head)
         lines = head + D.lines
         trace = [(a + shift, b + shift, o, f) for a, b, o, f in D.trace]
-        gaps = [(n + shift, w) for n, w in D.gaps]
-        return "\n".join(lines) + "\n", bib, trace, gaps
+        gaps = [(n + shift, w, m) for n, w, m in D.gaps]
+        return "\n".join(lines) + "\n", trace, gaps
+
+    # ----- the supplement: the claimset as a record -----
+    def supplement(self):
+        self.mode = "supplement"
+        D = self.D = _Draft()
+        D.refer = self.xref
+        D.add(f"\\title{{Supplement to: {D.text(self.p.get('title') or '')}}}", "paper", "title")
+        D.add("\\author{" + "\n\\and\n".join(D.esc(c.get("name") or "") for c in self.byline()) + "}",
+              "contributors", "name")
+        D.add(f"\\date{{{DRAFT_LABEL}\\\\ made from {D.esc(self.global_id)} of {D.esc(_day(self.p.get('date')))}}}",
+              "paper", "date")
+        D.add("\\begin{document}")
+        D.add("\\maketitle")
+        D.add(f"This supplement sets out the claimset {D.esc(self.global_id)} \\citep{{{self.self_key}}} as a record, "
+              f"for the reader who checks the paper: each claim by its ID, with its place in the paper, everything it "
+              f"rests on and what limits it; then every evidence object, limitation and artefact. The claimset is at "
+              f"\\url{{{self.url}}}.")
+        D.blank()
+        D.add("\\section{Claims}")
+        for cid in self.view.shown:
+            self.record_claim(self.claims[cid])
+        D.blank()
+        self.record_assumptions()
+        self.record_definitions()
+        self.record_evidence()
+        self.record_limitations()
+        self.record_artefacts()
+        D.add("\\bibliographystyle{plainnat}")
+        D.add("\\bibliography{references}")
+        D.add("\\end{document}")
+        tex, trace, _ = self.finish(D)
+        return tex, trace
+
+    def record_claim(self, c):
+        D, cid = self.D, c["id"]
+        name = self.claim_name(c)
+        where = f" ({self.in_paper(cid)} in the paper)" if cid in self.env and self.in_paper(cid) else ""
+        D.blank()
+        D.add(f"\\paragraph{{Claim {D.esc(cid)}{where}{': ' + D.esc(name) if name else ''}.}}\\label{{claim:{cid}}}",
+              cid, "name")
+        D.add(self.statement(c.get("statement")), cid, "statement")
+        scope = c.get("scope") if isinstance(c.get("scope"), dict) else {}
+        conds = _strs(scope.get("conditions"))
+        if conds:
+            D.add("It holds for " + "; ".join(self.t(x) for x in conds) + ".", cid, "scope")
+        for sp in _dicts(c.get("support")):
+            self.record_support(c, sp)
+        assumed = [a for a in _strs(c.get("assumptions")) if a in self.claims]
+        if assumed:
+            D.add(f"It assumes {_list([self.xref(a) for a in assumed])}.", cid, "assumptions")
+        lims = _strs(c.get("limitations"))
+        if lims:
+            D.add(f"Limitation{'s' if len(lims) > 1 else ''} {_list([D.esc(x) for x in lims])} "
+                  f"{'apply' if len(lims) > 1 else 'applies'} (Section~\\ref{{sec:limitations}}).", cid, "limitations")
+        local = []
+        for r in _dicts(c.get("relations")):
+            if r.get("id_type") == "local" and r.get("target") in self.claims:
+                local.append(f"{paperview.RELATION.get(r.get('type'), _words(r.get('type')))} "
+                             f"{self.xref(r['target'])}")
+        if local:
+            D.add("; ".join(local) + ".", cid, "relations")
+
+    def record_support(self, c, sp):
+        D, cid, kind = self.D, c["id"], sp.get("kind")
+        e = self.evidence.get(sp.get("evidence")) if isinstance(sp.get("evidence"), str) else None
+        if kind == "formal_proof" and e is not None:
+            steps = _dicts(e.get("steps"))
+            if not steps:
+                where = e.get("proof_artefact")
+                D.add("Its proof is " + (f"in {self.artefact_ref(where)}" if where in self.arts else "in the source")
+                      + ".", e["id"], "proof_artefact")
+                return
+            lead = f" (in {D.esc(e['foundation'])})" if isinstance(e.get("foundation"), str) else ""
+            D.add(f"\\begin{{proof}}[Proof{lead}]", e["id"], "foundation")
+            D.add("\\leavevmode\n\\begin{enumerate}")
+            for st in steps:
+                s = st.get("statement", "")
+                shown = (D.math(s.strip(), display=True) if pageview.bare_formula(s) else self.t(s))
+                by = [b for b in _strs(st.get("by")) if b in self.claims or b in self.defs]
+                tail = f" (by {_list([self.xref(b) if b in self.claims else D.esc(b) for b in by])})" if by else ""
+                D.add(f"\\item {shown}{tail}", e["id"], f"steps.{st.get('id', '')}")
+            D.add("\\end{enumerate}")
+            D.add("\\end{proof}")
+        elif kind in ("empirical_quant", "empirical_qual", "empirical_obs", "simulation") and e is not None:
+            cited = _strs(sp.get("results"))
+            parts = [f"Evidence \\hyperref[ev:{_label(e['id'])}]{{{D.esc(e['id'])}}}"]
+            if e.get("estimate") is not None and not cited:
+                parts.append(f"{D.esc(e.get('estimand') or 'the estimate')} is {D.esc(number(e['estimate']))}")
+            wanted = {x.split(".")[1] for x in cited if x.startswith(e["id"] + ".") and x.count(".") >= 1}
+            parts += [self.result(r) for r in _dicts(e.get("results")) if r.get("id") in wanted]
+            tables = [t for t in _dicts(e.get("tables")) if t.get("id") in wanted]
+            line = parts[0] + (": " + "; ".join(parts[1:]) if len(parts) > 1 else "") + "."
+            for t in tables:
+                tid = f"{e['id']}.{t.get('id')}"
+                rows = [x.split(".")[2] for x in cited if x.startswith(tid + ".") and x.count(".") == 2]
+                where = (f"\\texttt{{tables/{D.esc(tid)}.csv}}" if _dicts(t.get("rows"))
+                         else self.artefact_ref(t.get("rows_file")) if t.get("rows_file") in self.arts else "a file")
+                line += f" Table {D.esc(tid)}" + (f", rows {D.esc(', '.join(rows))}" if rows else "") + f", in {where}."
+            D.add(line, e["id"], "estimate, results")
+        elif kind == "argument":
+            w = self.warrants.get(sp.get("warrant"))
+            if w is not None:
+                premises = [p for p in _strs(w.get("premises")) if p in self.claims]
+                lead = f"The argument ({_words(w.get('reasoning'))}" + (
+                    f", from {_list([self.xref(p) for p in premises])}" if premises else "") + "): "
+                D.add(lead + self.t(w.get("text")), w["id"], "text, premises")
+        elif kind == "cited":
+            ref = sp.get("reference")
+            where = self.cite(ref, sp.get("locator"), text=True) if ref in self.bib else self.source(sp)
+            D.add(f"It is a result of {where}.", cid, "support")
+        elif kind in ("consensus", "expert_judgement", "demonstration"):
+            self.plain_support(c, sp)
+
+    def artefact_ref(self, aid):
+        a = self.arts.get(aid) or {}
+        kind = _words(a.get("kind") or "artefact")
+        uri = a.get("uri")
+        return f"{self.D.esc(aid)} ({self.D.esc(kind)}{', ' + self.D.url(uri) if isinstance(uri, str) else ''})"
+
+    def record_assumptions(self):
+        D = self.D
+        assumed = [self.claims[c] for c in self.view.assumed]
+        if not assumed:
+            return
+        D.add("\\section{Assumptions}")
+        D.add("\\begin{itemize}")
+        for c in assumed:
+            cat = f" ({D.esc(_words(c['assumption_category']))})" if isinstance(c.get("assumption_category"), str) \
+                else ""
+            where = f", {self.in_paper(c['id'])} in the paper" if self.in_paper(c["id"]) else ""
+            D.add(f"\\item\\label{{claim:{c['id']}}}\\textbf{{{D.esc(c['id'])}}}{cat}{where}. "
+                  f"{self.t(c.get('statement'))}", c["id"], "statement, assumption_category")
+        D.add("\\end{itemize}")
+        D.blank()
+
+    def record_definitions(self):
+        D = self.D
+        if not self.defs:
+            return
+        D.add("\\section{Definitions}")
+        D.add("\\begin{description}[style=unboxed]")
+        for d in self.defs.values():
+            sym = f" ({self.t(d['symbol'])})" if isinstance(d.get("symbol"), str) and d["symbol"].strip() else ""
+            src = self.source(d.get("source")) if d.get("source") else ""
+            where = f" {self.number[d['id']]} in the paper." if d["id"] in self.number else ""
+            D.add(f"\\item[{{{D.esc(d['id'])}: {self.t(d.get('term') or d['id'])}}}]{sym} {self.t(d.get('definition'))}"
+                  + (f" {src}" if src else "") + where, d["id"], "term, symbol, definition, source")
+        D.add("\\end{description}")
+        D.blank()
+
+    def record_evidence(self):
+        D = self.D
+        if not self.evidence:
+            return
+        D.add("\\section{Evidence}")
+        for e in self.evidence.values():
+            facts = []
+            for key in ("profile", "design", "data_origin", "analytic_approach", "sampling"):
+                if isinstance(e.get(key), str) and e[key] != "other":
+                    facts.append(_words(e[key]))
+            if e.get("n") is not None:
+                facts.append(f"n = {number(e['n'])}" if isinstance(e["n"], int) else f"n {e['n']}")
+            line = (f"\\paragraph{{Evidence {D.esc(e['id'])}.}}\\label{{ev:{_label(e['id'])}}} "
+                    f"{self.t(e.get('description'))}")
+            if facts:
+                line += " (" + D.esc("; ".join(facts)) + ")."
+            arts = [a for a in _strs(e.get("artefacts")) if a in self.arts]
+            if arts:
+                line += f" Its artefacts: {_list([self.artefact_ref(a) for a in arts])}."
+            D.add(line, e["id"], "description, design, n, artefacts")
+        D.blank()
+
+    def record_limitations(self):
+        D = self.D
+        D.add("\\section{Limitations}\\label{sec:limitations}")
+        lims = self.P.limitations
+        if not lims:
+            D.add("The claimset records no limitation.")
+            D.blank()
+            return
+        D.add("\\begin{itemize}")
+        for x in lims:
+            affects = _list([self.xref(a) for a in _strs(x.get("affects"))])
+            how = "; ".join(s for s in (IMPACT.get(x.get("impact"), ""), MITIGATION.get(x.get("mitigation"), "")) if s)
+            D.add(f"\\item \\textbf{{{D.esc(x['id'])}}} ({D.esc(_words(x.get('category')))}). "
+                  f"{self.t(x.get('statement'))}" + (f" It affects {affects}" if affects else "")
+                  + (f"; it {D.esc(how)}" if how else "") + ".", x["id"], "statement, affects, impact, mitigation")
+        D.add("\\end{itemize}")
+        D.blank()
+
+    def record_artefacts(self):
+        D = self.D
+        arts = [a for a in self.P.artefacts]
+        if not arts:
+            return
+        D.add("\\section{Artefacts}")
+        D.add("\\begin{itemize}")
+        for a in arts:
+            desc = f" {self.t(a['description'])}" if isinstance(a.get("description"), str) else ""
+            lic = f" Licence: {D.esc(a['licence'])}." if a.get("licence") else ""
+            D.add(f"\\item\\label{{art:{_label(a['id'])}}} {self.artefact_ref(a['id'])}.{desc}{lic}", a["id"],
+                  "kind, uri, description, licence")
+        D.add("\\end{itemize}")
+        D.blank()
 
 
 def readme(global_id, url, files):
@@ -1103,19 +1547,23 @@ Write each, then delete its marker. Nothing else needs to change for the draft t
     pdflatex paper
     pdflatex paper
 
-or `latexmk -pdf paper`. A character outside the Latin script is printed by pdflatex as [U+…];
-compile with `lualatex` instead to print it.
+and the same for `supplement`, or `latexmk -pdf paper supplement`. A character outside the Latin script is
+printed by pdflatex as [U+…]; compile with `lualatex` instead to print it.
 
 ## Files
 
 {chr(10).join(f"- `{f}`" for f in files)}
 
-- `paper.tex`: the paper, a plain `article`.
+- `paper.tex`: the paper, a plain `article`: the claims as theorems and results in the paper's sections, the
+  longer proofs and the numerical checks in its appendix. It names no ID of the claimset's record.
+- `supplement.tex`: the claimset as a record, claim by claim, with each claim's place in the paper.
 - `references.bib`: the claimset itself, then each work it cites, as EntryLib knows it.
   A reference given only by its identifier has only that: complete it from the publisher's record.
 - `tables/`: each result table as the claimset records it, every digit kept (the paper rounds them).
-- `traceability.csv`: which lines of `paper.tex` come from which object and field of the claimset.
-- `GAPS.md`: what is left for you to write.
+- `figures/`: the figures, numbered in the order the paper shows them.
+- `traceability.csv`: which lines of `paper.tex` and `supplement.tex` come from which object and field of the
+  claimset.
+- `GAPS.md`: what is left for you to write, each with what the claimset gives towards it.
 
 ## Keep the link to the claimset
 
@@ -1127,10 +1575,12 @@ template keeps. A double-blind journal will ask you to remove all three for revi
 
 
 def gaps_md(global_id, gaps):
-    rows = "\n".join(f"| {n} | {w} |" for n, w in gaps)
+    rows = "\n".join(f"| {n} | {w} |" for n, w, _m in gaps)
+    given = [f"### Line {n}: {w}\n\n" + "\n".join(f"- {x}" for x in m) + "\n" for n, w, m in gaps if m]
     return (f"# What is left to write: {global_id}\n\n"
             "Each line of `paper.tex` below holds a `\\gap{…}`: write what it asks for, then delete the marker.\n\n"
-            f"| Line | What |\n|---|---|\n{rows}\n")
+            f"| Line | What |\n|---|---|\n{rows}\n"
+            + ("\n## What the claimset gives towards them\n\n" + "\n".join(given) if given else ""))
 
 
 #: Why a published claimset has no LaTeX draft (design §4.6): {reason: (in a few words, in full)}.
@@ -1166,14 +1616,17 @@ def build(doc, base_url, references=None, figure_file=None):
     try:
         paper = _Paper(doc, base_url, references, figure_file)
         tex, bib, trace, gaps = paper.tex()
+        supplement, supplement_trace = paper.supplement()
     finally:
         DIGITS.reset(token)
     folder = f"entrylib-{paper.key}-v{paper.n}"
     out = io.StringIO()
     w = csv.writer(out, lineterminator="\n")
-    w.writerow(["first_line", "last_line", "object", "field"])
-    w.writerows(trace)
-    files = {"paper.tex": tex.encode("utf-8"), "references.bib": bib.encode("utf-8"),
+    w.writerow(["file", "first_line", "last_line", "object", "field"])
+    w.writerows(("paper.tex", *row) for row in trace)
+    w.writerows(("supplement.tex", *row) for row in supplement_trace)
+    files = {"paper.tex": tex.encode("utf-8"), "supplement.tex": supplement.encode("utf-8"),
+             "references.bib": bib.encode("utf-8"),
              "traceability.csv": out.getvalue().encode("utf-8"),
              "GAPS.md": gaps_md(paper.global_id, gaps).encode("utf-8"), **paper.files}
     names = sorted(files) + ["README.md"]
