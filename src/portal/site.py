@@ -1968,10 +1968,43 @@ def _published_row(x):
     if status and status not in ("active", "corrected"):           # a correction is in the dates already
         facts.append(f'<span class="status status-{esc(STATUS_CLASS.get(status, "neutral"))}">'
                      f"{esc(STATUS_LABELS.get(status, status))}</span>")
-    links = (f'<a href="/p/{key}">Paper</a> · <a href="/p/{key}/record">Record</a> · '
-             f'<a href="/p/{key}.txt">Text for AI</a>')
+    links = (f'<span><a href="/p/{key}">Paper</a> · <a href="/p/{key}/record">Record</a> · '
+             f'<a href="/p/{key}.txt">Text for AI</a></span>')
+    if status in DRAFTABLE:
+        links += f'<a class="button-quiet pub-action" href="/submissions/draft/{key}">LaTeX draft</a>'
     return (f'<li><a class="pub-title" href="/p/{key}">{esc(x["title"])}</a>'
             f'<p class="pub-facts">{" · ".join(facts)}</p><p class="pub-links">{links}</p></li>')
+
+
+#: The statuses of a paper its guarantor may make a LaTeX draft of (design §4.6): not one retracted or withdrawn.
+DRAFTABLE = (None, "active", "corrected", "expression_of_concern")
+
+
+def draft_page(x):
+    """/submissions/draft/<key> (design §4.6): what the LaTeX draft of a published paper is, before it is built."""
+    key = ids.url_key(x["id"])
+    title = f"LaTeX draft of {x['title']}"
+    items = ["A plain <code>article</code> in LaTeX, made from version "
+             f"{esc(x['version'])} of the claimset by a program, not a model: it sets out what the claimset holds "
+             "and adds nothing.",
+             "What a paper needs and the claimset does not hold (the motivation, a discussion, a conclusion, "
+             "acknowledgements, an affiliation that is missing) is marked in red as a gap for you to write, and "
+             "listed with its line in <code>GAPS.md</code>.",
+             "The paper names its claimset in a footnote on the title, cites it in the introduction and links it in "
+             "the statement on data, materials and provenance. Please keep them: they let a reader find each claim "
+             "with its evidence.",
+             "A zip of <code>paper.tex</code>, <code>references.bib</code>, the result tables as CSV files, the "
+             "figures stored with the claimset, <code>traceability.csv</code> (which line comes from which part of "
+             "the claimset) and a README on compiling it. No PDF: compile it with <code>pdflatex</code> or "
+             "<code>latexmk</code>."]
+    main = (f'<div class="wrap prose"><h1>{esc(title)}</h1>'
+            f'<p class="muted">{esc(x["id"])} · version {esc(x["version"])}</p>'
+            "<p>A draft of a paper for people, to finish and post as a preprint.</p>"
+            "<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>"
+            f'<form method="post" action="/submissions/draft/{key}" class="actions draft-actions">'
+            '<button type="submit">Build the draft</button> '
+            '<a class="button-quiet" href="/submissions#published">Back to Your submissions</a></form></div>')
+    return shell(title, main, active="submissions", head='<meta name="robots" content="noindex">')
 
 
 def submissions_list(items, past, orcid, name=None, session=False):
