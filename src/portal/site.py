@@ -1921,7 +1921,7 @@ def _published_row(x):
         # said in the row, so that a guarantor without the button knows why (design §4.6)
         short, full = latex_reasons().get(x["no_draft"], ("", ""))
         links += f'<span class="pub-action pub-nodraft" title="{esc(full)}">No LaTeX draft: {esc(short)}</span>'
-    return (f'<li><a class="pub-title" href="/p/{key}">{esc(x["title"])}</a>'
+    return (f'<li id="pub-{key}"><a class="pub-title" href="/p/{key}">{esc(x["title"])}</a>'
             f'<p class="pub-facts">{" · ".join(facts)}</p><p class="pub-links">{links}</p></li>')
 
 
@@ -1949,14 +1949,18 @@ def draft_page(x):
     title = f"LaTeX draft of {x['title']}"
     items = ["A plain <code>article</code> in LaTeX, made from version "
              f"{esc(x['version'])} of the claimset by a program, not a model: it sets out what the claimset holds "
-             "and adds nothing.",
-             "What a paper needs and the claimset does not hold (the motivation, a discussion, a conclusion, "
-             "acknowledgements, an affiliation that is missing) is marked in red as a gap for you to write, and "
-             "listed with its line in <code>GAPS.md</code>.",
+             "as a paper and adds nothing. Formal claims are theorems, titled by their names, with the short proofs "
+             "after them and the longer ones in an appendix; the other claims are paragraphs in the paper's sections. "
+             "The paper names no ID of the record: a supplement sets it out claim by claim.",
+             "What a paper needs and the claimset does not hold (the motivation, the earlier work, a sentence leading "
+             "into each section, a discussion, a conclusion, acknowledgements, an affiliation that is missing) is "
+             "marked in red as a gap for you to write, and listed with its line in <code>GAPS.md</code>, with what "
+             "the claimset gives towards it.",
              "The paper names its claimset in a footnote on the title, cites it in the introduction and links it in "
              "the statement on data, materials and provenance. Please keep them: they let a reader find each claim "
              "with its evidence.",
-             "A zip of <code>paper.tex</code>, <code>references.bib</code>, the result tables as CSV files, the "
+             "A zip of <code>paper.tex</code>, <code>supplement.tex</code>, <code>references.bib</code>, the result "
+             "tables as CSV files, the "
              "figures stored with the claimset, <code>traceability.csv</code> (which line comes from which part of "
              "the claimset) and a README on compiling it. No PDF: compile it with <code>pdflatex</code> or "
              "<code>latexmk</code>."]
@@ -1995,13 +1999,28 @@ def submissions_list(items, past, orcid, name=None, session=False):
     if past.get("closed"):
         sections.append(("closed", "Closed in the last 14 days", len(past["closed"]),
                          "<ul>" + "".join(_submission_row(x) for x in past["closed"]) + "</ul>"))
-    toc = "".join(f'<li><a href="#{sid}">{esc(title)}</a> <span class="count">{n}</span></li>'
-                  for sid, title, n, _ in sections)
-    body = "".join(f'<section id="{sid}"><h2>{esc(title)}</h2>{html_}</section>' for sid, title, _, html_ in sections)
-    main = (f'<div class="wrap spec submissions"><h1>Your submissions</h1>'
-            f'<p>Signed in as {who}. Only you see this page. {signout}</p>'
-            f'<div class="cs-layout"><nav class="cs-toc spec-toc" aria-label="Sections"><p class="cs-toc-title">'
-            f'On this page</p><ol>{toc}</ol></nav><div class="spec-body">{body}</div></div></div>')
+    body = "".join(f'<section class="cs-section" id="{sid}"><h2>{esc(title)}</h2>{html_}</section>'
+                   for sid, title, _, html_ in sections)
+    # laid out as the paper view (site.css, .entry[data-view="paper"]): one column of text, and to its right the
+    # contents, as every page's (On this page, Top, the sections with their counts). Waiting for you and Published
+    # are entries as the paper view's sections are: the title opens the list of the papers by name, the arrow beside
+    # it leads to the section.
+    papers = {"waiting": [(it["submission"], it.get("title")) for it in items or []],
+              "published": [(f"pub-{ids.url_key(x['id'])}", x.get("title")) for x in published]}
+
+    def entry(sid, title, n):
+        count = f' <span class="count">{n}</span>'
+        if not papers.get(sid):
+            return f'<li><a href="#{sid}">{esc(title)}</a>{count}</li>'
+        names = "".join(f'<li><a href="#{esc(a)}">{esc(t or a)}</a></li>' for a, t in papers[sid])
+        return (f'<li class="pv-toc-sec"><details><summary>{esc(title)}{count}</summary>'
+                f'<ol class="pv-toc pub-toc">{names}</ol></details><a class="pv-toc-go" href="#{sid}" '
+                f'title="Go to this section" aria-label="Go to the section {esc(title)}">\u2192</a></li>')
+    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+           + TOC_TOP + "".join(entry(sid, title, n) for sid, title, n, _ in sections) + "</ol></nav>")
+    main = (f'<div class="cs-page entry submissions" data-view="paper"><div class="cs-header entry-header">'
+            f'<h1>Your submissions</h1><p>Signed in as {who}. Only you see this page. {signout}</p></div>'
+            f'<div class="entry-rail">{nav}</div><article class="cs-body" data-open>{body}</article></div>')
     return shell("Your submissions", main, active="submissions", script="/page.js",
                  head='<meta name="robots" content="noindex">')
 

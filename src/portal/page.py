@@ -924,6 +924,23 @@ def _claim(P, c, principal=False):
     return f'<div class="cs-item cs-claim" id="{esc(c["id"])}">' + "".join(lines) + "</div>"
 
 
+def _def_tables(text, d):
+    """The tables by which a definition specifies its term (claimset §3.2, `tables`, as amended on 2026-11-23): each a
+    caption and a table of text cells, mathematics shown as the definition's text is. '' without tables."""
+    out = []
+    for t in d.get("tables") or []:
+        if not isinstance(t, dict) or not isinstance(t.get("columns"), list) or not isinstance(t.get("rows"), list):
+            continue
+        rows = [r for r in t["rows"] if isinstance(r, list)]
+        out.append('<div class="cs-table cs-def-table"><table>'
+                   + (f"<caption>{text(t['description'])}</caption>" if isinstance(t.get("description"), str) else "")
+                   + "<thead><tr>" + "".join(f'<th scope="col">{text(str(c))}</th>' for c in t["columns"])
+                   + "</tr></thead><tbody>"
+                   + "".join("<tr>" + "".join(f"<td>{text(str(x))}</td>" for x in r) + "</tr>" for r in rows)
+                   + "</tbody></table></div>")
+    return "".join(out)
+
+
 def _definition(P, d, nested=False):
     head = f'<span class="cs-id">{esc(d["id"])}</span>'
     rel = []
@@ -946,7 +963,7 @@ def _definition(P, d, nested=False):
             + (f' · {" · ".join(rel)}' if rel and nested else "")
             + f' <strong>{esc(d.get("term", ""))}</strong></span>: {P.text(d.get("definition", ""))}'
             + (f' <span class="cs-tail">{". ".join(tail)}.</span>' if tail else "") + "</p>"
-            + _corrected(P, d.get("id")) + "</div>")
+            + _def_tables(P.text, d) + _corrected(P, d.get("id")) + "</div>")
 
 
 def _definitions(P):
@@ -1492,6 +1509,9 @@ def _render_parts(doc, file_url, ref_text, person=None, marker=None, claim_url=N
         name = (f'{P.text(desc)} <a class="cs-open" href="{esc(target)}">{esc(_link_name(target))}</a>' if target
                 else _link(uri) if _href(uri) and desc == uri else P.text(desc))
         bits = [esc(x) for x in (a.get("kind"), a.get("function")) if x]
+        v = a.get("version")                             # a package's version; a content hash is not shown
+        if isinstance(v, str) and v.strip() and not v.startswith("sha256:"):
+            bits.append(f"version {esc(v)}")
         if a.get("reference"):
             bits.append(P.ref(a["reference"]))
         return (f'<li id="{esc(a["id"])}"><span class="cs-id">{esc(a["id"])} · {" · ".join(bits)}</span> {name}</li>')

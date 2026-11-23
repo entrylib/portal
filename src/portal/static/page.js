@@ -305,7 +305,7 @@ window.entrylibOpen = (function () {
     var b = ev.target.closest && ev.target.closest(".cs-rows-toggle");
     if (b) foldRows(b.closest(".cs-table-long"), !b.closest(".cs-table-long").classList.contains("cs-folded"));
   });
-  if (body) {
+  if (body && !body.hasAttribute("data-open")) {       // data-open: a page whose sections all stay open (Your submissions)
     body.querySelectorAll(":scope > section.cs-section").forEach(function (s) {
       var h = s.querySelector(":scope > h2");
       if (!h || OPEN[s.id]) return;

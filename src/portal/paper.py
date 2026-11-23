@@ -620,7 +620,7 @@ class _View:
         symbol = f' <span class="pv-symbol">{self.text(sym)}</span>' if isinstance(sym, str) and sym.strip() else ""
         symbol += f' <span class="pv-how pv-key">{KEY_TERM}</span>' if did in self.key else ""
         return (f'<div class="pv-term" id="{esc(did)}"><dt>{esc(pageview._s(d.get("term")))}{symbol}</dt>'
-                f'<dd>{self.text(d.get("definition", ""))}</dd></div>')
+                f'<dd>{self.text(d.get("definition", ""))}{pageview._def_tables(self.text, d)}</dd></div>')
 
     def terms_block(self, c):
         new = self.new_terms(c)
