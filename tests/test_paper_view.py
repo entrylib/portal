@@ -608,3 +608,17 @@ def test_a_claim_lists_the_assumptions_it_rests_on_through_the_claims_between():
         assert block.index("</h3>") < block.index(line) < block.index("pv-statement")   # after the terms, before it
     c4 = claims[claims.index('id="C4"'):]
     assert "pv-assumes" not in c4[:c4.index("</article>")]                            # C4 rests on no claim
+
+
+def test_every_orcid_carries_the_id_icon():
+    """The iD icon beside every ORCID iD on a paper's page, the co-authors' as the responsible researcher's; only
+    the researcher's says it was verified."""
+    doc = copy.deepcopy(NATIVE)
+    doc["paper"].update({"id": "entrylib:2026.000001", "version": 1})
+    doc["contributors"].append({"id": "AC9", "type": "human", "name": "B. Coauthor", "orcid": "0000-0002-1825-0097",
+                                "positions": ["coauthor"]})
+    page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1}])
+    assert '<a class="orcid" href="https://orcid.org/0000-0002-1825-0097">' in page
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
+    rule = re.search(r"\n\.orcid, \.orcid-verified \{([^}]*)\}", css)
+    assert rule and "url(/img/orcid.svg)" in rule.group(1)

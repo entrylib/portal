@@ -347,8 +347,9 @@ window.entrylibOpen = (function () {
   return reveal;
 })();
 
-// Claimset and claim pages: a link to an ID (a claim, evidence, a definition or term, an artefact, a reference, a score)
-// shows that item in a pop-up instead of moving the page; links inside it show the next item, with a way back.
+// Claimset and claim pages: a link to an ID (a claim, evidence, a definition or term, an artefact, a reference, a score,
+// a correction) shows that item in a pop-up instead of moving the page; links inside it show the next item, with a way
+// back. The paper view holds the corrections for its pop-ups only (.cs-popup-only).
 // Without this script the link goes to the item.
 (function () {
   "use strict";
@@ -449,7 +450,8 @@ window.entrylibOpen = (function () {
     });
     var section = t.el.closest("section.cs-section");
     var name = /^score-/.test(t.el.id) ? t.el.id.slice(6) : t.el.id;
-    title.textContent = (name === "paper" ? "The paper" : name) + " · " + ((section && KINDS[section.id]) || "");
+    title.textContent = t.el.getAttribute("data-name") ||          // a correction: "Correction 2"
+      (name === "paper" ? "The paper" : name) + " · " + ((section && KINDS[section.id]) || "");
     content.replaceChildren(copy);
     back.hidden = trail.length < 2;
     foot.replaceChildren();
@@ -466,7 +468,7 @@ window.entrylibOpen = (function () {
       void at.offsetWidth;
       at.classList.add("flash");
     });
-    foot.appendChild(inPage);
+    if (!t.el.closest(".cs-popup-only")) foot.appendChild(inPage);   // shown only here: nothing in the page
     var issues = issuesCopy(t.el);
     if (issues) foot.appendChild(issues);
     var own = t.el.querySelector("a.claim-page");
@@ -484,7 +486,8 @@ window.entrylibOpen = (function () {
   document.addEventListener("click", function (e) {
     var a = e.target.closest('a[href^="#"]');
     if (!a || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || a.closest(".cs-toc")) return;
-    if (!(body.contains(a) || a.closest(".panel") || (popup && popup.dialog.contains(a)))) return;
+    if (!(body.contains(a) || a.closest(".panel") || a.closest(".cs-header") ||
+          (popup && popup.dialog.contains(a)))) return;
     var id = a.getAttribute("data-popup") || decodeURIComponent(a.getAttribute("href").slice(1));
     if (show(id)) e.preventDefault();
   });
