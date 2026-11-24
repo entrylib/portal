@@ -12,6 +12,7 @@ from importlib import resources
 from pathlib import Path
 
 from portal import page as H
+from portal import page_css
 
 EXAMPLES = Path(str(resources.files("claimset") / "data" / "examples"))
 
@@ -165,6 +166,42 @@ class TestTermsReferencesMaths(unittest.TestCase):
         body = H.render_parts(doc)["body"]
         self.assertIn('Source: <a class="ref" href="#B1">Smith (2020)</a>', body)
         self.assertIn('Used by: <a href="#D1">D1</a>', body)
+
+    def test_items_citations_paragraphs_and_parts(self):
+        doc = example()
+        doc["references"] = [{"id": "B1", "target": "Smith, J. (2020). A paper.", "id_type": "reference"}]
+        cid = doc["claims"][0]["id"]
+        P = H._Paper(doc)
+        out = P.text(f"Given {cid}, as in [[B1:Smith (2020)]]; C999, $C1$, `C1()` and https://x.org/{cid} stay.\n\nNext.")
+        self.assertIn(f'<a class="cs-ref-id" href="#{cid}">{cid}</a>', out)          # an item named by its ID
+        self.assertIn('<a class="ref" href="#B1" title="Smith (2020)">Smith (2020)</a>', out)   # a citation marker
+        self.assertNotIn('href="#C999"', out)                                         # no such item: plain
+        self.assertIn('<code class="cs-code">C1()</code>', out)
+        self.assertIn(f"https://x.org/{cid}", out)
+        self.assertIn('<span class="cs-para"></span>Next.', out)                       # a blank line: a paragraph
+        out = P.statement("For $y > 0$: (a) one holds; (b) the other, with $(c)$ in a formula.")
+        self.assertEqual(out.count('class="cs-part"'), 2)                             # parts, one per line
+        self.assertIn('<span class="cs-part-mark">(a)</span> one holds;', out)
+        self.assertEqual(P.statement("Only (a) here."), P.text("Only (a) here."))      # one mark: no list
+        did = doc["definitions"][0]["id"]
+        out = P.text(f"Written with [[{did}:$I_n$]] and [[B1:$x$]].")                 # a formula in a marker
+        self.assertNotIn("[[", out)
+        self.assertIn(f'<a class="term" href="#{did}"><math>', out)
+        self.assertIn('<a class="ref" href="#B1"><math>', out)
+        for rule in (".cs-para {", ".cs-part {"):
+            self.assertIn(rule, page_css.CSS)
+
+    def test_a_fenced_block_is_a_block(self):
+        P = H._Paper({"paper": {}})
+        out = P.text("Run:\n```r\nfit <- adam(y, h = 12)\nif (a != b) x <- 1\n```\nthen `es()` inline.")
+        self.assertIn('<code class="cs-code cs-code-block language-r">fit &lt;- adam(y, h = 12)\n'
+                      'if (a != b) x &lt;- 1</code>', out)               # its lines kept, its language a class
+        self.assertIn('<code class="cs-code">es()</code>', out)
+        self.assertNotIn("`", out)
+        out = P.text("```\nfor t in 1..T:\n    step\n```")
+        self.assertIn('<code class="cs-code cs-code-block">for t in 1..T:\n    step</code>', out)
+        self.assertIn('<code class="cs-code">x</code>', P.text("odd ```x``` inline"))  # on one line: inline code
+        self.assertIn(".cs-code-block {", page_css.CSS)
 
     def test_maths_and_code(self):
         P = H._Paper({"paper": {}})
@@ -524,6 +561,32 @@ class TestCorrections(unittest.TestCase):
         self.assertIn("Why:", section)
         self.assertNotIn("<b>sum</b>", section)                               # the paper's text is never HTML
         self.assertIn(("corrections", "Corrections to published paper", 2), parts["sections"])
+
+    def test_each_correction_opens_in_a_pop_up(self):
+        """The header names each place, and a corrected object's "Why" links to its correction, which page.js opens in
+        a pop-up; the paper view and a claim's page hold the corrections for it, not as a section."""
+        d, cid, did = self.doc()
+        d["paper"]["published_as"]["corrections"].append(dict(d["paper"]["published_as"]["corrections"][1]))
+        parts = H.render_parts(d)
+        self.assertIn(f'in 3 places: <a href="#corr-1">{cid}</a>, <a href="#corr-2">{did} (1)</a>, '
+                      f'<a href="#corr-3">{did} (2)</a>.', parts["header"])
+        self.assertNotIn('href="#corrections"', parts["header"] + parts["body"])
+        claim_html = parts["body"].split(f'id="{cid}"', 1)[1].split("</div>", 1)[0]
+        self.assertIn('<a href="#corr-1">Why</a>', claim_html)
+        for n in (1, 2, 3):
+            self.assertIn(f'id="corr-{n}" data-name="Correction {n}"', parts["blocks"]["corrections"])
+        from portal import site
+        d["paper"].update({"id": "entrylib:2026.000001", "version": 1})
+        page = site.paper_page(d, base_url="https://entrylib.test", listing=[{"version": 1}])
+        self.assertIn('<div class="cs-popup-only" hidden><section class="cs-section" id="corrections">', page)
+        self.assertNotIn('href="#corrections"', page)                         # not in the paper view's contents
+        self.assertIn('<a href="#corr-1">Why</a>', page.split("cs-popup-only", 1)[0])     # under the claim, in view
+        principal = d["paper"]["contributions"][0]                         # a claim the paper view draws itself
+        d["paper"]["published_as"]["corrections"][0]["field"] = f"{principal}.statement"
+        page = site.paper_page(d, base_url="https://entrylib.test", listing=[{"version": 1}])
+        claim = page.split(f'<article class="pv-claim" id="{principal}"', 1)[1].split("</article>", 1)[0]
+        self.assertIn("Corrected from the published paper", claim)
+        self.assertIn('<a href="#corr-1">Why</a>', claim)
 
     def test_a_converted_source_s_corrections_are_shown_too(self):
         d, cid, _ = self.doc("converted")

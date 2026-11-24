@@ -549,7 +549,7 @@ class _View:
         # in order (design §7.4, *A leaner paper page*): the heading, the terms it uses, the assumptions it rests on,
         # the claim itself, its proof or evidence, earlier work, the record
         return (f'<article class="pv-claim" id="{esc(cid)}">{head}{self.terms_block(c)}{self.assumes_line(c)}'
-                f'{plain}{self.statement(c.get("statement"))}'
+                f'{plain}{self.statement(c.get("statement"))}{pageview._corrected(self.P, cid)}'
                 f'{self.support(c)}{self.beside(c)}{self.remarks(c)}'
                 # the earlier wordings and merged hypotheses that went into it, folded (design §7.6, *Not claimed*)
                 f'{pageview.earlier_block(self.P.not_claimed, cid, self.P.text, self.P.lab_record, self.P.hypotheses)}'
