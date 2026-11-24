@@ -599,12 +599,13 @@ class _Paper:
         return [self.by_id[aid] for aid in out]
 
     def term(self, x):
-        """A value that is a definition's ID, shown as its term (linked); anything else as text."""
+        """A value that is a definition's ID, shown as its term (linked); anything else as text, its formulas set
+        (claimset §8 rule 6: a condition's value may be `real part $\\alpha_0$`)."""
         if isinstance(x, str) and x in self.by_id and self.by_id[x] in self.defs:
             d = self.by_id[x]
             tip = f"{d.get('term', '')}: " + _first_sentence(d.get("definition", ""))
             return f'<a class="term" href="#{esc(x)}" title="{esc(tip)}">{esc(d.get("term", x))}</a>'
-        return esc(_s(x))
+        return self.text(_s(x))
 
     def conditions(self, c):
         if not isinstance(c, dict) or not c:
@@ -807,7 +808,7 @@ def _corrected(P, oid):
     out = []
     for corr in P.corrected.get(oid, []):
         kind = CORRECTION_WORDS.get(corr.get("kind"), "corrected")
-        where = f", {esc(corr['where'])}" if corr.get("where") else ""
+        where = f", {P.text(corr['where'])}" if corr.get("where") else ""
         out.append(f'<p class="cs-correction"><span class="k">Corrected from {P.against}</span> ({esc(kind)}{where}): '
                    f'printed {P.text(str(corr.get("printed", "")))}. '
                    f'<a href="#{correction_id(P, corr)}">Why</a></p>')
@@ -1426,7 +1427,7 @@ def _correction_item(P, corr):
     stated instead, why, and who found it. Its anchor (correction_id) is what the links to it open."""
     oid = corr["field"].split(".")[0]
     head = [P.ids([oid]) if oid in P.by_id else esc(oid), esc(CORRECTION_WORDS.get(corr.get("kind"), "correction")),
-            esc(corr.get("where") or "")]
+            P.text(corr.get("where") or "")]
     finder = next((c for c in P.doc.get("contributors") or [] if isinstance(c, dict)
                    and c.get("id") == corr.get("found_by")), None)
     if finder:

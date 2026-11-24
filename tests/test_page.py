@@ -191,6 +191,17 @@ class TestTermsReferencesMaths(unittest.TestCase):
         for rule in (".cs-para {", ".cs-part {"):
             self.assertIn(rule, page_css.CSS)
 
+    def test_formulas_in_values_and_where_a_correction_stands(self):
+        doc = example()
+        P = H._Paper(doc)
+        self.assertIn("<math>", P.term("real part $\\alpha_0$"))                      # a condition's value
+        self.assertIn("<math>", P.conditions({"part": "real part $\\alpha_0$"}))
+        doc["paper"]["published_as"] = {"id_type": "doi", "id": "10.1000/x", "corrections": [
+            {"kind": "misprint", "field": f"{doc['claims'][0]['id']}.statement", "where": "Table 1, column $s_h^2$",
+             "printed": "$s_h$", "recorded": "$s_h^2$", "reason": "A square."}]}
+        body = H.render_parts(doc)["body"]
+        self.assertNotIn("column $s_h^2$", body)                                       # set, not raw
+
     def test_a_fenced_block_is_a_block(self):
         P = H._Paper({"paper": {}})
         out = P.text("Run:\n```r\nfit <- adam(y, h = 12)\nif (a != b) x <- 1\n```\nthen `es()` inline.")
