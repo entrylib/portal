@@ -52,3 +52,20 @@ def test_start_updates_the_rubric_from_pypi():
     line = next(x for x in (ROOT / "deploy" / "start.sh").read_text().splitlines()
                 if "pip install" in x and "entrylib-rubric" in x)
     assert "--upgrade" in line and "git+" not in line
+
+
+def test_an_update_rebuilds_the_portal_without_its_dependencies():
+    """The dependencies are installed from a file that holds only them (read from pyproject.toml in a stage of its
+    own), before the code is copied: a change to the code or to the version number reuses that layer."""
+    lines = (ROOT / "Dockerfile").read_text().splitlines()
+    deps = next(i for i, x in enumerate(lines) if x.startswith("RUN pip install -r /tmp/requirements.txt"))
+    code = next(i for i, x in enumerate(lines) if x.startswith("COPY src "))
+    assert deps < code
+    assert "RUN pip install --no-deps ." in lines[code + 1:]
+    assert "FROM python:3.12-slim AS deps" in lines
+
+
+def test_an_update_removes_the_images_it_replaces():
+    launch_sh = (ROOT / "deploy" / "launch.sh").read_text()
+    assert launch_sh.index("docker image prune -f") > launch_sh.index("docker compose up -d --build")
+    assert "builder prune" not in launch_sh and "system prune" not in launch_sh     # the build cache is kept

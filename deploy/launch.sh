@@ -41,6 +41,9 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 docker compose up -d --build --remove-orphans
+# Each build leaves the images it replaces behind, untagged; remove them, so that they do not fill the disk and slow
+# the next build. The build cache is kept: the classifier's model and the portal's dependencies are not fetched again.
+docker image prune -f >/dev/null
 # Caddy does not watch its Caddyfile: reload it, so a changed one takes effect (without dropping connections).
 docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
