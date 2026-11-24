@@ -1,3 +1,9 @@
+# The dependencies, read from pyproject.toml into a file of their own: a new version number or a change to the code
+# leaves the file unchanged, so the layer that installs them is reused and an update rebuilds only the portal itself.
+FROM python:3.12-slim AS deps
+COPY pyproject.toml /tmp/
+RUN python -c "import tomllib; print(chr(10).join(tomllib.load(open('/tmp/pyproject.toml', 'rb'))['project']['dependencies']))" > /tmp/requirements.txt
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
@@ -10,13 +16,15 @@ RUN apt-get update \
  && useradd --create-home --uid 10001 portal
 
 WORKDIR /app
-COPY pyproject.toml README.md LICENSE ./
-COPY src ./src
-RUN pip install .
+COPY --from=deps /tmp/requirements.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
 # The scoring rubric (design §7.6), from PyPI; the image builds without it (the pages then show "–" for scores), and
 # deploy/start.sh updates it at each start.
 RUN pip install "entrylib-rubric>=0.4" \
  || echo "portal: the rubric could not be installed; scores will show –"
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN pip install --no-deps .
 
 # Named volumes take their owner from these folders when first created, so the app (not root) can write to them.
 RUN mkdir -p /srv/published /srv/registry /srv/submissions /home/portal/.local \
