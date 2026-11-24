@@ -57,7 +57,7 @@ services:
       ORCID_CLIENT_SECRET: ${ORCID_CLIENT_SECRET:-}
       PORTAL_INDEXNOW_KEY: ${PORTAL_INDEXNOW_KEY:-}
       PORTAL_MAX_NEW_PER_WEEK: ${PORTAL_MAX_NEW_PER_WEEK:-}
-      PORTAL_MAX_VERSIONS_PER_DAY: ${PORTAL_MAX_VERSIONS_PER_DAY:-}
+      PORTAL_MAX_VERSIONS_PER_WEEK: ${PORTAL_MAX_VERSIONS_PER_WEEK:-}
     volumes:
       - published:/srv/published
       - registry:/srv/registry

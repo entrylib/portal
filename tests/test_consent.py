@@ -232,6 +232,31 @@ def test_correction_by_the_guarantor(app_client):
     assert app_client.get(f"/api/submissions/{out2['id']}").json()["published"] == f"{concept}@v2"
 
 
+def test_weekly_limit_on_new_versions(app_client, monkeypatch):
+    """One new version of a published claimset in any seven days (design §8): a second correction within the week is
+    refused when it is made, saying why and from when, so that changes are gathered into one version."""
+    monkeypatch.setattr(limits, "VERSIONS_PER_WEEK", 1)
+    out, token = submit(app_client)
+    sign_in(app_client, token)
+    concept = app_client.get(f"/api/submissions/{out['id']}").json()["published"].split("@")[0]
+
+    def correction(words):
+        doc = example()
+        doc["paper"]["id"] = concept
+        doc["paper"]["correction_reason"] = f"The first claim's statement omitted that it held {words}."
+        doc["claims"][0]["statement"] = doc["claims"][0]["statement"].rstrip(".") + f" {words}."
+        return doc
+    _, token2 = submit(app_client, correction("in every run"))
+    assert sign_in(app_client, token2).status_code == 200
+    r = app_client.post("/api/submissions", content=json.dumps(correction("at every horizon")).encode(),
+                        headers={"Content-Type": "application/json"})
+    assert r.status_code == 429
+    text = json.dumps(r.json())
+    assert "up to 1 new version in any seven days" in text and "1 published in the last seven days" in text
+    from portal import site
+    assert "up to 1 new version in any seven days" in site.fixed_page("agents", "https://e.org")
+
+
 def test_correction_by_someone_else_is_refused(app_client):
     out, token = submit(app_client)
     sign_in(app_client, token)
