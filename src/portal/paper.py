@@ -22,6 +22,7 @@ from claimset.render import DIGITS
 
 from . import page as pageview
 from . import score_html
+from . import text as textview
 from .page import esc
 
 #: A formula, a term mark or code: claim IDs inside them are left alone.
@@ -172,7 +173,7 @@ class _View:
 
     def xref(self, cid, cap=True, bare=False):
         shown = cid if bare else ("Claim " if cap else "claim ") + cid
-        title = f' title="{esc(self.name(cid))}"' if self.name(cid) else ""
+        title = f' title="{esc(textview.readable(self.name(cid)))}"' if self.name(cid) else ""
         return f'<a class="pv-xref" href="#{esc(cid)}"{title}>{esc(shown)}</a>'
 
     def step(self, s):
@@ -491,11 +492,11 @@ class _View:
         if not ev and kinds:
             rows.append(("Support", esc(", ".join(pageview._s(k).replace("_", " ") for k in kinds if k))))
         for ch in _dicts(c.get("checks")):
-            res = f" <i>{esc(ch['resolution'])}</i>" if isinstance(ch.get("resolution"), str) else ""
+            res = f" <i>{self.text(ch['resolution'])}</i>" if isinstance(ch.get("resolution"), str) else ""
             rows.append((f"Check: {esc(pageview._s(ch.get('outcome')))}",
                          f"By {esc(self.who(ch.get('by')))}"
                          + (f", {esc(ch['extent'])}" if isinstance(ch.get("extent"), str) else "")
-                         + f". {esc(pageview._s(ch.get('notes') or ''))}{res}"))
+                         + f". {self.text(pageview._s(ch.get('notes') or ''))}{res}"))     # its formulae as formulae
         if isinstance(c.get("scope"), dict) and c["scope"]:
             rows.append(("Scope", self.text(pageview._scope(c["scope"]))))        # its formulae as formulae
         lims = [x for x in _strs(c.get("limitations")) if x in self.P.by_id]
@@ -541,7 +542,7 @@ class _View:
         if isinstance(own, str) and own:
             called = f'<a class="pv-claim-link" href="{esc(own)}" title="The page of this claim">{called}</a>'
         head = (f'<h3><span class="pv-head-text"><span class="pv-claim-id">{called}</span>'
-                + (f' <span class="pv-name">{esc(name)}</span>' if name else "") + "</span>"
+                + (f' <span class="pv-name">{textview.html(name)}</span>' if name else "") + "</span>"
                 + (f'<span class="pv-tags">{"".join(tags)}</span>' if tags else "") + "</h3>")
         summary = c.get("summary")
         plain = (f'<p class="pv-summary">{self.text(summary)}</p>'

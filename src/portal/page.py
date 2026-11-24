@@ -1384,7 +1384,7 @@ def _evidence(P, e, source_link):
         out.append(f'<p class="cs-links"><span class="k">Setup:</span> {" · ".join(parts)}</p>')
     extra = []
     if e.get("foundation"):
-        extra.append(f'<span class="k">Foundation:</span> {esc(e["foundation"])}')
+        extra.append(f'<span class="k">Foundation:</span> {P.text(e["foundation"])}')
     if e.get("assumptions"):
         extra.append('<span class="k">Assumes:</span> ' + P.ids(e["assumptions"]))
     if e.get("checker"):
@@ -1396,7 +1396,7 @@ def _evidence(P, e, source_link):
     if extra:
         out.append('<p class="cs-links">' + " · ".join(extra) + "</p>")
     if e.get("estimate") is not None:
-        out.append(f'<p>{esc(e.get("estimand", ""))} = {esc(_num(e["estimate"]))} '
+        out.append(f'<p>{P.text(e.get("estimand", ""))} = {esc(_num(e["estimate"]))} '
                    f'{esc(_uncertainty(e.get("uncertainty")))} {esc(_interval(e.get("interval")))}</p>')
     # figures before the numbers: a reader sees the pattern first, then the values behind it (design §7.6)
     figures = P.figures_of(e)
