@@ -581,13 +581,24 @@ dialog.help .popup-body { max-height: 90vh; overflow-y: auto; padding: 20px 64px
   justify-content: space-between; gap: 8px 16px; padding: 10px 16px; background: var(--warn-bg);
   border-bottom: 1px solid var(--warn); }
 .preview-bar-text { margin: 0; flex: 1 1 320px; }
+/* signed in, from Your submissions: Confirm and Back side by side, the same size */
+.preview-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.preview-actions form { margin: 0; }
+.preview-actions .button-quiet, .preview-actions button[type="submit"] { min-height: 44px; padding: 0 16px; font-size: inherit;
+  font-weight: 600; white-space: nowrap; }
 .preview .preview-note { border-color: var(--warn); }
 .entry.preview > .panel { top: calc(var(--head) + 76px); }
 form.inline { display: inline; margin-left: 8px; }
 @media (max-width: 640px) {
   .preview-bar { padding: 8px 16px; flex-wrap: nowrap; }
   .preview-bar .preview-more { display: none; }
-  .preview-bar .button { min-height: 40px; padding: 0 12px; }
+  .preview-bar .button, .preview-actions .button-quiet, .preview-actions button[type="submit"] { min-height: 40px; padding: 0 12px; }
+  /* on a phone, the two buttons share a row under the bar's line, each half of it */
+  .preview-bar:has(.preview-actions) { flex-wrap: wrap; }
+  .preview-actions { flex: 1 1 100%; flex-wrap: nowrap; }
+  .preview-actions > a, .preview-actions > form { flex: 1 1 0; min-width: 0; }
+  .preview-actions .button-quiet, .preview-actions button[type="submit"] { width: 100%; justify-content: center; font-size: 15px;
+    padding: 0 8px; }
 }
 
 /* The two views of a paper (design §7.4, Paper view): the switch at the top of both. */

@@ -95,12 +95,16 @@ expect this, ignore it: nothing is published without your confirmation.</p>
     return page("Confirm a submission", body)
 
 
-def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper", views=("?", "?view=record")):
+def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper", views=("?", "?view=record"),
+             actions=None, package=None):
     """The pending consent page: the bar, what confirming means, and the paper as it will be published, in its paper
-    view or its record (`view`; `views`: the two addresses of the consent page that show them)."""
+    view or its record (`view`; `views`: the two addresses of the consent page that show them). `actions` and
+    `package`, given for a guarantor signed in (session_preview), replace the bar's button and the package form."""
     from . import site
     expires = ctx["expires"].strftime("%d %B %Y, %H:%M UTC")
-    if ctx.get("waiting_package"):
+    if actions is not None:
+        action = actions
+    elif ctx.get("waiting_package"):
         action = '<a class="button" href="#attach">First, attach the package</a>'
     else:
         action = f'<a class="button" href="{escape(start_url)}">Confirm: sign in with ORCID</a>'
@@ -111,7 +115,8 @@ def _preview(ctx, start_url, attach_url, attached, scores, base_url, view="paper
     if ctx["kind"] == "correction":
         correction = (f"<p><strong>A new version of {escape(ctx['target'])}.</strong> Reason given: "
                       f"{escape(ctx.get('correction_reason') or '')}</p>")
-    package = _package_box(ctx, attach_url, attached)
+    if package is None:
+        package = _package_box(ctx, attach_url, attached)
     statement = (
         f"<p>An AI agent has submitted this paper to EntryLib naming you, <strong>{escape(ctx['name'] or '')}"
         f"</strong> (ORCID <code>{escape(ctx['orcid'])}</code>), as its responsible researcher (its guarantor). "
@@ -145,24 +150,22 @@ def _removals_box(ctx):
 
 
 def session_preview(ctx, scores=None, base_url="", view="paper", views=("?", "?view=record")):
-    """The preview Your submissions opens for a guarantor signed in (design §4.2): the consent page's, with a bar that
-    leads back to Your submissions, where the Confirm button is."""
-    from . import site
-    expires = ctx["expires"].strftime("%d %B %Y, %H:%M UTC")
-    back = f"/submissions#{ctx['submission']}"
-    bar = (f'<p class="preview-bar-text"><strong>Preview, not published yet.</strong> <span class="preview-more">'
-           f'This is how the paper will look once published. Confirm or cancel it in Your submissions, by '
-           f'{escape(expires)}.</span></p><a class="button" href="{escape(back)}">Back to Your submissions</a>')
-    correction = ""
-    if ctx["kind"] == "correction":
-        correction = (f"<p><strong>A new version of {escape(ctx['target'])}.</strong> Reason given: "
-                      f"{escape(ctx.get('correction_reason') or '')}</p>")
-    statement = (f"<p>The paper as readers will see it once published, under the licence {escape(ctx['licence'])}. "
-                 f"Nothing is published until you confirm it in Your submissions.</p>{correction}"
-                 f"{_removals_box(ctx)}"
-                 f"{_source_box(ctx)}")
-    return site.preview_page(ctx["doc"], base_url=base_url, bar=bar, statement=statement, scores=scores, view=view,
-                             paper_href=views[0], record_href=views[1])
+    """The preview Your submissions opens for a guarantor signed in (design §4.2): the consent link's page, the same
+    in every part, but for its bar's buttons. The guarantor has signed in with ORCID already, so the blue one confirms
+    at once, by a one-time ticket (`ctx["ticket"]`, as Your submissions' Confirm button), or for a submission waiting
+    for its package leads to the form that attaches it; the white one leads back to Your submissions."""
+    back = f'<a class="button-quiet" href="/submissions#{escape(ctx["submission"])}">Back to submissions</a>'
+    ticket = f'<input type="hidden" name="ticket" value="{escape(ctx["ticket"])}">'
+    if ctx.get("waiting_package"):
+        from . import site
+        action = '<a class="button" href="#attach">First, attach the package</a>'
+        package = site._attach_form(ctx, ticket)
+    else:
+        action = (f'<form method="post" action="/confirm">{ticket}<button type="submit" name="action" '
+                  'value="confirm">Confirm and publish</button></form>')
+        package = ""
+    return _preview(ctx, None, None, False, scores, base_url, view, views,
+                    actions=f'<div class="preview-actions">{action}{back}</div>', package=package)
 
 
 def _confirm_button(ctx, start_url):
