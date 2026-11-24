@@ -41,6 +41,12 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 docker compose up -d --build --remove-orphans
+# Each build leaves the images it replaces behind, untagged; remove them. The build cache keeps every layer of every
+# build (30 GB after two months of updates and seven classifier builds): keep the most recently used 10 GB of it,
+# which holds the current classifier and portal layers, so the next build fetches neither again.
+docker image prune -f >/dev/null
+docker builder prune -f --max-used-space 10GB >/dev/null 2>&1 \
+  || docker builder prune -f --keep-storage 10GB >/dev/null || true      # --keep-storage: Docker before 28
 # Caddy does not watch its Caddyfile: reload it, so a changed one takes effect (without dropping connections).
 docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 

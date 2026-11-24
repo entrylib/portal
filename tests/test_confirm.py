@@ -173,21 +173,41 @@ def test_a_waiting_submission_reads_as_a_paper(app_client):
     assert f'href="/submissions/{out["id"]}/preview"' in card and f'id="{out["id"]}"' in card
 
 
+def _without_bar(html_):
+    """A preview page without its bar, and with the addresses of its two views made the same."""
+    html_ = re.sub(r'<div class="preview-bar".*?</div>(</div>)?(?=<div class="cs-page)', "", html_, flags=re.S)
+    return re.sub(r'href="/(consent/[^"?#]+|submissions/[^"/]+/preview)(\?view=record)?(#[^"]*)?"',
+                  r'href="VIEW\2\3"', html_)
+
+
 def test_the_preview_opens_with_the_session(app_client):
-    out, _ = submit(app_client)
+    """Open the preview, from Your submissions, is the consent link's page: the same in all but its bar, whose blue
+    button confirms (the guarantor has signed in already) and whose white one leads back to Your submissions."""
+    out, token = submit(app_client)
     url = f"/submissions/{out['id']}/preview"
     r = app_client.get(url, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/submissions"            # not signed in
+    consent_page = app_client.get(f"/consent/{token}").text
     signed_in(app_client)
     r = app_client.get(url)
     assert r.status_code == 200 and "Preview, not published yet." in r.text and 'data-view="paper"' in r.text
-    assert f'href="/submissions#{out["id"]}">Back to Your submissions' in r.text
-    assert "Confirm: sign in with ORCID" not in r.text                               # confirming is on the list
+    assert _without_bar(r.text) == _without_bar(consent_page)                       # the same page
+    bar = r.text[r.text.index('<div class="preview-bar"'):r.text.index('<div class="cs-page')]
+    assert '<form method="post" action="/confirm"><input type="hidden" name="ticket"' in bar
+    assert '<button type="submit" name="action" value="confirm">Confirm and publish</button>' in bar
+    assert f'<a class="button-quiet" href="/submissions#{out["id"]}">Back to submissions</a>' in bar
+    assert "Confirm: sign in with ORCID" not in r.text
+    ticket = re.search(r'name="ticket" value="([^"]+)"', bar).group(1)
     assert f'href="{url}?view=record"' in r.text
     assert 'id="principal"' in app_client.get(f"{url}?view=record").text            # the record
-    app_client.post("/signout")
-    signed_in(app_client, as_orcid="0000-0002-1825-0097")                            # someone else
-    assert app_client.get(url).status_code == 404
+    assert "Published" in app_client.post("/confirm", data={"ticket": ticket, "action": "confirm"}).text
+    assert app_client.get(url).status_code == 404                                    # confirmed: no longer waiting
+
+
+def test_someone_else_gets_no_preview(app_client):
+    out, _ = submit(app_client)
+    signed_in(app_client, as_orcid="0000-0002-1825-0097")
+    assert app_client.get(f"/submissions/{out['id']}/preview").status_code == 404
 
 
 def test_your_submissions_may_run_the_sites_script(app_client):
@@ -197,3 +217,19 @@ def test_your_submissions_may_run_the_sites_script(app_client):
         csp = r.headers["content-security-policy"]
         assert "script-src 'self'" in csp and "unsafe-inline" not in csp, csp
         assert 'src="/page.js' in r.text
+
+
+def test_a_preview_waiting_for_its_package_leads_to_its_form():
+    import datetime as dt
+
+    from publishing import example
+
+    from portal import pages
+    ctx = {"submission": "sub_x", "orcid": GUARANTOR, "name": "A. Researcher", "state": "pending", "kind": "new",
+           "target": None, "expires": dt.datetime(2026, 11, 26, 12, 0), "doc": example(), "licence": "CC-BY-4.0",
+           "ticket": "T1", "removals": [], "source": None, "waiting_package": True, "package_files": ["data.csv"]}
+    html_ = pages.session_preview(ctx, base_url="https://entrylib.test")
+    bar = html_[html_.index('<div class="preview-bar"'):html_.index('<div class="cs-page')]
+    assert '<a class="button" href="#attach">First, attach the package</a>' in bar and "Back to submissions" in bar
+    attach = html_[html_.index('<div id="attach">'):]
+    assert 'action="/confirm/package"' in attach and 'name="ticket" value="T1"' in attach
