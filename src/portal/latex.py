@@ -786,7 +786,7 @@ class _Paper:
             env = self.env[cid]
             self.counters["theorem"] += 1
             self.number[cid] = f"{ENV_NAME[env]} {self.counters['theorem']}"
-            D.add(f"\\begin{{{env}}}{self.title_arg(D.esc(name))}\\label{{thm:{cid}}}", cid, "name")
+            D.add(f"\\begin{{{env}}}{self.title_arg(D.text(name))}\\label{{thm:{cid}}}", cid, "name")
             D.add(self.statement(c.get("statement"), emph=False), cid, "statement")
             D.add(f"\\end{{{env}}}")
             for sp in _dicts(c.get("support")):
