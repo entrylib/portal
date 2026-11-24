@@ -1670,7 +1670,8 @@ def fixed_page(name, base_url):
     file, title, active, description = PAGES[name]
     body = (_static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
             .replace("{new_per_week}", str(limits.NEW_PER_WEEK))
-            .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)).replace("{how_to_read}", HOW_TO_READ)
+            .replace("{versions_per_week}", limits.plural(limits.VERSIONS_PER_WEEK, "new version"))
+            .replace("{how_to_read}", HOW_TO_READ)
             .replace("{convert_request}", esc(skills.shown(base_url)))
             .replace("{plan_request}", esc(planning.short(base_url))))
     return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,
