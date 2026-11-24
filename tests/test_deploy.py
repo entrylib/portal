@@ -65,7 +65,9 @@ def test_an_update_rebuilds_the_portal_without_its_dependencies():
     assert "FROM python:3.12-slim AS deps" in lines
 
 
-def test_an_update_removes_the_images_it_replaces():
+def test_an_update_removes_the_images_it_replaces_and_bounds_the_build_cache():
     launch_sh = (ROOT / "deploy" / "launch.sh").read_text()
-    assert launch_sh.index("docker image prune -f") > launch_sh.index("docker compose up -d --build")
-    assert "builder prune" not in launch_sh and "system prune" not in launch_sh     # the build cache is kept
+    build = launch_sh.index("docker compose up -d --build")
+    assert launch_sh.index("docker image prune -f") > build
+    assert launch_sh.index("docker builder prune -f --max-used-space 10GB") > build   # recent cache kept, not all of it
+    assert "system prune" not in launch_sh and "builder prune -af" not in launch_sh

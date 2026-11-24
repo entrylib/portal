@@ -160,8 +160,10 @@ https://github.com/modelcontextprotocol/registry/releases), sign in as an owner 
 - **Updates to the portal:** `sudo /opt/entrylib/portal/deploy/launch.sh --update` (fetches the newest code, rebuilds,
   restarts, and reloads Caddy so a changed Caddyfile takes effect). An update rebuilds only the portal's own layer (its dependencies
   are installed in a layer of their own, reused while they are unchanged) and removes the images it replaces (`docker
-  image prune`); the build cache, with the classifier's model, is kept. If builds slow down ("exporting layers"), see what
-  the images and the cache hold, and how full the disk is: `sudo docker system df` and `df -h /`. After changing `.env`:
+  image prune`). The build cache, every layer of every build, is cut to its most recently used 10 GB (`docker builder
+  prune --max-used-space 10GB`), which holds the classifier's model and the portal's dependencies; it had grown to 30 GB
+  in two months. To see what the images and the cache hold, and how full the disk is: `sudo docker system df` and
+  `df -h /`. After changing `.env`:
   `sudo /opt/entrylib/portal/deploy/launch.sh`.
 - **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
   and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
