@@ -66,12 +66,24 @@ def page_context(conn, token, submissions_dir):
     return _context_by_hash(conn, token_hash(token), submissions_dir)
 
 
-def context_for(conn, submission, orcid, submissions_dir):
+def context_for(conn, submission, orcid, submissions_dir, now=None):
     """What the consent page shows, for a guarantor signed in (a live session) whom `submission` names and who has not
-    confirmed it: the preview Your submissions links to (design §4.2). None otherwise."""
+    confirmed it: the preview Your submissions links to (design §4.2), with a one-time `ticket` for its Confirm
+    button while it waits. None otherwise."""
     row = conn.execute("SELECT token_hash FROM submission_guarantors WHERE submission_id = %s AND orcid = %s"
                        " AND confirmed IS NULL", (submission, orcid)).fetchone()
-    return _context_by_hash(conn, row[0], submissions_dir) if row else None
+    ctx = _context_by_hash(conn, row[0], submissions_dir) if row else None
+    if ctx is not None and ctx["state"] == "pending":
+        ctx["ticket"] = _new_ticket(conn, submission, orcid, now or dt.datetime.now(dt.UTC))
+    return ctx
+
+
+def _new_ticket(conn, submission, orcid, now):
+    """A one-time ticket for the Confirm and Cancel buttons of `submission`, bound to the iD signed in."""
+    ticket = secrets.token_urlsafe(24)
+    conn.execute("INSERT INTO confirm_tickets (ticket_hash, submission_id, orcid, expires) VALUES (%s, %s, %s, %s)",
+                 (token_hash(ticket), submission, orcid, now + TICKET_WINDOW))
+    return ticket
 
 
 def _context_by_hash(conn, hash_, submissions_dir):
@@ -218,10 +230,7 @@ def listing_for(conn, orcid, submissions_dir, now=None):
         ctx = _context_by_hash(conn, token_row[0], submissions_dir)
         if ctx is None or ctx["state"] != "pending":
             continue
-        ticket = secrets.token_urlsafe(24)
-        conn.execute("INSERT INTO confirm_tickets (ticket_hash, submission_id, orcid, expires) VALUES (%s, %s, %s,"
-                     " %s)", (token_hash(ticket), sid, orcid, now + TICKET_WINDOW))
-        out.append({**ctx, "ticket": ticket})
+        out.append({**ctx, "ticket": _new_ticket(conn, sid, orcid, now)})
     return out
 
 
