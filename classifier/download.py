@@ -30,6 +30,21 @@ OUT = Path(os.environ.get("CLASSIFIER_DIR", "/opt/classifier"))
 SECRET = Path("/run/secrets/openalex_api_key")
 
 
+#: Weights for other frameworks than PyTorch, which the server never loads: a model repository may hold the same weights
+#: several times over (TensorFlow, Flax, ONNX), each as large as the model.
+OTHER_WEIGHTS = ["*.h5", "*.msgpack", "*.onnx", "*.ot", "*.tflite", "*.mlmodel", "onnx/*", "coreml/*", "openvino/*",
+                 "tf_model*", "flax_model*", "rust_model*"]
+
+
+def ignored(files):
+    """What not to fetch of a model repository's files: other frameworks' weights, and the PyTorch `.bin` copy when the
+    same weights are there as safetensors (which transformers loads first)."""
+    out = list(OTHER_WEIGHTS)
+    if any(f.endswith(".safetensors") for f in files):
+        out.append("*.bin")
+    return out
+
+
 def api_key():
     key = SECRET.read_text().strip() if SECRET.exists() else os.environ.get("OPENALEX_API_KEY", "").strip()
     if not key:
@@ -53,7 +68,8 @@ def openalex_topics():
 
 def main():
     commit = HfApi().model_info(MODEL, revision=REVISION).sha     # pin the build to one commit of the model
-    snapshot_download(MODEL, revision=commit, local_dir=OUT / "model")
+    files = HfApi().list_repo_files(MODEL, revision=commit)
+    snapshot_download(MODEL, revision=commit, local_dir=OUT / "model", ignore_patterns=ignored(files))
     config = json.loads((OUT / "model" / "config.json").read_text())
     labels = list(config["id2label"].values())
     topics = openalex_topics()

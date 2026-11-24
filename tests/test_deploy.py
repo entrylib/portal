@@ -71,3 +71,26 @@ def test_an_update_removes_the_images_it_replaces_and_bounds_the_build_cache():
     assert launch_sh.index("docker image prune -f") > build
     assert launch_sh.index("docker builder prune -f --max-used-space 10GB") > build   # recent cache kept, not all of it
     assert "system prune" not in launch_sh and "builder prune -af" not in launch_sh
+
+
+def test_the_classifier_installs_cpu_only_pytorch_and_one_copy_of_the_weights(monkeypatch):
+    """The classifier runs on CPU: PyTorch comes from its CPU-only index before the requirements (from PyPI it is the
+    CUDA build, several GB larger), and the model is fetched without other frameworks' weights or a second copy."""
+    import importlib
+    import sys
+    import types
+    lines = (ROOT / "classifier" / "Dockerfile").read_text().splitlines()
+    cpu = next(i for i, x in enumerate(lines) if "download.pytorch.org/whl/cpu" in x and "pip install" in x)
+    reqs = next(i for i, x in enumerate(lines) if "pip install -r requirements.txt" in x)
+    assert cpu <= reqs
+    hub = types.ModuleType("huggingface_hub")
+    hub.HfApi, hub.snapshot_download = object, None
+    labels = types.ModuleType("labels")
+    labels.build_table = None
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
+    monkeypatch.setitem(sys.modules, "labels", labels)
+    monkeypatch.syspath_prepend(str(ROOT / "classifier"))
+    download = importlib.import_module("download")
+    both = ["config.json", "model.safetensors", "pytorch_model.bin", "tf_model.h5", "vocab.txt"]
+    assert "*.bin" in download.ignored(both) and "*.h5" in download.ignored(both)
+    assert "*.bin" not in download.ignored(["config.json", "pytorch_model.bin", "tf_model.h5"])   # the only copy
