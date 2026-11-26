@@ -165,6 +165,10 @@ https://github.com/modelcontextprotocol/registry/releases), sign in as an owner 
   in two months. To see what the images and the cache hold, and how full the disk is: `sudo docker system df` and
   `df -h /`. After changing `.env`:
   `sudo /opt/entrylib/portal/deploy/launch.sh`.
+- **While the app restarts** (an update, the daily restart): the static pages go on. A request for the app waits for it
+  for up to 30 seconds, then gets its answer; if the app is still away, a person gets the page *EntryLib is being
+  updated* (`/503.html`, reloading itself) and `/api` and `/mcp` a JSON error to retry (design §7.4, `deploy/Caddyfile`).
+  The page is written with the other static pages, so a new server shows it only after the first build.
 - **Claimset updates** need nothing: the app restarts daily at 04:17 UTC, installs the newest claimset from PyPI (design §10),
   and rebuilds the reading views and the pages if claimset or the site changed. At once: `cd /opt/entrylib/portal && sudo docker compose
   restart app`.
