@@ -291,8 +291,8 @@ def test_the_pages_and_the_switch_between_them():
             '<span class="pv-toc-id">C1</span> <span>The term depends on the ratio' in page)
     assert "<details class=\"pv-toc-fold\" open" not in page
     # what a program is given at the claimset's address does not depend on the view (design §7.1): the server's
-    # rules look at the address, and the page still tells an assistant where the reading view is
-    assert f"{BASE}/p/2026.000099@v1.read" in page and "/p/2026.000099@v1.txt" in page
+    # rules look at the address, and the page still tells an assistant where the overview is
+    assert f"{BASE}/p/2026.000099/v1/overview.read" in page and "/p/2026.000099@v1.txt" in page
     caddy = (Path(site.__file__).parents[2] / "deploy" / "Caddyfile").read_text(encoding="utf-8")
     assert "rewrite @assistant /p/{re.paper.1}/overview.read.html" in caddy                 # the overview (§7.1)
     assert "rewrite @wants_text /p/{re.paper.1}/overview.txt" in caddy

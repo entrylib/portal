@@ -586,7 +586,8 @@ PRINT_BUTTON = ('<button type="button" class="button-quiet pv-print" aria-label=
 def ask_ai(doc, base_url, cid=None, printed=False):
     """The buttons under the byline (design §7.4, *Three buttons* and *Ask your AI*), in one row: with `printed`
     (the paper view) "PDF", which prints the page; "Ask your AI", which copies a message for an AI assistant, which
-    reads the claimset's reading view as a web page (or the claim's page); and "Text file for AI", a link that
+    starts at the overview as a web page (/p/<key>/v<n>/overview.read; for a claim, the claim's page) and opens the
+    claims it needs; and "Text file for AI", a link that
     downloads the reading view of this version (or of the claim) as a file, for an assistant that cannot open the
     address. What each does is its tooltip, and the message the button copies is not shown (design §7.4, *A leaner
     paper page*)."""
@@ -598,9 +599,10 @@ def ask_ai(doc, base_url, cid=None, printed=False):
                    "says and how well it is supported.")
         text, name, whole = f"/p/{key}/{cid}.txt", f"entrylib-{key}-v{n}-{cid}.txt", "the claim with what it rests on"
     else:
-        what, url = "paper", f"{base_url}/p/{key}@v{n}.read"
-        message = (f"Read {url}, a research paper written as claims with their evidence. Give me a brief summary of "
-                   "its main findings and how well each is supported.")
+        what, url = "paper", f"{base_url}/p/{key}/v{n}/overview.read"   # the overview: where an assistant starts
+        message = (f"Read {url}, the overview of a research paper written as claims with their evidence. It lists the "
+                   "main findings and gives the address of each claim's own file: open the ones you need. Give me a "
+                   "brief summary of its main findings and how well each is supported.")
         text, name, whole = f"/p/{key}@v{n}.txt", f"entrylib-{key}-v{n}.txt", "the whole paper"
     message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
     return ('<div class="ask-ai"><div class="ask-row">' + (PRINT_BUTTON if printed else "")
@@ -2080,6 +2082,22 @@ def not_found_page():
     return shell("Page not found", main, head='<meta name="robots" content="noindex">')
 
 
+#: How long a visitor waits before the page saying the site is being updated reloads itself; Caddy's Retry-After too.
+RETRY_SECONDS = 30
+
+
+def unavailable_page():
+    """What a person gets while the app restarts and Caddy cannot reach it (deploy/Caddyfile, design §7.4): the site
+    is being updated, the page reloads itself, and what still works meanwhile. It links only to static pages, which
+    Caddy serves while the app is away."""
+    main = ('<div class="wrap prose"><h1>EntryLib is being updated</h1>'
+            f'<p class="lead">It should be back shortly. This page reloads itself every {RETRY_SECONDS} seconds.</p>'
+            "<p>Papers and their pages can still be read. Searching, submitting and signing in return when the update "
+            'ends.</p><p><a href="/all">Browse all papers</a> · <a href="/">Home</a></p></div>')
+    return shell("EntryLib is being updated", main,
+                 head=f'<meta name="robots" content="noindex"><meta http-equiv="refresh" content="{RETRY_SECONDS}">')
+
+
 def message_page(title, text, link=None):
     """A short page after an action: what happened, and where to go next."""
     more = f'<p><a href="{esc(link[0])}">{esc(link[1])}</a></p>' if link else ""
@@ -2244,6 +2262,7 @@ def write_fixed(published_dir, base_url):
         _write(published_dir / f"{name}.html", fixed_page(name, base_url))
     _write(published_dir / "site.css", _static("site.css").read_text(encoding="utf-8"))
     _write(published_dir / "404.html", not_found_page())               # Caddy's answer to a missing static file
+    _write(published_dir / "503.html", unavailable_page())             # Caddy's answer while the app restarts
     subs = _subfields()                                     # for agents proposing a subfield (claimset spec §3.1)
     _write(published_dir / "subfields.json", json.dumps(
         [{"id": f"openalex:subfields/{k}", "name": v} for k, v in sorted(subs.items(), key=lambda kv: kv[1])],
