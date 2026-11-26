@@ -583,11 +583,12 @@ PRINT_BUTTON = ('<button type="button" class="button-quiet pv-print" aria-label=
                 'title="Print or save as PDF: the whole paper, every proof open" hidden>PDF</button>')
 
 
-def ask_ai(doc, base_url, cid=None, printed=False):
+def ask_ai(doc, base_url, cid=None, printed=False, current=True):
     """The buttons under the byline (design §7.4, *Three buttons* and *Ask your AI*), in one row: with `printed`
     (the paper view) "PDF", which prints the page; "Ask your AI", which copies a message for an AI assistant, which
-    starts at the overview as a web page (/p/<key>/v<n>/overview.read; for a claim, the claim's page) and opens the
-    claims it needs; and "Text file for AI", a link that
+    starts at the paper's own address (/p/<key>, an earlier version's /p/<key>@v<n>; for a claim, the claim's page),
+    where an assistant's fetcher gets the overview, and opens the claims it needs. It is the address search engines
+    index: Gemini opens only addresses Google knows (design §7.4, *Ask your AI*); and "Text file for AI", a link that
     downloads the reading view of this version (or of the claim) as a file, for an assistant that cannot open the
     address. What each does is its tooltip, and the message the button copies is not shown (design §7.4, *A leaner
     paper page*)."""
@@ -599,10 +600,11 @@ def ask_ai(doc, base_url, cid=None, printed=False):
                    "says and how well it is supported.")
         text, name, whole = f"/p/{key}/{cid}.txt", f"entrylib-{key}-v{n}-{cid}.txt", "the claim with what it rests on"
     else:
-        what, url = "paper", f"{base_url}/p/{key}/v{n}/overview.read"   # the overview: where an assistant starts
-        message = (f"Read {url}, the overview of a research paper written as claims with their evidence. It lists the "
-                   "main findings and gives the address of each claim's own file: open the ones you need. Give me a "
-                   "brief summary of its main findings and how well each is supported.")
+        what, url = "paper", f"{base_url}/p/{key}" if current else f"{base_url}/p/{key}@v{n}"
+        message = (f"Read {url}, a research paper written as claims with their evidence. An AI assistant gets its "
+                   "overview there, which lists the main findings and gives the address of each claim's own file: "
+                   "open the ones you need. Give me a brief summary of its main findings and how well each is "
+                   "supported.")
         text, name, whole = f"/p/{key}@v{n}.txt", f"entrylib-{key}-v{n}.txt", "the whole paper"
     message += " If you cannot open the link, tell me instead of guessing. Then wait for my questions."
     return ('<div class="ask-ai"><div class="ask-row">' + (PRINT_BUTTON if printed else "")
@@ -1043,7 +1045,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     switch = view_switch(key, "record") if not current or current == n else ""
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}{note}'
-            f'{parts["header"]}{_origin_line(doc, origin, lab)}{ask_ai(doc, base_url)}</div>'
+            f'{parts["header"]}{_origin_line(doc, origin, lab)}'
+            f'{ask_ai(doc, base_url, current=not current or current == n)}</div>'
             f'{_panel(doc, parts, base_url, key, scores, lab)}'
             f'{nav}<article class="cs-body">{body}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'

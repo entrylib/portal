@@ -114,6 +114,10 @@ def test_bundles_follow_the_current_version(env):
     for f in (p / f"{KEY}@v2.read.html", p / f"{KEY}.read.html", p / KEY / "v2" / "overview.read.html",
               p / KEY / "overview.read.html"):
         assert canonical(f) == f"{BASE}/p/{KEY}", f
+    # Ask your AI gives the address a search engine indexes (design §7.4): the claimset's, an earlier version's own
+    assert f"Read {BASE}/p/{KEY}, a research paper" in (p / f"{KEY}.html").read_text()
+    assert f"Read {BASE}/p/{KEY}, a research paper" in (p / f"{KEY}@v2.html").read_text()
+    assert f"Read {BASE}/p/{KEY}@v1, a research paper" in (p / f"{KEY}@v1.html").read_text()
 
 
 class TestSearch:
