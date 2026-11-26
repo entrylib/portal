@@ -96,7 +96,21 @@ def test_static_not_found_page(env):
     site.write_fixed(ctx["published_dir"], BASE)
     assert "We could not find that page" in (ctx["published_dir"] / "404.html").read_text()
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
-    assert "handle_errors 404 {" in caddy and "rewrite * /404.html" in caddy
+    assert "@missing expression `{err.status_code} == 404`" in caddy and "rewrite * /404.html" in caddy
+
+
+def test_while_the_app_restarts(env):
+    """Design §7.4: a request for the app waits for it, then gets the site's page saying it is being updated (or, for
+    programs, a JSON error to retry), never a bare 502."""
+    ctx, _ = env
+    site.write_fixed(ctx["published_dir"], BASE)
+    page = (ctx["published_dir"] / "503.html").read_text()
+    assert "EntryLib is being updated" in page and f'http-equiv="refresh" content="{site.RETRY_SECONDS}"' in page
+    assert 'content="noindex"' in page and "<form" not in page                    # links only to static pages
+    caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
+    assert f"lb_try_duration {site.RETRY_SECONDS}s" in caddy and f"Retry-After {site.RETRY_SECONDS}" in caddy
+    assert "rewrite * /503.html" in caddy and "status 503" in caddy
+    assert "path('/api/*', '/mcp', '/mcp/*')" in caddy and '"error": "EntryLib is being updated' in caddy
 
 
 # Round 2 (design §7.4, §7.7)
