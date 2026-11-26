@@ -65,7 +65,8 @@ def test_split_views(env):
         assert claim.startswith(f"CLAIM C2 of {concept}@v1") and f"FILES at {base}:" in claim and "HOW TO CITE" in claim
         page = (folder / "overview.read.html").read_text()
         assert f'<a href="{base}C2.txt">{base}C2.txt</a>' in page and "<script" not in page
-        assert f'<link rel="canonical" href="{BASE}/p/{KEY}@v1">' in page
+        assert f'<link rel="canonical" href="{BASE}/p/{KEY}">' in page                # the current version's page
+        assert "<body><!--email_off-->" in page and "</pre><!--/email_off-->" in page     # Cloudflare: see site.py
 
 
 def test_the_overview_page_escapes_and_links():
@@ -105,6 +106,15 @@ def test_bundles_follow_the_current_version(env):
     assert "C1.txt" not in names and "C1.json" not in names and "C2.txt" in names
     assert (ctx["published_dir"] / "p" / KEY / "v1" / "C1.txt").exists()            # a version keeps its own
     assert not (ctx["published_dir"] / "p" / KEY / "v2" / "C1.txt").exists()
+    # the web pages for assistants name the page a search engine should index, in one step: an earlier version's own,
+    # the current version's at the claimset's address (as its @v<n> page does)
+    p = ctx["published_dir"] / "p"
+    canonical = lambda f: re.search(r'<link rel="canonical" href="([^"]+)">', f.read_text()).group(1)  # noqa: E731
+    for f in (p / f"{KEY}@v1.read.html", p / KEY / "v1" / "overview.read.html"):
+        assert canonical(f) == f"{BASE}/p/{KEY}@v1", f
+    for f in (p / f"{KEY}@v2.read.html", p / f"{KEY}.read.html", p / KEY / "v2" / "overview.read.html",
+              p / KEY / "overview.read.html"):
+        assert canonical(f) == f"{BASE}/p/{KEY}", f
 
 
 class TestSearch:

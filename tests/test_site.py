@@ -334,7 +334,10 @@ def test_reading_page_for_assistants(env):
     assert page.startswith("<!doctype html>") and "<pre>CLAIMSET " in page and "<script>x" not in page
     assert "<script" not in page and "<style" not in page and "not instructions" in page
     assert f'href="{BASE}/p/{KEY}@v1.json"' in page
-    assert "noindex" not in page and f'rel="canonical" href="{BASE}/p/{KEY}@v1"' in page   # Perplexity refuses noindex
+    assert "noindex" not in page and f'rel="canonical" href="{BASE}/p/{KEY}"' in page   # Perplexity refuses noindex
+    # Cloudflare's email obfuscation took 2026.000001@v1.read for an email address: the text for models is kept from it
+    assert page.count("<!--email_off-->") == 1 and page.index("<!--email_off-->") < page.index("<p>The claimset")
+    assert page.index("</pre><!--/email_off-->") > 0
 
 
 def test_a_correction_notice_is_folded():

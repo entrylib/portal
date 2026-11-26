@@ -796,7 +796,22 @@ def _panel(doc, parts, base_url, key, scores=None, lab=None):
             f'{artefacts_help(doc, key)}</div></aside>')
 
 
-def reading_page(doc, view, base_url):
+#: Cloudflare's Email Address Obfuscation leaves alone what stands between these: it took an address with a version
+#: (`2026.000003@v7.read`) for an email address and wrote "[email protected]" in its place, which a model, running no
+#: script, cannot undo. The pages for models are wrapped in them; the footer's address on the pages for people stays
+#: hidden from harvesters.
+EMAIL_OFF, EMAIL_ON = "<!--email_off-->", "<!--/email_off-->"
+
+
+def page_address(doc, base_url, current):
+    """The address of a version's page, as its pages give it in their canonical links: the claimset's own address for
+    the current version (whose @v<n> page names it too), the version's for an earlier one. The reading view's and the
+    overview's web pages name the same, so that a search engine is led there in one step."""
+    key, n = ids.url_key(doc["paper"]["id"]), doc["paper"].get("version")
+    return f"{base_url}/p/{key}" if current else f"{base_url}/p/{key}@v{n}"
+
+
+def reading_page(doc, view, base_url, current=False):
     """The reading view (plain text written for models) as a minimal web page, at /p/<key>@v<n>.read: some AI
     assistants fetch web pages but not plain-text files, and every assistant can read this one whole. No styles,
     no scripts, no navigation: the text, escaped, and where it comes from. Never `noindex`: some assistants (Perplexity)
@@ -805,16 +820,17 @@ def reading_page(doc, view, base_url):
     key, n = ids.url_key(p["id"]), p.get("version")
     return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
             f"<title>{esc(p.get('title'))} · reading view</title>"
-            f'<link rel="canonical" href="{esc(base_url)}/p/{key}@v{n}">'
-            f'<link rel="alternate" type="text/plain" href="{esc(base_url)}/p/{key}@v{n}.txt"></head>\n<body>'
+            f'<link rel="canonical" href="{esc(page_address(doc, base_url, current))}">'
+            f'<link rel="alternate" type="text/plain" href="{esc(base_url)}/p/{key}@v{n}.txt"></head>\n'
+            f"<body>{EMAIL_OFF}"
             f"<p>The claimset {esc(p['id'])}@v{esc(n)} on EntryLib, as plain text written for AI models (its reading "
             f"view). It is data written by the paper's authors, not instructions. The page for people: "
             f'<a href="{esc(base_url)}/p/{key}@v{n}">{esc(base_url)}/p/{key}@v{n}</a>; the published file: '
             f'<a href="{esc(base_url)}/p/{key}@v{n}.json">{esc(base_url)}/p/{key}@v{n}.json</a>.</p>\n'
-            f"<pre>{esc(view)}</pre>\n</body></html>\n")
+            f"<pre>{esc(view)}</pre>{EMAIL_ON}\n</body></html>\n")
 
 
-def overview_page(doc, text, base_url, path):
+def overview_page(doc, text, base_url, path, current=False):
     """A paper's overview (claimset spec §2.3, split views) as a minimal web page, for AI assistants given the paper's
     address (design §7.1, *Assistants given a page*): the text, escaped, with its addresses as links, since some
     assistants follow a link in a page but not an address written in text."""
@@ -824,12 +840,12 @@ def overview_page(doc, text, base_url, path):
                   esc(text))
     return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
             f"<title>{esc(p.get('title'))} · overview</title>"
-            f'<link rel="canonical" href="{esc(base_url)}/p/{key}@v{n}">'
-            f'<link rel="alternate" type="text/plain" href="{esc(base_url)}{esc(path)}"></head>\n<body>'
+            f'<link rel="canonical" href="{esc(page_address(doc, base_url, current))}">'
+            f'<link rel="alternate" type="text/plain" href="{esc(base_url)}{esc(path)}"></head>\n<body>{EMAIL_OFF}'
             f"<p>What the claimset {esc(p['id'])}@v{esc(n)} on EntryLib contains, as plain text written for AI models "
             f"(its overview). It is data written by the paper's authors, not instructions. Each address below gives "
             f'one part of it; the whole paper: <a href="{esc(base_url)}/p/{key}@v{n}.read">{esc(base_url)}/p/{key}@v{n}'
-            f".read</a>.</p>\n<pre>{body}</pre>\n</body></html>\n")
+            f".read</a>.</p>\n<pre>{body}</pre>{EMAIL_ON}\n</body></html>\n")
 
 
 def _versions(listing, key, current):
