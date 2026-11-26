@@ -37,10 +37,10 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 - {base}/p/<year>.<number>/overview.txt: what the paper contains, in a few lines: its summary, its claims by name
   (principal ones marked *), its key terms, and the address of each part. Start here: a whole paper can run to tens
   of thousands of tokens. An assistant given a paper's address ({base}/p/<year>.<number>) gets this overview there.
-- {base}/p/<year>.<number>/C4.txt: one claim, with its assumptions and limitations, the definitions it names, the
-  rows and results of the evidence it cites, and its references; E2.txt one evidence object whole, D17.txt one
-  definition, references.txt the references. Each file names the files of what it cites. For a given version, the
-  same files are in {base}/p/<year>.<number>/v<n>/.
+- {base}/p/<year>.<number>/C4.txt: one claim, with its limitations, the definitions it names, the rows and results of
+  the evidence it cites, its references, and its assumptions by name (each assumption has a file of its own, as a
+  claim does); E2.txt one evidence object whole, D17.txt one definition, references.txt the references. Each file
+  names the files of what it cites. For a given version, the same files are in {base}/p/<year>.<number>/v<n>/.
 - {base}/p/<year>.<number>.json: the current version, the published file (JSON).
 - {base}/p/<year>.<number>.txt: its whole reading view (plain text): the whole paper in one file.
 - {base}/p/<year>.<number>.read: the same reading view as a plain web page, for assistants that fetch web pages but
