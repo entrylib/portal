@@ -28,6 +28,7 @@ from . import areas, chrome, ids, indexnow, limits, planning, score_html, skills
 from . import page as pageview
 from . import paper as paperview
 from . import scores as score_data
+from . import text as textview
 from .chrome import (  # noqa: F401 - the shell and its constants, used here and by site's callers
     BUTTON,
     CARET,
@@ -1123,8 +1124,8 @@ def _paper_body(doc, parts, record, more, *, file_url=None, ref_text=None, score
              if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)}
     def by_name(cids):                                   # claims in the contents: the ID, then the name
         return '<ol class="pv-toc">' + "".join(
-            f'<li><a href="#{esc(cid)}"><span class="pv-toc-id">{esc(cid)}</span> <span>{esc(names.get(cid, ""))}'
-            f'</span></a></li>' for cid in cids) + "</ol>"
+            f'<li><a href="#{esc(cid)}"><span class="pv-toc-id">{esc(cid)}</span> '
+            f'<span>{textview.html(names.get(cid, ""))}</span></a></li>' for cid in cids) + "</ol>"
     for sid, title, c, block in view["sections"]:
         body.append(block)
         inner = ""
@@ -1687,7 +1688,8 @@ def fixed_page(name, base_url):
     file, title, active, description = PAGES[name]
     body = (_static(f"pages/{file}").read_text(encoding="utf-8").replace("{base}", base_url)
             .replace("{new_per_week}", str(limits.NEW_PER_WEEK))
-            .replace("{versions_per_day}", str(limits.VERSIONS_PER_DAY)).replace("{how_to_read}", HOW_TO_READ)
+            .replace("{versions_per_week}", limits.plural(limits.VERSIONS_PER_WEEK, "new version"))
+            .replace("{how_to_read}", HOW_TO_READ)
             .replace("{convert_request}", esc(skills.shown(base_url)))
             .replace("{plan_request}", esc(planning.short(base_url))))
     return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,

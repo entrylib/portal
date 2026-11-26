@@ -153,6 +153,21 @@ def test_a_scope_is_written_with_its_formulae():
     assert "<math>" in scope and "$s=0.32$" not in scope
 
 
+def test_a_name_and_a_check_are_written_with_their_formulae():
+    doc = proofs()
+    c = doc["claims"][3]
+    c["name"] = "The $\\mathrm{MSE}_h$ likelihood"
+    c["checks"] = [{"by": doc["contributors"][0]["id"], "outcome": "confirmed", "extent": "full",
+                    "notes": "Derived $s_1^2$ by hand.", "resolution": "Rechecked at $h = 2$."}]
+    page = site.paper_page(doc, base_url=BASE, listing=[{"version": 1, "date": "2026-11-17"}])
+    c4 = article(page, c["id"])
+    assert "$\\mathrm{MSE}_h$" not in c4 and "$s_1^2$" not in c4 and "$h = 2$" not in c4
+    assert c4.count("<math>") >= 3                                # the name, the note and the resolution
+    toc = page.split('class="pv-toc')[1] if 'class="pv-toc' in page else ""
+    assert "$\\mathrm{MSE}_h$" not in page.split("<main")[0] + toc   # nor in the contents
+    assert 'title="The MSEh likelihood"' in page or "\\mathrm" not in page.split(c["id"])[0]
+
+
 def test_evidence_under_a_computed_claim():
     sections, out = view(proofs())
     c4 = sections["claims"][sections["claims"].index('id="C4"'):]

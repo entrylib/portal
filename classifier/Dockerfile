@@ -9,7 +9,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 CLASSIFIER_D
 RUN useradd --create-home --uid 10002 classifier
 WORKDIR /srv
 COPY requirements.txt ./
-RUN pip install -r requirements.txt
+# PyTorch from its CPU-only index first: from PyPI it is the CUDA build, which brings several GB of GPU libraries this
+# CPU-only service never uses. The requirements then find it installed.
+RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" \
+ && pip install -r requirements.txt
 COPY labels.py download.py server.py ./
 ARG CLASSIFIER_MODEL_REVISION=main
 RUN --mount=type=secret,id=openalex_api_key \

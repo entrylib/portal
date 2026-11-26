@@ -202,6 +202,16 @@ class TestTermsReferencesMaths(unittest.TestCase):
         body = H.render_parts(doc)["body"]
         self.assertNotIn("column $s_h^2$", body)                                       # set, not raw
 
+    def test_formulas_in_an_evidence_foundation_and_estimand(self):
+        doc = example()
+        e = doc["evidence"][0]
+        e["foundation"] = "power series in the backshift operator $B$"
+        e["estimand"] = "the mean of $\\hat{\\sigma}^2$"
+        e["estimate"] = 0.5
+        body = H.render_parts(doc)["body"]
+        self.assertNotIn("operator $B$", body)
+        self.assertNotIn("$\\hat{\\sigma}^2$", body)
+
     def test_a_fenced_block_is_a_block(self):
         P = H._Paper({"paper": {}})
         out = P.text("Run:\n```r\nfit <- adam(y, h = 12)\nif (a != b) x <- 1\n```\nthen `es()` inline.")
