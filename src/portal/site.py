@@ -1006,11 +1006,11 @@ def for_ai(doc, base_url, current=True, cid=None):
     same text for people and programs."""
     key, n = ids.url_key(doc["paper"]["id"]), doc["paper"].get("version")
     if cid:
-        url, what = f"{base_url}/p/{key}/{cid}.txt", "this claim with what it rests on, as plain text"
+        url, what = f"{base_url}/p/{key}/{cid}.txt", "this claim as plain text"
     else:
         url = f"{base_url}/p/{key}/overview.txt" if current else f"{base_url}/p/{key}/v{n}/overview.txt"
-        what = "this page is long. Read its overview, a few kilobytes of plain text"
-    return f'<p class="for-ai">For AI assistants: {what}: <a href="{esc(url)}">{esc(url)}</a></p>'
+        what = "read the overview"
+    return f'<p class="for-ai">AI assistants: {what}: <a href="{esc(url)}">{esc(url)}</a></p>'
 
 
 def not_claimed(doc):

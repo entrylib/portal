@@ -124,7 +124,7 @@ def test_bundles_follow_the_current_version(env):
                       (p / f"{KEY}@v1.html", f"{BASE}/p/{KEY}/v1/overview.txt"),
                       (p / KEY / "C2.html", f"{BASE}/p/{KEY}/C2.txt")):
         html = page.read_text()
-        line = '<p class="for-ai">For AI assistants: '
+        line = '<p class="for-ai">AI assistants: '
         assert line in html and f'<a href="{url}">{url}</a></p>' in html, page
         assert html.index(line) < html.index('<p class="entry-top">'), page        # before the paper's own text
 
