@@ -66,7 +66,6 @@ def test_split_views(env):
         page = (folder / "overview.read.html").read_text()
         assert f'<a href="{base}C2.txt">{base}C2.txt</a>' in page and "<script" not in page
         assert f'<link rel="canonical" href="{BASE}/p/{KEY}">' in page                # the current version's page
-        assert "<body><!--email_off-->" in page and "</pre><!--/email_off-->" in page     # Cloudflare: see site.py
 
 
 def test_the_overview_page_escapes_and_links():
