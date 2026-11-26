@@ -296,8 +296,9 @@ def test_the_pages_and_the_switch_between_them():
     caddy = (Path(site.__file__).parents[2] / "deploy" / "Caddyfile").read_text(encoding="utf-8")
     assert "rewrite @assistant /p/{re.paper.1}/overview.read.html" in caddy                 # the overview (§7.1)
     assert "rewrite @wants_text /p/{re.paper.1}/overview.txt" in caddy
-    assert "rewrite @wants_text_claim {path}.txt" in caddy
-    assert "rewrite @wants_json {path}.json" in caddy and "/record" not in caddy
+    assert "rewrite @wants_text_claim {re.claim.1}.txt" in caddy
+    assert "rewrite @wants_json {re.json.1}.json" in caddy and "/record" not in caddy
+    assert "rewrite @slash {re.slash.1}" in caddy                    # /p/<id>/ is /p/<id>, for people too
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
     assert '<a href="/p/2026.000099/record" aria-current="page"' in record
     assert '<a href="/p/2026.000099" title' in record
