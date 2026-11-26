@@ -324,16 +324,17 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
                     _write(p / f"{key}.issues.txt", issues)
         _write(p / f"{key}@v{n}.json", text)
         _write(p / f"{key}@v{n}.txt", view)
-        reading = site.reading_page(doc, view, base_url)       # the same text as a web page, for assistants
+        latest = n == versions[-1]
+        reading = site.reading_page(doc, view, base_url, latest)    # the same text as a web page, for assistants
         _write(p / f"{key}@v{n}.read.html", reading)
         score_line = scores.line(scored[n])
-        write_views(p / key / f"v{n}", doc, base_url, f"/p/{key}/v{n}/", f"/p/{key}@v{n}.txt", score_line)
-        if n == versions[-1]:
+        write_views(p / key / f"v{n}", doc, base_url, f"/p/{key}/v{n}/", f"/p/{key}@v{n}.txt", score_line, latest)
+        if latest:
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
             _write(p / f"{key}.read.html", reading)
             write_bundles(p / key, doc)
-            write_views(p / key, doc, base_url, f"/p/{key}/", f"/p/{key}.txt", score_line)
+            write_views(p / key, doc, base_url, f"/p/{key}/", f"/p/{key}.txt", score_line, latest)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab, record = {}, None
         if lab_copy.exists():
@@ -593,7 +594,7 @@ def write_bundles(directory, doc):
 SPLIT = re.compile(r"(overview\.txt|overview\.read\.html|references\.txt|[CED]\d+\.txt)")
 
 
-def write_views(directory, doc, base_url, folder, whole, score_line=None):
+def write_views(directory, doc, base_url, folder, whole, score_line=None, current=False):
     """The split views of one version (claimset spec §2.3; design §7.1), in `directory`, served at `folder`, beside the
     whole reading view at `whole`, replacing those of a version before; a claim's ends with how to cite it, and the
     overview is also written as a web page for assistants (overview.read.html)."""
@@ -607,7 +608,7 @@ def write_views(directory, doc, base_url, folder, whole, score_line=None):
             text += site.citation_note(doc, base_url, name[:-4])
         _write(directory / name, text)
     _write(directory / "overview.read.html",
-           site.overview_page(doc, written["overview.txt"], base_url, f"{folder}overview.txt"))
+           site.overview_page(doc, written["overview.txt"], base_url, f"{folder}overview.txt", current))
 
 
 def paper_card(doc, base_url):

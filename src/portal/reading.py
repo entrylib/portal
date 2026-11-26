@@ -37,9 +37,9 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
 - {base}/p/<year>.<number>/overview.txt: what the paper contains, in a few lines: its summary, its claims by name
   (principal ones marked *), its key terms, and the address of each part. Start here: a whole paper can run to tens
   of thousands of tokens. overview.read is the same as a plain web page, for assistants that fetch web pages but not
-  text files: when a person points an assistant at a paper, this is the address to give it, since some assistants
-  open only addresses they are given. An assistant given a paper's address ({base}/p/<year>.<number>) gets the
-  overview there too.
+  text files. An assistant given a paper's address ({base}/p/<year>.<number>) gets the overview there: when a person
+  points an assistant at a paper, that is the address to give it, since some assistants open only addresses a search
+  engine knows.
 - {base}/p/<year>.<number>/C4.txt: one claim, with its limitations and references; it names what it rests on, each in
   its own file: its assumptions (an assumption has a file as a claim does), the definitions it uses (D17.txt), and the
   evidence it cites (E2.txt), each table by title with the rows it cites. references.txt holds the references. Each
