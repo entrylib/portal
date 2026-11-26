@@ -5,7 +5,7 @@ import json
 from publishing import example, write
 from test_consent import sign_in, titled
 
-from portal import fetch, mcp_server
+from portal import fetch, ids, mcp_server
 
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
            "MCP-Protocol-Version": "2025-06-18"}
@@ -136,9 +136,16 @@ def test_search_and_read(app_client):
     assert all(isinstance(h["warnings"], list) and "paper_warnings" in h for h in hits)
     raw = ok(app_client, "get_paper", id=concept, format="json")
     assert "\n" not in raw.strip() and json.loads(raw) and ": " not in raw.split('"claims"')[0]   # compact
-    overview = ok(app_client, "get_paper", id=concept, part="overview")
-    assert overview.startswith("CLAIMSET") and "SECTIONS" in overview and "  claims: " in overview
-    assert len(overview) < len(view)
+    overview = ok(app_client, "get_paper", id=concept, part="overview")     # the split views' (claimset spec §2.3)
+    assert overview.startswith(f"OVERVIEW {concept}@v1") and "\nCLAIMS (* principal)\n" in overview
+    assert len(overview) < len(view) and f"/p/{ids.url_key(concept)}/C2.txt" in overview
+    assert f"/p/{ids.url_key(concept)}/v1/C2.txt" in ok(app_client, "get_paper", id=f"{concept}@v1", part="Overview")
+    assert ok(app_client, "get_paper", id=concept, part="e1").startswith(f"EVIDENCE E1 of {concept}@v1")
+    assert ok(app_client, "get_paper", id=concept, part="D1").startswith(f"DEFINITION D1 of {concept}@v1")
+    assert ok(app_client, "get_paper", id=concept, part="references").startswith("REFERENCES ")
+    assert ok(app_client, "get_paper", id=concept, part="C2") == ok(app_client, "get_claim", id=f"{concept}#C2")
+    err, text = call(app_client, "get_paper", id=concept, part="E9")
+    assert err and "has no E9" in text
     claims = ok(app_client, "get_paper", id=concept, part="Claims")
     assert claims.startswith("CLAIMS\n") and "DEFINITIONS" not in claims
     err, text = call(app_client, "get_paper", id=concept, part="nowhere")
