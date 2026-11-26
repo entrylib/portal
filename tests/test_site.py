@@ -285,7 +285,8 @@ def test_robots_and_for_models(env):
     # Ask your AI (design §7.4): a button copying a message that names the reading view's web page
     assert 'data-copy="ask-message"' in page and ">Ask your AI about this paper</button>" in page
     message = re.search(r'<span class="ask-message" id="ask-message" hidden>(.*?)</span>', page).group(1)
-    assert message.startswith(f"Read {BASE}/p/{KEY}@v1.read, a research paper") and "instead of guessing" in message
+    assert message.startswith(f"Read {BASE}/p/{KEY}/v1/overview.read, the overview of a research paper")   # §7.4
+    assert "open the ones you need" in message and "instead of guessing" in message
     claim = (out / "p" / KEY / "C2.html").read_text()
     assert ">Ask your AI about this claim</button>" in claim and f"Read {BASE}/p/{KEY}/C2, one claim" in claim
     # beside it, the reading view as a file to attach, for an assistant that cannot open the address

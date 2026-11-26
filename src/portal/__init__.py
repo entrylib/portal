@@ -1,6 +1,6 @@
 """EntryLib: the portal that publishes claimsets."""
 
-__version__ = "0.9.3"
+__version__ = "0.10.0"
 
 #: The oldest claimset package the portal works with. There is no upper bound: newer releases are expected to
 #: accept everything older ones accepted.
