@@ -294,7 +294,9 @@ def test_the_pages_and_the_switch_between_them():
     # rules look at the address, and the page still tells an assistant where the reading view is
     assert f"{BASE}/p/2026.000099@v1.read" in page and "/p/2026.000099@v1.txt" in page
     caddy = (Path(site.__file__).parents[2] / "deploy" / "Caddyfile").read_text(encoding="utf-8")
-    assert "rewrite @assistant {path}.read.html" in caddy and "rewrite @wants_text {path}.txt" in caddy
+    assert "rewrite @assistant /p/{re.paper.1}/overview.read.html" in caddy                 # the overview (§7.1)
+    assert "rewrite @wants_text /p/{re.paper.1}/overview.txt" in caddy
+    assert "rewrite @wants_text_claim {path}.txt" in caddy
     assert "rewrite @wants_json {path}.json" in caddy and "/record" not in caddy
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
     assert '<a href="/p/2026.000099/record" aria-current="page"' in record

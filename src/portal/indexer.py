@@ -34,7 +34,8 @@ import threading
 import unicodedata
 from pathlib import Path
 
-from claimset.claim import claim_bundle, render_claim
+from claimset import views
+from claimset.claim import claim_bundle
 from claimset.render import render
 from claimset.revision import doc_hash
 from psycopg.types.json import Jsonb
@@ -325,11 +326,14 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
         _write(p / f"{key}@v{n}.txt", view)
         reading = site.reading_page(doc, view, base_url)       # the same text as a web page, for assistants
         _write(p / f"{key}@v{n}.read.html", reading)
+        score_line = scores.line(scored[n])
+        write_views(p / key / f"v{n}", doc, base_url, f"/p/{key}/v{n}/", f"/p/{key}@v{n}.txt", score_line)
         if n == versions[-1]:
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
             _write(p / f"{key}.read.html", reading)
-            write_bundles(p / key, doc, base_url)
+            write_bundles(p / key, doc)
+            write_views(p / key, doc, base_url, f"/p/{key}/", f"/p/{key}.txt", score_line)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab, record = {}, None
         if lab_copy.exists():
@@ -571,19 +575,39 @@ def _lab_summary(record):
     return site.lab_summary(events)
 
 
-def write_bundles(directory, doc, base_url=None):
-    """The claim bundles of a version, replacing those of the version before (whose claims may differ); their reading
-    views end with how to cite the claim when `base_url` is given."""
+def write_bundles(directory, doc):
+    """The claim bundles (JSON) of the current version, replacing those of the version before (whose claims may
+    differ)."""
     directory = Path(directory)
-    for old in directory.glob("C*.*") if directory.exists() else []:
-        if re.fullmatch(r"C\d+\.(json|txt)", old.name):
+    for old in directory.glob("C*.json") if directory.exists() else []:
+        if re.fullmatch(r"C\d+\.json", old.name):
             old.unlink()
     for c in doc.get("claims") or []:
         cid = c.get("id") if isinstance(c, dict) else None
         if isinstance(cid, str) and re.fullmatch(r"C\d+", cid):
             _write(directory / f"{cid}.json", json.dumps(claim_bundle(doc, cid), indent=1, ensure_ascii=False) + "\n")
-            _write(directory / f"{cid}.txt", render_claim(doc, cid)
-                   + (site.citation_note(doc, base_url, cid) if base_url else ""))
+
+
+#: The files of the split views (claimset spec §2.3): the overview, a claim's, an evidence object's, a definition's, the
+#: references, and the overview as a web page for assistants.
+SPLIT = re.compile(r"(overview\.txt|overview\.read\.html|references\.txt|[CED]\d+\.txt)")
+
+
+def write_views(directory, doc, base_url, folder, whole, score_line=None):
+    """The split views of one version (claimset spec §2.3; design §7.1), in `directory`, served at `folder`, beside the
+    whole reading view at `whole`, replacing those of a version before; a claim's ends with how to cite it, and the
+    overview is also written as a web page for assistants (overview.read.html)."""
+    directory = Path(directory)
+    for old in directory.iterdir() if directory.exists() else []:
+        if old.is_file() and SPLIT.fullmatch(old.name):
+            old.unlink()
+    written = views.files(doc, f"{base_url}{folder}", f"{base_url}{whole}", score=score_line)
+    for name, text in written.items():
+        if re.fullmatch(r"C\d+\.txt", name):
+            text += site.citation_note(doc, base_url, name[:-4])
+        _write(directory / name, text)
+    _write(directory / "overview.read.html",
+           site.overview_page(doc, written["overview.txt"], base_url, f"{folder}overview.txt"))
 
 
 def paper_card(doc, base_url):
