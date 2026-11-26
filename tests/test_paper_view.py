@@ -357,7 +357,7 @@ def test_the_page_prints_whole_and_the_manuscript_is_linked():
     css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
     js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
     assert "@media print {" in css and ".entry > .panel, .entry-rail, #score, #versions" in css
-    assert ".toc-bar, .to-top, .intro-strip, .view-switch, .ask-ai," in css     # the row of buttons is not printed
+    assert ".toc-bar, .to-top, .intro-strip, .for-ai, .view-switch, .ask-ai," in css   # nor the row of buttons
     assert 'window.addEventListener("beforeprint", openAll)' in js and 'querySelectorAll("details.pv-proof")' in js
 
 
