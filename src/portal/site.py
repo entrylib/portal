@@ -998,6 +998,21 @@ INTRO_STRIP = ('<p class="intro-strip" id="intro-strip">You are reading a resear
                'page</a></p></template>')
 
 
+def for_ai(doc, base_url, current=True, cid=None):
+    """A line near the top of a paper's page (and a claim's) for AI assistants that fetch it as a page (design §7.4,
+    *For AI assistants*): an assistant whose fetcher the server does not recognise gets the whole page, hundreds of
+    kilobytes, and a small context window stops part way (DeepSeek stopped at C20 of 30); near the top, the line
+    sends it to the overview (a claim's page: the claim's file) before it runs out of room. Visible, not hidden: the
+    same text for people and programs."""
+    key, n = ids.url_key(doc["paper"]["id"]), doc["paper"].get("version")
+    if cid:
+        url, what = f"{base_url}/p/{key}/{cid}.txt", "this claim as plain text"
+    else:
+        url = f"{base_url}/p/{key}/overview.txt" if current else f"{base_url}/p/{key}/v{n}/overview.txt"
+        what = "read the overview"
+    return f'<p class="for-ai">AI assistants: {what}: <a href="{esc(url)}">{esc(url)}</a></p>'
+
+
 def not_claimed(doc):
     """The section *Not claimed* (design §7.6): the paper's planned proofs that give no claim of their own and went into
     no claim (claimset §3.1.1, `exploration.not_claimed` without `into`), one item each; those with `into` are shown
@@ -1044,7 +1059,8 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
     # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
     switch = view_switch(key, "record") if not current or current == n else ""
     main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
-            f'{INTRO_STRIP}{switch}<p class="entry-top">{" · ".join(top)}</p>{newer}{note}'
+            f'{INTRO_STRIP}{for_ai(doc, base_url, not current or current == n)}{switch}'
+            f'<p class="entry-top">{" · ".join(top)}</p>{newer}{note}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}'
             f'{ask_ai(doc, base_url, current=not current or current == n)}</div>'
             f'{_panel(doc, parts, base_url, key, scores, lab)}'
@@ -1203,7 +1219,7 @@ def paper_page(doc, *, base_url, listing, lab=None, file_url=None, ref_text=None
                 f'<p class="pv-print-id">{esc(p["id"])}@v{esc(n)} · <a href="{esc(base_url)}/p/{esc(key)}@v{esc(n)}">'
                 f'{esc(base_url)}/p/{esc(key)}@v{esc(n)}</a></p>{score_html.print_line(scores)}')
     main = (f'<div class="cs-page entry" data-view="paper"><div class="cs-header entry-header">'
-            f'{INTRO_STRIP}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
+            f'{INTRO_STRIP}{for_ai(doc, base_url)}{view_switch(key, "paper")}<p class="entry-top">{" · ".join(top)}</p>'
             f'{note}{parts["header"]}{_origin_line(doc, parts["origin"], lab)}'
             f'{ask_ai(doc, base_url, printed=True)}{document}<div class="pv-opening">{opening}</div></div>'
             # the rail (site.css): the panel, and directly under it the contents, to the right of the text
@@ -1438,7 +1454,7 @@ def claim_page(doc, cid, *, base_url, scores=None, file_url=None, ref_text=None,
     switch = view_switch(key, view, paper_href=f"/p/{key}/{cid}", record_href=f"/p/{key}/{cid}/record",
                          what="claim")
     main = (f'<div class="cs-page entry claim-entry" data-view="{"paper" if view == "paper" else "record"}">'
-            f'<div class="cs-header entry-header">{switch}'
+            f'<div class="cs-header entry-header">{for_ai(doc, base_url, cid=cid)}{switch}'
             f'<p class="entry-top">{" · ".join(t for t in top if t)}</p>{note}'
             f'<h1 class="cs-title">{esc(title)} <span class="claim-code">· {esc(cid)}</span></h1>{origin}'
             f'{ask_ai(doc, base_url, cid)}</div>'

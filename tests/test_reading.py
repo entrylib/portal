@@ -118,6 +118,15 @@ def test_bundles_follow_the_current_version(env):
     assert f"Read {BASE}/p/{KEY}, a research paper" in (p / f"{KEY}.html").read_text()
     assert f"Read {BASE}/p/{KEY}, a research paper" in (p / f"{KEY}@v2.html").read_text()
     assert f"Read {BASE}/p/{KEY}@v1, a research paper" in (p / f"{KEY}@v1.html").read_text()
+    # near the top, for an assistant that gets the whole page (design §7.4, *For AI assistants*)
+    for page, url in ((p / f"{KEY}.html", f"{BASE}/p/{KEY}/overview.txt"),
+                      (p / f"{KEY}@v2.html", f"{BASE}/p/{KEY}/overview.txt"),
+                      (p / f"{KEY}@v1.html", f"{BASE}/p/{KEY}/v1/overview.txt"),
+                      (p / KEY / "C2.html", f"{BASE}/p/{KEY}/C2.txt")):
+        html = page.read_text()
+        line = '<p class="for-ai">AI assistants: '
+        assert line in html and f'<a href="{url}">{url}</a></p>' in html, page
+        assert html.index(line) < html.index('<p class="entry-top">'), page        # before the paper's own text
 
 
 class TestSearch:
