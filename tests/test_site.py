@@ -279,7 +279,9 @@ def test_robots_and_for_models(env):
     robots = (out / "robots.txt").read_text()
     assert "User-agent: *" in robots and "Allow: /" in robots and f"{BASE}/llms.txt" in robots
     assert "ai-train=yes" in robots                                      # the owner's choice, design §7.4
-    assert "Disallow" not in robots
+    assert re.findall(r"^Disallow:.*$", robots, re.M) == ["Disallow:"]  # an empty one: nothing is disallowed
+    group = robots.split("User-agent: *\n")[1]
+    assert group.startswith("Allow: /\nDisallow:\n") and "\n\nSitemap: " in robots   # for strict parsers
     page = (out / "p" / f"{KEY}.html").read_text()
     assert ", for programs" not in page
     # Ask your AI (design §7.4): a button copying a message that names the reading view's web page
