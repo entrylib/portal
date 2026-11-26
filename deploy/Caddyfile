@@ -26,21 +26,43 @@
 	}
 	rewrite @wants_bibtex {path}.bib
 
-	# An AI assistant given a claimset's page by a person gets the reading view, written for models, at the same
-	# address: assistants often may not open the links they find in a page, so the .txt link alone does not reach
-	# them. Known assistant fetchers (their user agents) get it as a plain web page (.read), since some fetch web
-	# pages but not text files; any client asking for plain text or Markdown first gets the .txt. Search crawlers
-	# (Googlebot, Bingbot) are not among them and get the page.
+	# An AI assistant given a claimset's address by a person gets its overview (claimset spec §2.3, split views) at the
+	# same address: what the paper contains, in a few lines, with the address of each part (a claim, an evidence
+	# object, the whole paper), so that it reads only what it needs; assistants often may not open the links they find
+	# in a page, so the .txt link alone does not reach them. Known assistant fetchers (their user agents) get it as a
+	# plain web page (overview.read.html), since some fetch web pages but not text files; any client asking for plain
+	# text or Markdown first gets overview.txt (a claim's address: its .txt). The whole reading view stays at .txt
+	# and .read. Search crawlers (Googlebot, Bingbot) are not among them and get the page.
 	@assistant {
-		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+)?$
+		path_regexp paper ^/p/([0-9]{4}\.[0-9]+)$
 		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
 	}
-	rewrite @assistant {path}.read.html
+	rewrite @assistant /p/{re.paper.1}/overview.read.html
+	@assistant_version {
+		path_regexp version ^/p/([0-9]{4}\.[0-9]+)@v([0-9]+)$
+		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
+	}
+	rewrite @assistant_version /p/{re.version.1}/v{re.version.2}/overview.read.html
 	@wants_text {
-		path_regexp ^/p/[0-9]{4}\.[0-9]+(@v[0-9]+|/C[0-9]+)?$
+		path_regexp paper ^/p/([0-9]{4}\.[0-9]+)$
 		header_regexp Accept ^\s*text/(plain|markdown)
 	}
-	rewrite @wants_text {path}.txt
+	rewrite @wants_text /p/{re.paper.1}/overview.txt
+	@wants_text_version {
+		path_regexp version ^/p/([0-9]{4}\.[0-9]+)@v([0-9]+)$
+		header_regexp Accept ^\s*text/(plain|markdown)
+	}
+	rewrite @wants_text_version /p/{re.version.1}/v{re.version.2}/overview.txt
+	@wants_text_claim {
+		path_regexp ^/p/[0-9]{4}\.[0-9]+/C[0-9]+$
+		header_regexp Accept ^\s*text/(plain|markdown)
+	}
+	rewrite @wants_text_claim {path}.txt
+	# The folder of a paper's split views, or of a version's, gives its overview.
+	@views_folder path_regexp folder ^/p/([0-9]{4}\.[0-9]+)/$
+	rewrite @views_folder /p/{re.folder.1}/overview.txt
+	@version_folder path_regexp vfolder ^/p/([0-9]{4}\.[0-9]+)/v([0-9]+)/$
+	rewrite @version_folder /p/{re.vfolder.1}/v{re.vfolder.2}/overview.txt
 
 	# The website and the published files are static, written by the indexer (design §7.4): served from the published
 	# directory without touching the app. The pages load only this site's styles, fonts, images and one script

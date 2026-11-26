@@ -25,7 +25,7 @@ def test_claim_bundles_page_and_llms_txt(env):
     ctx, _, concept = published(env)
     out = ctx["published_dir"]
     text = (out / "p" / KEY / "C2.txt").read_text()
-    assert text.startswith(f"CLAIM C2 of {concept} Method M")
+    assert text.startswith(f"CLAIM C2 of {concept}@v1 Method M")
     bundle = json.loads((out / "p" / KEY / "C2.json").read_text())
     assert bundle["bundle_of"] == "C2" and bundle["paper"]["id"] == concept
     assert [c["id"] for c in bundle["claims"]] == ["C2", "C1", "C3"]
@@ -44,7 +44,38 @@ def test_claim_bundles_page_and_llms_txt(env):
     assert f"{BASE}/api/search/claims?q=" in llms and "data" in llms and "{base}" not in llms
     assert f"{BASE}/mcp" in llms and f"{BASE}/api/submissions/from-url" in llms and "new_paper" in llms
     assert "## Extensions" in llms and "`ext` blocks" in llms
+    assert f"{BASE}/p/<year>.<number>/overview.txt" in llms and "Start here" in llms      # the split views
     assert f"{BASE}/spec/extensions" in llms and "github.com/entrylib/claimset/tree" not in llms   # issue #46
+
+
+def test_split_views(env):
+    """The split views of the claimset package (claimset spec §2.3), for the current version and each version, with
+    their addresses here (design §7.1)."""
+    ctx, _, concept = published(env)
+    out = ctx["published_dir"] / "p" / KEY
+    for folder, base, whole in ((out, f"{BASE}/p/{KEY}/", f"{BASE}/p/{KEY}.txt"),
+                                (out / "v1", f"{BASE}/p/{KEY}/v1/", f"{BASE}/p/{KEY}@v1.txt")):
+        names = {f.name for f in folder.iterdir() if f.is_file()}
+        assert {"overview.txt", "overview.read.html", "E1.txt", "D1.txt", "references.txt", "C1.txt", "C2.txt"} <= names
+        overview = (folder / "overview.txt").read_text()
+        assert overview.startswith(f"OVERVIEW {concept}@v1 Method M")
+        assert f"FILES at {base}:" in overview and f"  C2: {base}C2.txt" in overview
+        assert f"the whole paper: {whole}" in overview and f"Could you paste {base}C2.txt" in overview
+        claim = (folder / "C2.txt").read_text()
+        assert claim.startswith(f"CLAIM C2 of {concept}@v1") and f"FILES at {base}:" in claim and "HOW TO CITE" in claim
+        page = (folder / "overview.read.html").read_text()
+        assert f'<a href="{base}C2.txt">{base}C2.txt</a>' in page and "<script" not in page
+        assert f'<link rel="canonical" href="{BASE}/p/{KEY}@v1">' in page
+
+
+def test_the_overview_page_escapes_and_links():
+    doc = example()
+    doc["paper"].update(id="entrylib:2026.000001", version=1, title="M <b>&")
+    page = site.overview_page(doc, "A <b> https://x.test/p/C1.txt). D<n>.txt https://x.test/p/D<n>.txt\n", BASE,
+                              "/p/2026.000001/overview.txt")
+    assert "M &lt;b&gt;&amp;" in page and "A &lt;b&gt;" in page
+    assert '<a href="https://x.test/p/C1.txt">https://x.test/p/C1.txt</a>).' in page
+    assert 'href="https://x.test/p/D' not in page                              # a pattern is not a link
 
 
 def test_submitted_text_is_escaped_in_the_page(env):
@@ -71,7 +102,9 @@ def test_bundles_follow_the_current_version(env):
             d["assumptions"] = [a for a in d["assumptions"] if a != "C1"] or d.pop("assumptions")
     publish(write(tmp, doc, "fixed.claimset.json"), **{**ctx, "today": dt.date(2026, 11, 5)})
     names = {f.name for f in (ctx["published_dir"] / "p" / KEY).glob("C*")}
-    assert "C1.txt" not in names and "C2.txt" in names
+    assert "C1.txt" not in names and "C1.json" not in names and "C2.txt" in names
+    assert (ctx["published_dir"] / "p" / KEY / "v1" / "C1.txt").exists()            # a version keeps its own
+    assert not (ctx["published_dir"] / "p" / KEY / "v2" / "C1.txt").exists()
 
 
 class TestSearch:
