@@ -60,12 +60,37 @@ def test_split_views(env):
         overview = (folder / "overview.txt").read_text()
         assert overview.startswith(f"OVERVIEW {concept}@v1 Method M")
         assert f"FILES at {base}:" in overview and f"  C2: {base}C2.txt" in overview
-        assert f"the whole paper: {whole}" in overview and f"Could you paste {base}C2.txt" in overview
+        assert f"the whole paper: {whole}" in overview and "let them choose which to paste back" in overview
         claim = (folder / "C2.txt").read_text()
         assert claim.startswith(f"CLAIM C2 of {concept}@v1") and f"FILES at {base}:" in claim and "HOW TO CITE" in claim
         page = (folder / "overview.read.html").read_text()
         assert f'<a href="{base}C2.txt">{base}C2.txt</a>' in page and "<script" not in page
         assert f'<link rel="canonical" href="{BASE}/p/{KEY}">' in page                # the current version's page
+
+
+def test_the_overview_gives_each_claims_score():
+    """design §7.1: the overview gives each claim's Support score beside its ID, from the rubric's scores."""
+    from portal import scores
+    assert scores.claim_lines({"claims": {"C2": {"score": 88}, "C3": {"band": "high"}}}) == {"C2": "Support 88"}
+    assert scores.claim_lines(None) is None
+    doc = example()
+    doc["paper"].update(id="entrylib:2026.000001", version=1)
+    from claimset import views
+    text = views.overview(doc, f"{BASE}/p/{KEY}/", claim_scores={"C2": "Support 88"})
+    assert "  C2* (Support 88) " in text
+
+
+def test_the_overview_page_links_each_id_to_its_file():
+    doc = example()
+    doc["paper"].update(id="entrylib:2026.000001", version=1)
+    text = ("CLAIMS (* principal)\n  C2* (Support 88) Method M\n  C9 Not a file\nKEY TERMS\n  D1 skill; D3 naive\n"
+            "READ ON\n  C2: https://entrylib.test/p/2026.000001/C2.txt\nC2.txt\n")
+    page = site.overview_page(doc, text, BASE, "/p/2026.000001/overview.txt", True, {"C2.txt", "D1.txt", "D3.txt"})
+    assert f'  <a href="{BASE}/p/2026.000001/C2.txt">C2</a>* (Support 88)' in page
+    assert f'<a href="{BASE}/p/2026.000001/D1.txt">D1</a> skill; <a href="{BASE}/p/2026.000001/D3.txt">D3</a>' in page
+    assert "  C9 Not a file" in page                                              # no file: no link
+    assert '<a href="https://entrylib.test/p/2026.000001/C2.txt">https://entrylib.test/p/2026.000001/C2.txt</a>' in page
+    assert "\nC2.txt\n" in page                                                   # a file name is left as it is
 
 
 def test_the_overview_page_escapes_and_links():

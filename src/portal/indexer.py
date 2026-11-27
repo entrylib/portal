@@ -327,14 +327,15 @@ def write_static(conn, registry, folder, published_dir, base_url, index=True, fo
         latest = n == versions[-1]
         reading = site.reading_page(doc, view, base_url, latest)    # the same text as a web page, for assistants
         _write(p / f"{key}@v{n}.read.html", reading)
-        score_line = scores.line(scored[n])
-        write_views(p / key / f"v{n}", doc, base_url, f"/p/{key}/v{n}/", f"/p/{key}@v{n}.txt", score_line, latest)
+        score_line, claim_scores = scores.line(scored[n]), scores.claim_lines(scored[n])
+        write_views(p / key / f"v{n}", doc, base_url, f"/p/{key}/v{n}/", f"/p/{key}@v{n}.txt", score_line, latest,
+                    claim_scores)
         if latest:
             _write(p / f"{key}.json", text)
             _write(p / f"{key}.txt", view)
             _write(p / f"{key}.read.html", reading)
             write_bundles(p / key, doc)
-            write_views(p / key, doc, base_url, f"/p/{key}/", f"/p/{key}.txt", score_line, latest)
+            write_views(p / key, doc, base_url, f"/p/{key}/", f"/p/{key}.txt", score_line, latest, claim_scores)
         lab_copy = registry.version_dir(folder, n) / "lab.jsonl"
         lab, record = {}, None
         if lab_copy.exists():
@@ -594,21 +595,23 @@ def write_bundles(directory, doc):
 SPLIT = re.compile(r"(overview\.txt|overview\.read\.html|references\.txt|[CED]\d+\.txt)")
 
 
-def write_views(directory, doc, base_url, folder, whole, score_line=None, current=False):
+def write_views(directory, doc, base_url, folder, whole, score_line=None, current=False, claim_scores=None):
     """The split views of one version (claimset spec §2.3; design §7.1), in `directory`, served at `folder`, beside the
-    whole reading view at `whole`, replacing those of a version before; a claim's ends with how to cite it, and the
-    overview is also written as a web page for assistants (overview.read.html)."""
+    whole reading view at `whole`, replacing those of a version before; the overview gives the paper's score and each
+    claim's, a claim's file ends with how to cite it, and the overview is also written as a web page for assistants
+    (overview.read.html), each ID in it a link to its file."""
     directory = Path(directory)
     for old in directory.iterdir() if directory.exists() else []:
         if old.is_file() and SPLIT.fullmatch(old.name):
             old.unlink()
-    written = views.files(doc, f"{base_url}{folder}", f"{base_url}{whole}", score=score_line)
+    written = views.files(doc, f"{base_url}{folder}", f"{base_url}{whole}", score=score_line,
+                          claim_scores=claim_scores)
     for name, text in written.items():
         if re.fullmatch(r"C\d+\.txt", name):
             text += site.citation_note(doc, base_url, name[:-4])
         _write(directory / name, text)
     _write(directory / "overview.read.html",
-           site.overview_page(doc, written["overview.txt"], base_url, f"{folder}overview.txt", current))
+           site.overview_page(doc, written["overview.txt"], base_url, f"{folder}overview.txt", current, set(written)))
 
 
 def paper_card(doc, base_url):

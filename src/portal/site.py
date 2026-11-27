@@ -824,14 +824,20 @@ def reading_page(doc, view, base_url, current=False):
             f"<pre>{esc(view)}</pre>\n</body></html>\n")
 
 
-def overview_page(doc, text, base_url, path, current=False):
+def overview_page(doc, text, base_url, path, current=False, files=()):
     """A paper's overview (claimset spec §2.3, split views) as a minimal web page, for AI assistants given the paper's
     address (design §7.1, *Assistants given a page*): the text, escaped, with its addresses as links, since some
-    assistants follow a link in a page but not an address written in text."""
+    assistants follow a link in a page but not an address written in text, and each ID of a claim, evidence object or
+    definition that has a file among `files` a link to it, so that a person helping an assistant that cannot open
+    links can copy the address it needs (design §7.4, *For AI assistants*)."""
     p = doc["paper"]
     key, n = ids.url_key(p["id"]), p.get("version")
+    folder = f"{base_url}{path[:-len('overview.txt')]}"
     body = re.sub(r"https://[^\s<>\"&]+?(?=[.,;:)]*(?:\s|$))", lambda m: f'<a href="{m.group(0)}">{m.group(0)}</a>',
                   esc(text))
+    body = re.sub(r"(?<![\w./#\"])([CDE]\d+)(?![\w.])",
+                  lambda m: f'<a href="{folder}{m.group(1)}.txt">{m.group(1)}</a>' if f"{m.group(1)}.txt" in files
+                  else m.group(1), body)
     return ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
             f"<title>{esc(p.get('title'))} · overview</title>"
             f'<link rel="canonical" href="{esc(page_address(doc, base_url, current))}">'
