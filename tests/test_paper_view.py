@@ -297,6 +297,7 @@ def test_the_pages_and_the_switch_between_them():
     assert "rewrite @assistant /p/{re.paper.1}/overview.read.html" in caddy                 # the overview (§7.1)
     assert "rewrite @wants_text /p/{re.paper.1}/overview.txt" in caddy
     assert "rewrite @wants_text_claim {re.claim.1}.txt" in caddy
+    assert "rewrite @assistant_claim {re.claimpage.1}.txt" in caddy          # a principal claim's page: its file
     assert "rewrite @wants_json {re.json.1}.json" in caddy and "/record" not in caddy
     assert "rewrite @slash {re.slash.1}" in caddy                    # /p/<id>/ is /p/<id>, for people too
     record = site.claimset_page(doc, base_url=BASE, listing=listing)

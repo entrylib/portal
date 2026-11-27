@@ -32,8 +32,8 @@
 	# object, the whole paper), so that it reads only what it needs; assistants often may not open the links they find
 	# in a page, so the .txt link alone does not reach them. Known assistant fetchers (their user agents) get it as a
 	# plain web page (overview.read.html), since some fetch web pages but not text files; any client asking for plain
-	# text or Markdown first gets overview.txt (a claim's address: its .txt). The whole reading view stays at .txt
-	# and .read. Search crawlers (Googlebot, Bingbot) are not among them and get the page.
+	# text or Markdown first gets overview.txt (a principal claim's page, for both: the claim's .txt). The whole
+	# reading view stays at .txt and .read. Search crawlers (Googlebot, Bingbot) are not among them and get the page.
 	@assistant {
 		path_regexp paper ^/p/([0-9]{4}\.[0-9]+)/?$
 		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
@@ -44,6 +44,13 @@
 		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
 	}
 	rewrite @assistant_version /p/{re.version.1}/v{re.version.2}/overview.read.html
+	# A principal claim's page (indexed, and the address its Ask your AI button gives) answers an assistant with the
+	# claim's file, as the paper's address answers with the overview.
+	@assistant_claim {
+		path_regexp claimpage ^(/p/[0-9]{4}\.[0-9]+/C[0-9]+)/?$
+		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
+	}
+	rewrite @assistant_claim {re.claimpage.1}.txt
 	@wants_text {
 		path_regexp paper ^/p/([0-9]{4}\.[0-9]+)/?$
 		header_regexp Accept ^\s*text/(plain|markdown)
