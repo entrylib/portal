@@ -1014,7 +1014,8 @@ def for_ai(doc, base_url, current=True, cid=None):
     if cid:
         url, what = f"{base_url}/p/{key}/{cid}.txt", "this claim as plain text"
     else:
-        url = f"{base_url}/p/{key}/overview.txt" if current else f"{base_url}/p/{key}/v{n}/overview.txt"
+        # its web page: whoever read this page can open it, and its IDs link to the claims' files
+        url = f"{base_url}/p/{key}/overview.read" if current else f"{base_url}/p/{key}/v{n}/overview.read"
         what = "read the overview"
     return f'<p class="for-ai">AI assistants: {what}: <a href="{esc(url)}">{esc(url)}</a></p>'
 
