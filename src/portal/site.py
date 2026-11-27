@@ -1014,7 +1014,8 @@ def for_ai(doc, base_url, current=True, cid=None):
     if cid:
         url, what = f"{base_url}/p/{key}/{cid}.txt", "this claim as plain text"
     else:
-        url = f"{base_url}/p/{key}/overview.txt" if current else f"{base_url}/p/{key}/v{n}/overview.txt"
+        # its web page: whoever read this page can open it, and its IDs link to the claims' files
+        url = f"{base_url}/p/{key}/overview.read" if current else f"{base_url}/p/{key}/v{n}/overview.read"
         what = "read the overview"
     return f'<p class="for-ai">AI assistants: {what}: <a href="{esc(url)}">{esc(url)}</a></p>'
 
@@ -1062,15 +1063,16 @@ def claimset_page(doc, *, base_url, listing, lab=None, file_url=None, current=No
                       if n_unclaimed else "")
                    + f'<li><a href="#versions">Versions</a> <span class="count">{len(listing)}</span></li>', doc)
     issues = f"/p/{key}@v{n}.issues.txt"                    # every issue that lowers a score, for an agent
-    # One grid (site.css, "claimset page"): the header above the contents and the body, the panel beside them all.
+    # One grid (site.css, "claimset page"): the header above the body, and to their right the rail: the panel, and
+    # directly under it the contents, as on the paper view (design §7.4, *The record*).
     switch = view_switch(key, "record") if not current or current == n else ""
-    main = (f'<div class="cs-page entry"><div class="cs-header entry-header">'
+    main = (f'<div class="cs-page entry" data-rail><div class="cs-header entry-header">'
             f'{INTRO_STRIP}{for_ai(doc, base_url, not current or current == n)}{switch}'
             f'<p class="entry-top">{" · ".join(top)}</p>{newer}{note}'
             f'{parts["header"]}{_origin_line(doc, origin, lab)}'
             f'{ask_ai(doc, base_url, current=not current or current == n)}</div>'
-            f'{_panel(doc, parts, base_url, key, scores, lab)}'
-            f'{nav}<article class="cs-body">{body}'
+            f'<div class="entry-rail">{_panel(doc, parts, base_url, key, scores, lab)}{nav}</div>'
+            f'<article class="cs-body">{body}'
             f'{score_html.section(scores, issues, f"{p["id"]}@v{n}", f"{base_url}/p/{key}@v{n}")}'
             f'{unclaimed}{_versions(listing, key, n)}</article></div>')
     description = _lead_text(doc)
@@ -1278,8 +1280,9 @@ def preview_page(doc, *, base_url, bar, statement, scores=None, title="Confirm a
     if view == "record":
         body, sections = page_sections(parts, d)
         nav = contents(sections, more, d)
-        main = (f'{bar_html}<div class="cs-page entry preview"><div class="cs-header entry-header">{header}</div>'
-                f'{panel}{nav}<article class="cs-body">{body}{score_html.section(scores)}{unclaimed}</article></div>')
+        main = (f'{bar_html}<div class="cs-page entry preview" data-rail><div class="cs-header entry-header">'
+                f'{header}</div><div class="entry-rail">{panel}{nav}</div>'
+                f'<article class="cs-body">{body}{score_html.section(scores)}{unclaimed}</article></div>')
     else:
         opening, nav, body, pv = _paper_body(d, parts, record_href, more, scores=scores)
         main = (f'{bar_html}<div class="cs-page entry preview" data-view="paper"><div class="cs-header entry-header">'

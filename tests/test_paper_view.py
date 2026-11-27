@@ -297,6 +297,7 @@ def test_the_pages_and_the_switch_between_them():
     assert "rewrite @assistant /p/{re.paper.1}/overview.read.html" in caddy                 # the overview (§7.1)
     assert "rewrite @wants_text /p/{re.paper.1}/overview.txt" in caddy
     assert "rewrite @wants_text_claim {re.claim.1}.txt" in caddy
+    assert "rewrite @assistant_claim {re.claimpage.1}.txt" in caddy          # a principal claim's page: its file
     assert "rewrite @wants_json {re.json.1}.json" in caddy and "/record" not in caddy
     assert "rewrite @slash {re.slash.1}" in caddy                    # /p/<id>/ is /p/<id>, for people too
     record = site.claimset_page(doc, base_url=BASE, listing=listing)
@@ -376,7 +377,9 @@ def test_one_column_of_text_and_a_rail_with_the_panel_and_the_contents():
     assert '<a class="toc-top" href="#top">' in rail and '<a href="#summary">Summary</a>' in rail
     assert '<a href="#claims">' in rail and 'id="summary"' in main and 'id="claims"' in main
     record = site.claimset_page(proofs(), base_url=BASE, listing=listing)
-    assert "entry-rail" not in record and '</aside><nav class="cs-toc"' in record
+    # the record has the same rail (design §7.4, *The record*): the panel, and under it the contents
+    assert '<div class="cs-page entry" data-rail>' in record and 'data-view="paper"' not in record
+    assert '<div class="entry-rail"><aside class="panel"' in record and '</aside><nav class="cs-toc"' in record
     css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
     wide = css.split(".entry-rail > .toc-bar { grid-area: bar; }")[1].split("@media (max-width: 1100px)")[0]
     assert "@media (min-width: 861px) {" in wide and 'grid-template-areas: "head rail" "body rail"' in wide
