@@ -215,6 +215,10 @@ details.notice[open] summary { margin-bottom: 4px; }
 @media (min-width: 861px) {
   .entry[data-view="paper"] { grid-template-columns: minmax(0, 50rem) 270px; grid-template-rows: auto 1fr;
     grid-template-areas: "head rail" "body rail"; justify-content: space-between; }
+  /* The record (design §7.4, *The record*): the same rail, the panel and under it the contents, to the right of a
+     body that keeps the page's width for its tables. */
+  .entry[data-rail] { grid-template-columns: minmax(0, 1fr) 270px; grid-template-rows: auto 1fr;
+    grid-template-areas: "head rail" "body rail"; }
   .entry-rail { display: block; grid-area: rail; align-self: stretch; min-width: 0; }
 }
 @media (max-width: 1100px) {
@@ -765,7 +769,7 @@ dialog.rows .popup-body { max-height: 90vh; overflow: auto; padding: 20px 64px 2
   .pv-print-score strong { font-size: 13pt; font-weight: 700; }
   .pv-print-id a { text-decoration: underline !important; }
   .wrap { max-width: none; padding: 0; }
-  .entry, .entry[data-view="paper"] { display: block; }
+  .entry, .entry[data-view="paper"], .entry[data-rail] { display: block; }
   .entry > .cs-body { max-width: none; }
   .cs-title { font-size: 20pt; }
   .cs-section { margin-top: 18pt; padding-top: 10pt; }
