@@ -1,10 +1,10 @@
 """EntryLib: the portal that publishes claimsets."""
 
-__version__ = "0.11.1"
+__version__ = "0.12.0"
 
 #: The oldest claimset package the portal works with. There is no upper bound: newer releases are expected to
 #: accept everything older ones accepted.
-MIN_CLAIMSET = "0.44.17"                 # claimset.views: the split views (overview, a claim, evidence, definitions)
+MIN_CLAIMSET = "0.44.19"                 # claimset.views: the split views, with each claim's score in the overview
 
 
 def claimset_ok(version):

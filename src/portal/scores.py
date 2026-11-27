@@ -231,6 +231,14 @@ def line(scores):
     return f"{NAME} {paper['score']}/100 ({paper['band']})" if paper else None
 
 
+def claim_lines(scores):
+    """Each claim's score in a few words, beside its ID in the overview (claimset spec §2.3, split views): {claim ID:
+    "Support 88"}; None without scores."""
+    if not scores or not isinstance(scores.get("claims"), dict):
+        return None
+    return {cid: f"{NAME} {c['score']}" for cid, c in scores["claims"].items() if isinstance(c, dict) and "score" in c}
+
+
 def issues_text(scores, concept, n, base_url):
     """Every issue that lowers a Support score, as plain text for the authors' agent to work through in the next
     version (/p/<key>@v<n>.issues.txt)."""
