@@ -2261,7 +2261,7 @@ def write_listings(published_dir, base_url, docs, corrected=None):
 
 #: The site's own pages that search engines should know, besides the claimsets.
 SITEMAP_PAGES = ["/", "/read", "/all", "/lab", "/agents", "/about", "/how-to-judge", "/before-you-submit", "/convert",
-                 "/convert.txt", "/spec/"]                  # convert.txt: Gemini opens only what Google has indexed
+                 "/convert.txt", "/study-planning.txt", "/spec/"]  # .txt: Gemini opens only what Google indexed
 
 
 def sitemap(docs, base_url):

@@ -92,6 +92,7 @@ submissions by URL an hour. Over a limit the answer is 429 with Retry-After: wai
   {base}/study-planning/<guide>.md), from the MCP tool guide (name 'study-planning', one guide
   'study-planning/prediction', one entry with section 'mean-forecasts') and at https://github.com/entrylib/study-planning.
   Propose its defaults to the person you work with, with their reasons; they are not requirements.
+  {base}/study-planning.txt is the request a researcher gives an assistant to plan a study with them.
 - An author turning their own paper into a claimset: {base}/convert.txt, the instructions, which point to
   {base}/skills/claimset-from-paper.md and {base}/skills/claimset-submit.md. {base}/convert/message.txt is the same
   request with both skills and an example claimset in it, for an assistant that cannot open addresses.

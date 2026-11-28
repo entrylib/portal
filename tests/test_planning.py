@@ -57,7 +57,7 @@ def test_without_guides_in_the_package_the_messages_name_the_repository(tmp_path
     assert planning.message(BASE, cat) == planning.short(BASE, cat)
     written = []
     planning.write(tmp_path / "out", site.shell, lambda p, t: written.append(p), BASE, root=empty)
-    assert written == []
+    assert written == [tmp_path / "out" / "study-planning.txt"]           # /lab's line still has its instructions
 
 
 def test_pages_and_texts(tmp_path):
@@ -99,9 +99,13 @@ def test_the_site_publishes_the_installed_guides(env):
     assert (out / "study-planning" / "index.html").exists()
     assert (out / "study-planning" / "message.txt").read_text() == planning.message(BASE, cat)
     lab = (out / "lab.html").read_text()
-    assert 'id="plan"' in lab and 'data-copy="plan-prompt"' in lab and "do not plan from memory" in lab
+    assert 'id="plan"' in lab and 'data-copy="plan-line"' in lab and f"{BASE}/study-planning.txt" in lab
+    assert (out / "study-planning.txt").read_text() == planning.short(BASE, cat)
+    assert "do not plan from memory" in (out / "study-planning.txt").read_text()
+    assert "/study-planning.txt</loc>" in site.sitemap([], BASE)
     assert '<a href="/study-planning/message.txt"\ndownload="entrylib-study-planning-message.txt">' in lab
     assert f"/study-planning/{name}</loc>" in site.sitemap([], BASE)
     caddy = (Path(__file__).resolve().parent.parent / "deploy" / "Caddyfile").read_text()
     assert " /study-planning /study-planning/* " in caddy and "/study-planning/*.md" in caddy
+    assert " /study-planning.txt " in caddy
     assert f"{BASE}/study-planning/" in reading.llms_txt(BASE)

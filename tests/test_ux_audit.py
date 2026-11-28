@@ -375,15 +375,30 @@ def test_lab_and_convert_say_what_a_newcomer_needs():
     package's README give one start command."""
     pages = Path(site.__file__).parent / "static" / "pages"
     lab, convert = (pages / "lab.html").read_text(), (pages / "convert.html").read_text()
-    assert "What you need" in lab and "a remote you can push to" in lab and "desk mode" in lab
-    assert "What your agent will ask you" in lab
+    assert "You need:" in lab and "a git remote you can push to" in lab and "desk mode" in lab
     assert "Data you collect yourself" in lab                # not only computational work
-    assert 'href="/p/2026.000007">quantitative study</a>' in lab and 'href="/p/2026.000004">qualitative one</a>' in lab
+    assert 'href="/p/2026.000007"' in lab and 'href="/p/2026.000004">qualitative study</a>' in lab
     submit = (pages.parent / "submit.html").read_text()
-    for page in (lab, convert, submit):                     # possible without an agent, and not recommended
+    for page in (convert, submit):                          # possible without an agent, and not recommended
         assert "we do not recommend it" in page
     assert "What you need" in convert and "perhaps already published" not in convert
     assert "A chat assistant has a size limit" in convert
     for name in ("lab.html", "agents.html"):
         page = (pages / name).read_text()
         assert "claimset init" in page and "claimset skill install" not in page
+
+
+def test_the_lab_page_gives_one_line_and_who_does_what():
+    """/lab (design §7.4, decided 28 November 2026): one line for the agent, which runs the commands itself; one
+    timeline of who does what, a person's steps and the agent's; and, for an agent that cannot install claimset, one
+    line for any assistant pointing to /study-planning.txt."""
+    lab = (Path(site.__file__).parent / "static" / "pages" / "lab.html").read_text()
+    assert 'id="lab-line">Install claimset with pip, run claimset init,' in lab
+    assert "<code>claimset init</code>" not in lab                # the agent runs it, not the person
+    steps = re.findall(r'<li class="(you|agent)">', lab)
+    assert steps == ["you", "agent", "you", "agent", "agent", "you"]
+    assert lab.count('<span class="role">Agent</span>') == 3 and lab.count('<span class="role">You</span>') == 3
+    assert "Your agent can't install claimset?" in lab and 'href="#assistant"' in lab
+    assert 'id="plan-line">Help me plan a study before we run it, following {base}/study-planning.txt' in lab
+    assert '<pre id="plan-prompt">' not in lab                    # the message is in the file, not on the page
+    assert lab.count("<details") == 1                              # only the commands are folded

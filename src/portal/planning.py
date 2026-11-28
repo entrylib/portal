@@ -7,9 +7,11 @@ whatever it can do: open a page, fetch a text, or find it by search.
     /study-planning/<guide>, <guide>.md       one guide, as a page and as text
     /study-planning/message.txt               the full message /lab offers to download and attach: the request, then
                                               every guide
+    /study-planning.txt                       the instructions /lab's line points to (short())
 
-/lab shows and copies the short message (short()): the request, with where to read the guides (the MCP tool `guide`,
-the guides' addresses, the package), and to stop rather than plan from memory when none can be read.
+/lab gives one line to copy, "Help me plan a study before we run it, following <base>/study-planning.txt". That file
+is the short message (short()): the request, with where to read the guides (the MCP tool `guide`, the guides'
+addresses, the package), and to stop rather than plan from memory when none can be read.
 
 Written by the indexer when the app starts, from the claimset package, like the skills (skills.py): a new claimset
 release publishes the guides it carries. A claimset too old to carry them publishes nothing here, and the messages
@@ -104,10 +106,10 @@ def index(shell, cat):
 
 
 def short(base_url, cat=None):
-    """The message /lab shows and copies: plan the study with me, one choice at a time, from the guides; where to
-    read them, in the order an assistant can use them (EntryLib's connector, an address, the package); and to stop
-    if it can use none. It is short, so that it copies in every browser; the full message, with the guides in it, is
-    downloaded instead (message())."""
+    """/study-planning.txt, the instructions /lab's line points to: plan the study with me, one choice at a time,
+    from the guides; where to read them, in the order an assistant can use them (EntryLib's connector, an address,
+    the package); and to stop if it can use none. The full message, with the guides in it, is downloaded instead
+    by an assistant that can open no address (message())."""
     cat = catalogue() if cat is None else cat
     base = base_url.rstrip("/")
     web = (", ".join(f"{base}/study-planning/{n}.md" for n in cat["guides"]) if cat["guides"]
@@ -160,10 +162,11 @@ def message(base_url, cat=None):
 
 
 def write(published_dir, shell, write_file, base_url, root=None):
-    """Write the guides' pages and texts under `published_dir`/study-planning, with the full message. Returns the
-    catalogue; a package that carries no guides writes nothing."""
+    """Write the guides' pages and texts under `published_dir`/study-planning, with the full message, and
+    /study-planning.txt. Returns the catalogue; a package that carries no guides writes /study-planning.txt alone."""
     out = Path(published_dir) / "study-planning"
     cat = catalogue(root)
+    write_file(Path(published_dir) / "study-planning.txt", short(base_url, cat))
     if not cat["guides"]:
         return cat
     for name, entry in cat["guides"].items():
