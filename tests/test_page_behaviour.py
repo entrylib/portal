@@ -24,7 +24,7 @@ def test_copying_works_in_every_browser():
             assert re.search(r'<script src="/page\.js[^"]*" defer>', page), name
     convert = site.fixed_page("convert", "https://entrylib.test")
     assert 'data-copy="convert-line"' in convert and 'download="entrylib-convert-message.txt"' in convert
-    box = convert.index('<div class="connect start">')               # the box: the line, its button, the steps
+    box = convert.index('<div class="copy-box">')               # the box: the line, its button, the steps
     line, button = convert.index('id="convert-line"'), convert.index('data-copy="convert-line"')
     assert box < line < button < convert.index("</div>", box) < convert.index('download="entrylib-convert-message')
 

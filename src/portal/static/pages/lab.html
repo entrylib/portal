@@ -2,20 +2,21 @@
 <p class="for-ai">AI assistants, your instructions: <a href="{base}/skills/claimset-lab.md">{base}/skills/claimset-lab.md</a>; to plan a study: <a href="{base}/study-planning.txt">{base}/study-planning.txt</a></p>
 <p class="lead">Your agent keeps a dated record while you research. Readers can tell a planned test from a pattern
 found by looking. Your failed tests count too.</p>
-<p class="lab-alt">Your agent can't install claimset? <a href="#assistant">Plan with any assistant instead</a>.</p>
+<p class="alt-path">Your agent can't install claimset? <a href="#assistant">Plan with any assistant instead</a>.</p>
 
-<div class="connect start" id="start">
-<p class="say-intro"><strong>Copy this line and paste it to your agent.</strong> It does the rest.</p>
-<p class="say" id="lab-line">Install claimset with pip, run claimset init, and follow its claimset-lab skill to keep a
+<div class="copy-box" id="start">
+<p class="copy-intro"><strong>Copy this line and paste it to your agent.</strong> It does the rest.</p>
+<p class="copy-line" id="lab-line">Install claimset with pip, run claimset init, and follow its claimset-lab skill to keep a
 lab record of this research.</p>
 <p class="copy-row"><button type="button" class="button" data-copy="lab-line"
 data-copied="Copied: now paste it to your agent" hidden>Copy this line</button></p>
-<p class="needs"><strong>You need:</strong> an agent that runs commands (Claude Code, Codex, Cursor, Gemini CLI…) ·
+<p class="copy-note"><strong>You need:</strong> an agent that runs commands (Claude Code, Codex, Cursor, Gemini CLI…) ·
 Python 3.10+ and git · a git remote you can push to, which dates each plan (without one, desk mode: plans undated) ·
 an ORCID iD, to publish.</p>
 </div>
 
-<section class="flow">
+
+<section class="band">
 <h2>How it goes</h2>
 <p>Your agent keeps the record. You make the decisions.</p>
 <ol class="timeline">
@@ -26,23 +27,23 @@ an ORCID iD, to publish.</p>
 <li class="agent"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 5v3"/><circle cx="12" cy="4" r="1"/><path d="M9.5 13h.01M14.5 13h.01M10 16h4M3 12v3M21 12v3"/></svg></span><span class="role">Agent</span><strong>Verdict</strong>by the plan's own rule</li>
 <li class="you"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="role">You</span><strong>Check and sign</strong>each claim, then confirm with ORCID</li>
 </ol>
-<p class="note">Each step is saved online with its date as it happens. If the work must depart from the plan, the
+<p class="band-note">Each step is saved online with its date as it happens. If the work must depart from the plan, the
 agent stops and you decide.</p>
 </section>
 
 <h2>Why readers trust it</h2>
-<div class="trust">
+<div class="features">
 <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/></svg><strong>Planned before tested</strong><span>A test counts only if its plan was saved before the
 run.</span></div>
 <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></svg><strong>Every number from code</strong><span>Results come from the files the code wrote, never
 retyped.</span></div>
 <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg><strong>Failures counted</strong><span>Refuted ideas stay. A planned test gets one attempt.</span></div>
 </div>
-<p class="trust-also">Also: the record cannot be quietly rewritten. An agent never approves its own plan. Colleagues'
+<p class="features-note">Also: the record cannot be quietly rewritten. An agent never approves its own plan. Colleagues'
 checks travel with the claims. Data you collect yourself, documents and interviews are recorded too.</p>
 
 <h2>One finished study</h2>
-<div class="example">
+<div class="feature-card">
 <span class="origin">Made with the lab</span>
 <h3><a href="/p/2026.000007">TBATS in smooth: its formulation, and its accuracy against forecast::tbats and AutoTBATS
 on hourly data</a></h3>
@@ -54,8 +55,8 @@ on hourly data</a></h3>
 <h2 id="assistant">Your agent can't install claimset?</h2>
 <p>Plan the study with any assistant instead, a chat assistant included. It proposes each choice with its reason and
 source, from EntryLib's <a href="/study-planning/">good practice for planning a study</a>.</p>
-<div class="connect start alt" id="plan">
-<p class="say" id="plan-line">Help me plan a study before we run it, following {base}/study-planning.txt</p>
+<div class="copy-box quiet" id="plan">
+<p class="copy-line" id="plan-line">Help me plan a study before we run it, following {base}/study-planning.txt</p>
 <p class="copy-row"><button type="button" class="button-quiet" data-copy="plan-line"
 data-copied="Copied: now paste it to your assistant" hidden>Copy this line</button></p>
 </div>

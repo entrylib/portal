@@ -3,12 +3,12 @@
 <p class="lead">Your AI assistant turns your published paper into a claimset: the same research as separate claims,
 each with its evidence, conditions and limits. You answer its questions and check its work.</p>
 
-<div class="connect start">
-<p class="say-intro"><strong>Attach your paper to your AI assistant and paste this line with it.</strong></p>
-<p class="say" id="convert-line">Turn my paper into a claimset for EntryLib, following {base}/convert.txt</p>
+<div class="copy-box">
+<p class="copy-intro"><strong>Attach your paper to your AI assistant and paste this line with it.</strong></p>
+<p class="copy-line" id="convert-line">Turn my paper into a claimset for EntryLib, following {base}/convert.txt</p>
 <p class="copy-row"><button type="button" class="button" data-copy="convert-line"
 data-copied="Copied: now paste it into your AI chat" hidden>Copy this line</button></p>
-<p class="needs"><strong>Only the paper's authors do this. You need:</strong> a published paper with a DOI or an arXiv
+<p class="copy-note"><strong>Only the paper's authors do this. You need:</strong> a published paper with a DOI or an arXiv
 ID · an AI assistant (an agent that runs commands suits any paper; a chat assistant, only a short one) · an ORCID iD ·
 time to check 20 to 40 claims.</p>
 </div>
@@ -16,7 +16,8 @@ time to check 20 to 40 claims.</p>
 download="entrylib-convert-message.txt">Download the full message</a>
 (about 15,000 tokens) and attach it with your paper instead of the line.</p>
 
-<section class="flow">
+
+<section class="band">
 <h2>How it goes</h2>
 <p>Your assistant does the writing. You check it and answer for it.</p>
 <ol class="timeline">
@@ -27,23 +28,23 @@ download="entrylib-convert-message.txt">Download the full message</a>
 <li class="agent"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 5v3"/><circle cx="12" cy="4" r="1"/><path d="M9.5 13h.01M14.5 13h.01M10 16h4M3 12v3M21 12v3"/></svg></span><span class="role">Assistant</span><strong>Submit</strong>after checking the file</li>
 <li class="you"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="role">You</span><strong>Confirm</strong>with ORCID, within 48 hours</li>
 </ol>
-<p class="note">Before you confirm, see <a href="/before-you-submit">what the responsible researcher checks</a>.</p>
+<p class="band-note">Before you confirm, see <a href="/before-you-submit">what the responsible researcher checks</a>.</p>
 </section>
 
-<h2>Why it is worth it</h2>
-<div class="trust two">
-<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><strong>AI reads it right</strong><span>Given a PDF, an assistant guesses what matters. Given a claimset, it
+<h2>What you get</h2>
+<div class="features two">
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><strong>AI quotes you correctly</strong><span>Given a PDF, an assistant guesses what matters. Given a claimset, it
 finds each finding with its conditions, and cites it exactly.</span></div>
-<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/></svg><strong>See which claims are supported</strong><span>Each main claim gets its own page and a Support
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/></svg><strong>See which claims are well supported</strong><span>Each main claim gets its own page and a Support
 score, with what would back it more (<a href="/about#quality">how</a>).</span></div>
-<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><strong>Found where research is searched</strong><span>Listed for search engines and answer engines, and
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><strong>Found by people and by AI</strong><span>Listed for search engines and answer engines, and
 open to any assistant through EntryLib's <a href="/agents">MCP server</a>.</span></div>
-<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><strong>Yours, current and free</strong><span>A correction is a new version; every version is kept. No
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><strong>Free, and yours to update</strong><span>A correction is a new version; every version is kept. No
 account beyond your ORCID iD.</span></div>
 </div>
 
 <h2>One converted paper</h2>
-<div class="example">
+<div class="feature-card">
 <span class="origin">Converted by its authors</span>
 <h3><a href="/p/2026.000012">Complex exponential smoothing</a></h3>
 <p class="meta">Published as doi:10.1002/nav.22074. On EntryLib, each main claim has its own score, and the

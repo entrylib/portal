@@ -1729,9 +1729,49 @@ def fixed_page(name, base_url):
             .replace("{how_to_read}", HOW_TO_READ)
             .replace("{convert_request}", esc(skills.shown(base_url)))
             .replace("{plan_request}", esc(planning.short(base_url))))
-    return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,
-                 ai=chrome.for_ai(f"{base_url}/llms.txt"),          # a page with its own line keeps it
-                 script="/page.js" if "data-copy" in body else None)       # its copy buttons
+    ai = chrome.for_ai(f"{base_url}/llms.txt")                     # a page with its own line keeps it
+    return shell(title, _text_page(body, ai), active=active, description=description, script="/page.js")
+
+
+def _slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", re.sub(r"<[^>]+>", "", text).lower()).strip("-") or "section"
+
+
+def _text_page(body, ai):
+    """A fixed page laid out as a paper's page (design §7.4, *Layouts*): its title and the line for AI assistants
+    on top (`ai`, unless the page has its own), then one column of text, as wide as a paper's and from the same left
+    edge, with the contents, *On this page*, in the rail to its right, made from its sections (h2); on a phone the
+    same bar as a paper's (page.js)."""
+    head, sep, rest = body.partition("</h1>")
+    if not sep:
+        head, rest = "", body
+    else:
+        head += sep
+        own = re.match(r'\s*(<p class="for-ai">.*?</p>)', rest, flags=re.S)
+        if own:
+            head, rest = head + own.group(1), rest[own.end():]
+        else:
+            head += ai
+    used = set(re.findall(r'id="([^"]+)"', body))
+    toc = []
+
+    def name(m):
+        attrs, inner = m.group(1), m.group(2)
+        found = re.search(r'id="([^"]+)"', attrs)
+        sid = found.group(1) if found else _slug(inner)
+        if not found:
+            while sid in used:
+                sid += "-2"
+            used.add(sid)
+            attrs += f' id="{sid}"'
+        toc.append((sid, re.sub(r"<[^>]+>", "", inner)))
+        return f"<h2{attrs}>{inner}</h2>"
+    rest = re.sub(r"<h2([^>]*)>(.*?)</h2>", name, rest, flags=re.S)
+    nav = ('<nav class="cs-toc" aria-label="Sections of this page"><p class="cs-toc-title">On this page</p><ol>'
+           + TOC_TOP + "".join(f'<li><a href="#{sid}">{esc(t)}</a></li>' for sid, t in toc) + "</ol></nav>")
+    return (f'<div class="cs-page entry page-text" data-view="paper">'
+            f'<div class="cs-header entry-header page-head">{head}</div><div class="entry-rail">{nav}</div>'
+            f'<article class="cs-body prose" data-open>{rest}</article></div>')
 
 
 # --- search -----------------------------------------------------------------------------------------------------------

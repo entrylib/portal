@@ -383,7 +383,8 @@ def test_one_column_of_text_and_a_rail_with_the_panel_and_the_contents():
     css = (Path(site.__file__).parent / "static" / "site.css").read_text(encoding="utf-8")
     wide = css.split(".entry-rail > .toc-bar { grid-area: bar; }")[1].split("@media (max-width: 1100px)")[0]
     assert "@media (min-width: 861px) {" in wide and 'grid-template-areas: "head rail" "body rail"' in wide
-    assert "grid-template-columns: minmax(0, 50rem) 270px" in wide         # one width of text; the panel's width
+    assert "grid-template-columns: minmax(0, var(--text-width)) var(--rail-width)" in wide   # one width of text
+    assert "--text-width: 50rem; --rail-width: 270px;" in css                                 # set once
     assert ".entry-rail { display: block; grid-area: rail; align-self: stretch;" in wide   # as tall as the page
     assert ".entry-rail { display: contents; }" in css                    # narrow: the one column's own items
     js = (Path(site.__file__).parent / "static" / "page.js").read_text(encoding="utf-8")
