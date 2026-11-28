@@ -37,7 +37,7 @@ def test_a_page_keeps_its_parts_out_of_what_is_served(env):
     _, out, _ = published(env)
     parts = out / site.PARTS / "p" / "2026.000001.html.json"
     held = json.loads(parts.read_text())
-    assert set(held) == {"title", "main", "active", "description", "head", "canonical", "script"}
+    assert set(held) == {"title", "main", "active", "description", "head", "canonical", "script", "ai"}
     assert chrome.shell(**held) == (out / "p" / "2026.000001.html").read_text()
     assert site.parts_path(out / "index.html") is None
     claim = out / "p" / "2026.000001" / "C1.html"

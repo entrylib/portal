@@ -19,7 +19,7 @@ import re
 from importlib import resources
 from pathlib import Path
 
-from . import markdown
+from . import chrome, markdown
 
 FRONTMATTER = re.compile(r"\A---\n(?P<meta>.*?)\n---\n", re.S)
 #: The skill /convert sends an author's assistant to, and the skill it builds on.
@@ -66,7 +66,8 @@ def page(shell, name, entry):
     main = (f'<div class="wrap spec"><p class="entry-top"><a href="/skills/">Skills</a> · <code>{name}</code> · '
             f'<a href="{text}">Plain text</a></p><article class="spec-body prose-like">{html}</article></div>')
     head = f'<link rel="alternate" type="text/markdown" href="{text}">'
-    return shell(entry["title"], main, head=head, canonical=f"/skills/{name}", script="/page.js",
+    ai = chrome.for_ai(("this skill as plain text", chrome.base_url() + text))
+    return shell(entry["title"], main, head=head, ai=ai, canonical=f"/skills/{name}", script="/page.js",
                  description=entry["description"][:300] or f"The {name} skill for agents.")
 
 

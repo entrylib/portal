@@ -5,7 +5,7 @@ from pathlib import Path
 
 from publishing import BASE, example, write
 
-from portal import read, score_html, site, text
+from portal import chrome, read, score_html, site, text
 from portal.publish import publish
 
 KEY = "2026.000001"
@@ -193,7 +193,7 @@ def test_the_convert_page():
     page = site.fixed_page("convert", BASE)
     assert 'id="convert-line"' in page and 'data-copy="convert-line"' in page and "page.js" in page
     assert f"Turn my paper into a claimset for EntryLib, following {BASE}/convert.txt</p>" in page
-    assert f'<p class="for-ai">AI assistants: your instructions are at <a href="{BASE}/convert.txt">' in page
+    assert f'<p class="for-ai">AI assistants: your instructions: <a href="{BASE}/convert.txt">' in page
     assert "Only the paper's authors" in page and "claimset-from-paper" not in page     # the instructions: convert.txt
     assert '<details class="more"><summary>Why bother</summary>' in page                # folded below the line
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
@@ -402,3 +402,24 @@ def test_the_lab_page_gives_one_line_and_who_does_what():
     assert 'id="plan-line">Help me plan a study before we run it, following {base}/study-planning.txt' in lab
     assert '<pre id="plan-prompt">' not in lab                    # the message is in the file, not on the page
     assert lab.count("<details") == 1                              # only the commands are folded
+
+
+def test_every_page_tells_an_ai_assistant_where_to_look():
+    """Design §7.4, *For AI assistants* (decided 28 November 2026): every page has one small line under its title, so
+    that a page copied into a chat tells the assistant where to go; a page with instructions of its own names them."""
+    base = chrome.base_url()
+    for name in site.PAGES:
+        page = site.fixed_page(name, base)
+        assert page.count('class="for-ai"') == 1, name
+        assert page.index('class="for-ai"') > page.index("</h1>"), name          # under the title
+    assert f"{base}/convert.txt" in site.fixed_page("convert", base).split('class="for-ai"')[1][:300]
+    lab = site.fixed_page("lab", base).split('class="for-ai"')[1][:400]
+    assert f"{base}/skills/claimset-lab.md" in lab and f"{base}/study-planning.txt" in lab
+    assert f"{base}/llms.txt" in site.fixed_page("about", base)
+    assert f"{base}/skills/claimset-submit.md" in site.submit_page("<p>Upload.</p>")
+    plain = chrome.shell("A page", '<div class="wrap prose"><h1>A page</h1><p>Text.</p></div>')
+    assert plain.count('class="for-ai"') == 1 and f"{base}/llms.txt" in plain
+    no_title = chrome.shell("A page", '<div class="wrap"><p>Text.</p></div>')
+    assert '<div class="wrap"><p class="for-ai">' in no_title
+    own = chrome.shell("A page", '<h1>A</h1>' + chrome.for_ai(("x", "https://e.org/x")))
+    assert own.count('class="for-ai"') == 1                                    # its own line, not two

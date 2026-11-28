@@ -8,6 +8,7 @@ change here re-wraps the stored content of every page (Page.args, indexer.rewrap
 import functools
 import hashlib
 import html
+import os
 from importlib import resources
 
 from . import page as pageview
@@ -116,8 +117,33 @@ class Page(str):
     args = None
 
 
-def shell(title, main, *, active=None, description="", head="", canonical=None, script=None):
-    """A whole page: head, site header, `main` (HTML), footer. A Page, which keeps its arguments."""
+def base_url():
+    """The site's address, as the app's configuration reads it (config.py), for the line for AI assistants."""
+    return os.environ.get("PORTAL_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+
+def for_ai(*links):
+    """The small line for AI assistants under a page's title (design §7.4, *For AI assistants*): where an
+    assistant given this page, perhaps copied into a chat, should look. `links`: (what, address) pairs."""
+    parts = "; ".join(f'{esc(what)}: <a href="{esc(url)}">{esc(url)}</a>' for what, url in links)
+    return f'<p class="for-ai">AI assistants: {parts}</p>'
+
+
+def _with_for_ai(main, line):
+    """`main` with the line for AI assistants under its title: after the first heading, else at the top of its first
+    block. A page that has its own line keeps it."""
+    if 'class="for-ai"' in main:
+        return main
+    line = line or for_ai(("how to read and use EntryLib", f"{base_url()}/llms.txt"))
+    if "</h1>" in main:
+        return main.replace("</h1>", "</h1>" + line, 1)
+    end = main.find(">") + 1 if main.startswith("<div") else 0
+    return main[:end] + line + main[end:]
+
+
+def shell(title, main, *, active=None, description="", head="", canonical=None, script=None, ai=None):
+    """A whole page: head, site header, `main` (HTML), footer. A Page, which keeps its arguments. `ai`: the page's
+    own line for AI assistants (for_ai()); without it, a page that has none points to /llms.txt."""
     full = title if title == SITE else f"{title} · {SITE}"
     meta = f'<meta name="description" content="{esc(description)}">' if description else ""
     canon = f'<link rel="canonical" href="{esc(canonical)}">' if canonical else ""
@@ -129,12 +155,12 @@ def shell(title, main, *, active=None, description="", head="", canonical=None, 
             f'<link rel="stylesheet" href="{asset("/site.css")}">'
             f'<link rel="alternate" type="application/atom+xml" title="{SITE}: recently published" href="/feed.xml">'
             f'{head}</head>\n<body id="top"><a class="skip-link" href="#content">Skip to content</a>{_header(active)}'
-            f'<main id="content">{main}</main>{_footer()}'
+            f'<main id="content">{_with_for_ai(main, ai)}</main>{_footer()}'
             + "".join(f'<script src="{asset(s)}" defer></script>' for s in ([script] if isinstance(script, str)
                                                                              else script or []))
                 + "</body></html>\n")
     page.args = {"title": title, "main": main, "active": active, "description": description, "head": head,
-                 "canonical": canonical, "script": script}
+                 "canonical": canonical, "script": script, "ai": ai}
     return page
 
 

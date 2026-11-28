@@ -1017,7 +1017,7 @@ def for_ai(doc, base_url, current=True, cid=None):
         # its web page: whoever read this page can open it, and its IDs link to the claims' files
         url = f"{base_url}/p/{key}/overview.read" if current else f"{base_url}/p/{key}/v{n}/overview.read"
         what = "read the overview"
-    return f'<p class="for-ai">AI assistants: {what}: <a href="{esc(url)}">{esc(url)}</a></p>'
+    return chrome.for_ai((what, url))
 
 
 def not_claimed(doc):
@@ -2148,7 +2148,8 @@ def submit_page(body):
                'without the consent link.</p>')
     intro_end = body.find("</p>") + len("</p>")                     # the guarantor's note after the introduction
     body = body[:intro_end] + waiting + body[intro_end:] if intro_end > 3 else waiting + body
-    return shell("Publish a paper", f'<div class="wrap prose">{body}</div>', active="submit",
+    ai = chrome.for_ai(("to write and submit a claimset", f"{chrome.base_url()}/skills/claimset-submit.md"))
+    return shell("Publish a paper", f'<div class="wrap prose">{body}</div>', active="submit", ai=ai,
                  description="Publish a paper on EntryLib: upload the package or claimset file your AI agent made; "
                  "its responsible researcher confirms with ORCID.")
 
