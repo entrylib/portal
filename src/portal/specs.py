@@ -13,7 +13,7 @@ import re
 from importlib import resources
 from pathlib import Path
 
-from . import markdown
+from . import chrome, markdown
 
 KINDS = {"claimset": ("claimset", "Claimset"), "lab-record": ("lab-record", "Lab record"),
          "claimset-revision": ("revision", "Revision of published claimsets")}
@@ -87,7 +87,8 @@ def page(shell, address, entry, version):
             f'<article class="spec-body prose-like">{body}</article></div></div>')
     head = f'<link rel="alternate" type="text/markdown" href="{text}">'
     canonical = f"/spec/{address}" if current else f"/spec/{address}/{version}"
-    return shell(entry["title"], main, head=head, canonical=canonical, script="/page.js",
+    ai = chrome.for_ai(chrome.base_url() + text)
+    return shell(entry["title"], main, head=head, ai=ai, canonical=canonical, script="/page.js",
                  description=f"{entry['label']} specification, version {version}.")
 
 

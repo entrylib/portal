@@ -5,7 +5,7 @@ from pathlib import Path
 
 from publishing import BASE, example, write
 
-from portal import read, score_html, site, text
+from portal import chrome, read, score_html, site, text
 from portal.publish import publish
 
 KEY = "2026.000001"
@@ -191,10 +191,17 @@ def test_a_summary_leads_the_card_and_the_description():
 
 def test_the_convert_page():
     page = site.fixed_page("convert", BASE)
-    assert 'id="convert-prompt"' in page and 'data-copy="convert-prompt"' in page and "page.js" in page
-    assert "claimset-from-paper" in page and "Only the paper's authors" in page
+    assert 'id="convert-line"' in page and 'data-copy="convert-line"' in page and "page.js" in page
+    assert f"Turn my paper into a claimset for EntryLib, following {BASE}/convert.txt</p>" in page
+    assert f'<p class="for-ai">AI assistants, your instructions: <a href="{BASE}/convert.txt">' in page
+    assert "Only the paper's authors" in page and "claimset-from-paper" not in page     # the instructions: convert.txt
+    assert '<details class="more"' not in page and "Why it is worth it" in page     # nothing folded
+    assert re.findall(r'<li class="(you|agent)">', page) == ["you", "agent", "you", "you", "agent", "you"]
+    assert 'href="/p/2026.000012"' in page                                                # one converted paper
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy
+    assert "/convert.txt" in site.SITEMAP_PAGES and " /convert.txt " in caddy             # reachable, and indexed
+    assert "rewrite @assistant_convert /convert.txt" in caddy and "rewrite @wants_text_convert /convert.txt" in caddy
     assert 'href="/convert"' in (Path(site.__file__).parent / "static" / "pages" / "home.html").read_text()
 
 
@@ -370,15 +377,51 @@ def test_lab_and_convert_say_what_a_newcomer_needs():
     package's README give one start command."""
     pages = Path(site.__file__).parent / "static" / "pages"
     lab, convert = (pages / "lab.html").read_text(), (pages / "convert.html").read_text()
-    assert "What you need" in lab and "a remote you can push to" in lab and "desk mode" in lab
-    assert "What your agent will ask you" in lab
+    assert "You need:" in lab and "a git remote you can push to" in lab and "desk mode" in lab
     assert "Data you collect yourself" in lab                # not only computational work
-    assert 'href="/p/2026.000007">quantitative study</a>' in lab and 'href="/p/2026.000004">qualitative one</a>' in lab
+    assert 'href="/p/2026.000007"' in lab and 'href="/p/2026.000004">qualitative study</a>' in lab
     submit = (pages.parent / "submit.html").read_text()
-    for page in (lab, convert, submit):                     # possible without an agent, and not recommended
+    for page in (convert, submit):                          # possible without an agent, and not recommended
         assert "we do not recommend it" in page
-    assert "What you need" in convert and "perhaps already published" not in convert
-    assert "A chat assistant has a size limit" in convert
+    assert "You need:" in convert and "perhaps already published" not in convert
+    assert "a chat assistant, only a short one" in convert
     for name in ("lab.html", "agents.html"):
         page = (pages / name).read_text()
         assert "claimset init" in page and "claimset skill install" not in page
+
+
+def test_the_lab_page_gives_one_line_and_who_does_what():
+    """/lab (design §7.4, decided 28 November 2026): one line for the agent, which runs the commands itself; one
+    timeline of who does what, a person's steps and the agent's; and, for an agent that cannot install claimset, one
+    line for any assistant pointing to /study-planning.txt."""
+    lab = (Path(site.__file__).parent / "static" / "pages" / "lab.html").read_text()
+    assert 'id="lab-line">Install claimset with pip, run claimset init,' in lab
+    assert "<code>claimset init</code>" not in lab                # the agent runs it, not the person
+    steps = re.findall(r'<li class="(you|agent)">', lab)
+    assert steps == ["you", "agent", "you", "agent", "agent", "you"]
+    assert lab.count('<span class="role">Agent</span>') == 3 and lab.count('<span class="role">You</span>') == 3
+    assert "Your agent can't install claimset?" in lab and 'href="#assistant"' in lab
+    assert 'id="plan-line">Help me plan a study before we run it, following {base}/study-planning.txt' in lab
+    assert '<pre id="plan-prompt">' not in lab                    # the message is in the file, not on the page
+    assert lab.count("<details") == 1                              # only the commands are folded
+
+
+def test_every_page_tells_an_ai_assistant_where_to_look():
+    """Design §7.4, *For AI assistants* (decided 28 November 2026): every page has one small line under its title, so
+    that a page copied into a chat tells the assistant where to go; a page with instructions of its own names them."""
+    base = chrome.base_url()
+    for name in site.PAGES:
+        page = site.fixed_page(name, base)
+        assert page.count('class="for-ai"') == 1, name
+        assert page.index('class="for-ai"') > page.index("</h1>"), name          # under the title
+    assert f"{base}/convert.txt" in site.fixed_page("convert", base).split('class="for-ai"')[1][:300]
+    lab = site.fixed_page("lab", base).split('class="for-ai"')[1][:400]
+    assert f"{base}/skills/claimset-lab.md" in lab and f"{base}/study-planning.txt" in lab
+    assert f"{base}/llms.txt" in site.fixed_page("about", base)
+    assert f"{base}/skills/claimset-submit.md" in site.submit_page("<p>Upload.</p>")
+    plain = chrome.shell("A page", '<div class="wrap prose"><h1>A page</h1><p>Text.</p></div>')
+    assert plain.count('class="for-ai"') == 1 and f"{base}/llms.txt" in plain
+    no_title = chrome.shell("A page", '<div class="wrap"><p>Text.</p></div>')
+    assert '<div class="wrap"><p class="for-ai">' in no_title
+    own = chrome.shell("A page", '<h1>A</h1>' + chrome.for_ai(("x", "https://e.org/x")))
+    assert own.count('class="for-ai"') == 1                                    # its own line, not two

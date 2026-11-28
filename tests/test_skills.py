@@ -91,8 +91,10 @@ def test_the_site_publishes_the_installed_skills(env):
     assert (out / "skills" / "claimset-submit.html").exists() and (out / "skills" / "index.html").exists()
     assert (out / "convert" / "message.txt").read_text() == skills.message(
         BASE, cat, (skills.examples_dir() / skills.EXAMPLE).read_text(encoding="utf-8"))
+    assert (out / "convert.txt").read_text() == skills.shown(BASE, cat)              # the instructions /convert gives
+    assert "do not write a claimset from memory" in (out / "convert.txt").read_text()
     convert = (out / "convert.html").read_text()
-    assert "do not write a claimset from memory" in convert and 'data-copy="convert-prompt"' in convert
+    assert 'data-copy="convert-line"' in convert and "do not write a claimset from memory" not in convert
     assert '<a href="/convert/message.txt"\ndownload="entrylib-convert-message.txt">' in convert
     assert "/skills/claimset-submit</loc>" in site.sitemap([], BASE)
     caddy = (Path(__file__).resolve().parent.parent / "deploy" / "Caddyfile").read_text()
