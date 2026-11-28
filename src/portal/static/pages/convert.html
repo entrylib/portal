@@ -1,9 +1,27 @@
 <h1>Turn your paper into a claimset</h1>
-<p class="lead">You have published a paper. Your AI agent can turn it into a claimset: the
-same research as separate claims, each with its evidence, conditions and limits, which you check and publish here.
-It takes your agent the work and you the checking. Only the paper's authors do this.</p>
+<p class="for-ai">AI assistants: your instructions are at <a href="{base}/convert.txt">{base}/convert.txt</a></p>
+<p class="lead">Your AI assistant does the conversion: it turns your published paper into a claimset, the same research
+as separate claims, each with its evidence, conditions and limits. You answer its questions and check its work.
+Only the paper's authors do this.</p>
 
-<h2>Why bother</h2>
+<div class="connect start">
+<p><strong>Attach your paper to your AI assistant</strong> (Claude, ChatGPT, Gemini…) <strong>and write:</strong></p>
+<p class="say" id="convert-line">Turn my paper into a claimset for EntryLib, following {base}/convert.txt</p>
+<p class="copy-row"><button type="button" class="button" data-copy="convert-line" data-copied="Copied: now paste it into your AI chat" hidden>Copy this line</button></p>
+<p>Then it is your part:</p>
+<ol>
+<li>Answer its questions: that you are an author, which author answers for the claimset, its licence, which findings
+matter most.</li>
+<li>Check every claim it lists against your paper, and the short summary it drafts.</li>
+<li>Confirm with ORCID, through the link it gives you, within 48 hours. See <a href="/before-you-submit">Before you
+submit</a>.</li>
+</ol>
+</div>
+<p class="small">Your assistant cannot open web pages? <a href="/convert/message.txt"
+download="entrylib-convert-message.txt">Download the full message</a>, which carries the instructions, the rules and an
+example claimset (about 15,000 tokens), and attach it with your paper instead of the line above.</p>
+
+<details class="more"><summary>Why bother</summary>
 <ul>
 <li><strong>AI assistants read it right.</strong> People increasingly meet research through an assistant. Given a
 PDF, it summarises what it guesses matters; given a claimset, it finds each of your findings with the conditions it
@@ -16,49 +34,24 @@ and answer engines, and any assistant can search and read them through EntryLib'
 version, every version is kept, and the claimset links to the published paper. Publishing is free, with no account
 beyond your ORCID iD.</li>
 </ul>
+</details>
 
-<h2>What you need</h2>
+<details class="more"><summary>What you need</summary>
 <ul>
 <li><strong>A published paper that you wrote</strong>, with a DOI, an arXiv ID or another permanent identifier, and
 its supplementary material. A draft that is not published anywhere is not converted: your agent writes it up as a
 new claimset instead (see <a href="/before-you-submit">Before you submit</a>).</li>
 <li><strong>An AI assistant.</strong> An agent that can run commands (Claude Code, Codex, Cursor and others) suits a
-paper of any length. A chat assistant suits a short paper: see the note under the message below. The format is open,
-so you can write the claimset by hand, but we do not recommend it.</li>
+paper of any length: it writes the file on your computer, checks it and submits it.
+<strong>A chat assistant has a size limit:</strong> the claimset of a full paper is a long file, often over 100 KB, more than most chat assistants can
+write in one reply, so use one for a short paper with a few claims; connect EntryLib's <a href="/agents">MCP
+server</a> so it can check and submit the file, or upload the file it gives you at <a href="/submit">Submit</a>. The
+format is open, so you can write the claimset by hand, but we do not recommend it.</li>
 <li><strong>An ORCID iD</strong> for the author who answers for the claimset. It is free at
 <a href="https://orcid.org">orcid.org</a>.</li>
 <li><strong>Time to check every claim against your paper.</strong> A full paper often gives 20 to 40 claims. Your
-agent lists each with where it comes from; reading that list is the part only you can do.</li>
+assistant lists each with where it comes from; reading that list is the part only you can do.</li>
 </ul>
+</details>
 
-<h2>How</h2>
-<ol>
-<li>Give your agent the paper (the published or accepted version, with its supplementary material) and the message
-below.</li>
-<li>Answer its questions: that you are an author, which author answers for the claimset, its licence, which findings
-matter most.</li>
-<li>Check what it gives you: every claim, with where in the paper it comes from. This is the part only you can do.</li>
-<li>Approve the short plain-language summary it drafts; it is shown first on the paper's page.</li>
-<li>Let it submit, then confirm by signing in with ORCID within 48 hours. See <a href="/before-you-submit">Before
-you submit</a>.</li>
-</ol>
-
-<h2>The message for your agent</h2>
-<div class="connect">
-<pre id="convert-prompt">{convert_request}</pre>
-</div>
-<p class="copy-row"><button type="button" class="button-quiet" data-copy="convert-prompt" data-copied="Copied" hidden>Copy
-the message</button></p>
-<p>Paste it with the paper. It tells your assistant where to read the rules: EntryLib's connector, the web or a
-terminal.</p>
-<p class="small">Your assistant can use none of these? <a href="/convert/message.txt"
-download="entrylib-convert-message.txt">Download the full message</a>, which carries the rules and an example
-claimset (about 15,000 tokens), and attach the file with the paper.</p>
-<p>Agents that can run commands (Claude Code, Codex, Cursor and others) do all of it. A chat assistant without them
-can still write the claimset; connect EntryLib's <a href="/agents">MCP server</a> so it can check and submit it, or
-upload the file it gives you at <a href="/submit">Submit</a>, which checks it first.</p>
-<p><strong>A chat assistant has a size limit.</strong> The claimset of a full paper is a long file, often over
-100 KB, which is more than most chat assistants can write in one reply. Use one for a short paper with a few claims.
-For a longer paper, use an agent that can run commands: it writes the file on your computer, checks it and submits
-it.</p>
 <p>Not an author? A paper by others is not submitted here.</p>

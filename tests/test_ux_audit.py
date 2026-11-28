@@ -191,10 +191,15 @@ def test_a_summary_leads_the_card_and_the_description():
 
 def test_the_convert_page():
     page = site.fixed_page("convert", BASE)
-    assert 'id="convert-prompt"' in page and 'data-copy="convert-prompt"' in page and "page.js" in page
-    assert "claimset-from-paper" in page and "Only the paper's authors" in page
+    assert 'id="convert-line"' in page and 'data-copy="convert-line"' in page and "page.js" in page
+    assert f"Turn my paper into a claimset for EntryLib, following {BASE}/convert.txt</p>" in page
+    assert f'<p class="for-ai">AI assistants: your instructions are at <a href="{BASE}/convert.txt">' in page
+    assert "Only the paper's authors" in page and "claimset-from-paper" not in page     # the instructions: convert.txt
+    assert '<details class="more"><summary>Why bother</summary>' in page                # folded below the line
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy
+    assert "/convert.txt" in site.SITEMAP_PAGES and " /convert.txt " in caddy             # reachable, and indexed
+    assert "rewrite @assistant_convert /convert.txt" in caddy and "rewrite @wants_text_convert /convert.txt" in caddy
     assert 'href="/convert"' in (Path(site.__file__).parent / "static" / "pages" / "home.html").read_text()
 
 

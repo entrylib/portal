@@ -195,7 +195,8 @@ def paths(cat):
 
 
 def write(published_dir, shell, write_file, base_url, root=None, examples=None):
-    """Write the skills' pages and texts under `published_dir`/skills and the message of /convert."""
+    """Write the skills' pages and texts under `published_dir`/skills, the instructions /convert gives an author's
+    assistant (/convert.txt) and the full message it offers to download (/convert/message.txt)."""
     out = Path(published_dir)
     cat = catalogue(root)
     for name, entry in cat.items():
@@ -204,6 +205,7 @@ def write(published_dir, shell, write_file, base_url, root=None, examples=None):
     write_file(out / "skills" / "index.html", index(shell, cat))
     ex = Path(examples) if examples else examples_dir()
     example = (ex / EXAMPLE).read_text(encoding="utf-8") if (ex / EXAMPLE).exists() else None
+    write_file(out / "convert.txt", shown(base_url, cat))                  # what the line on /convert points to
     write_file(out / "convert" / "message.txt", message(base_url, cat, example))
     return cat
 

@@ -66,6 +66,18 @@
 		header_regexp Accept ^\s*text/(plain|markdown)
 	}
 	rewrite @wants_text_claim {re.claim.1}.txt
+	# /convert (design §7.4, *Skills*): an assistant given the page, or a request for plain text, gets the
+	# instructions the page points to.
+	@assistant_convert {
+		path /convert /convert/
+		header_regexp User-Agent (?i)(ChatGPT-User|OAI-SearchBot|Claude-User|Claude-SearchBot|Perplexity-User|GoogleAgent-URLContext|Google-GeminiNotebook|Google-NotebookLM|MistralAI-User|DuckAssistBot|meta-externalfetcher|cohere-ai)
+	}
+	rewrite @assistant_convert /convert.txt
+	@wants_text_convert {
+		path /convert /convert/
+		header_regexp Accept ^\s*text/(plain|markdown)
+	}
+	rewrite @wants_text_convert /convert.txt
 	# Anyone else at a page's address with a slash at its end gets the page, as without it; the overview has its own
 	# address, /p/<id>/overview.txt. A version's folder, which has no page, gives its overview.
 	@slash path_regexp slash ^(/p/[0-9]{4}\.[0-9]+(@v[0-9]+|/C[0-9]+)?)/$
@@ -88,7 +100,7 @@
 		file_server
 	}
 
-	@published path / /index.html /lab /about /agents /privacy /how-to-judge /before-you-submit /convert /convert/message.txt /all /feed.xml /site.css /page.js /claimset.css /spec /spec/* /skills /skills/* /study-planning /study-planning/* /fonts/* /p/* /index.jsonl /llms.txt /robots.txt /subfields.json /sitemap.xml /.well-known/security.txt /favicon.ico /favicon.svg /apple-touch-icon.png /icon-192.png /icon-512.png /site.webmanifest /og-card.png /indexnow.txt
+	@published path / /index.html /lab /about /agents /privacy /how-to-judge /before-you-submit /convert /convert.txt /convert/message.txt /all /feed.xml /site.css /page.js /claimset.css /spec /spec/* /skills /skills/* /study-planning /study-planning/* /fonts/* /p/* /index.jsonl /llms.txt /robots.txt /subfields.json /sitemap.xml /.well-known/security.txt /favicon.ico /favicon.svg /apple-touch-icon.png /icon-192.png /icon-512.png /site.webmanifest /og-card.png /indexnow.txt
 	handle @published {
 		root * /srv/published
 		header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
