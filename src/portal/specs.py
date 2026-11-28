@@ -87,7 +87,7 @@ def page(shell, address, entry, version):
             f'<article class="spec-body prose-like">{body}</article></div></div>')
     head = f'<link rel="alternate" type="text/markdown" href="{text}">'
     canonical = f"/spec/{address}" if current else f"/spec/{address}/{version}"
-    ai = chrome.for_ai(("this specification as plain text", chrome.base_url() + text))
+    ai = chrome.for_ai(chrome.base_url() + text)
     return shell(entry["title"], main, head=head, ai=ai, canonical=canonical, script="/page.js",
                  description=f"{entry['label']} specification, version {version}.")
 

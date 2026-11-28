@@ -193,9 +193,11 @@ def test_the_convert_page():
     page = site.fixed_page("convert", BASE)
     assert 'id="convert-line"' in page and 'data-copy="convert-line"' in page and "page.js" in page
     assert f"Turn my paper into a claimset for EntryLib, following {BASE}/convert.txt</p>" in page
-    assert f'<p class="for-ai">AI assistants: your instructions: <a href="{BASE}/convert.txt">' in page
+    assert f'<p class="for-ai">AI assistants, your instructions: <a href="{BASE}/convert.txt">' in page
     assert "Only the paper's authors" in page and "claimset-from-paper" not in page     # the instructions: convert.txt
-    assert '<details class="more"><summary>Why bother</summary>' in page                # folded below the line
+    assert '<details class="more"' not in page and "Why it is worth it" in page     # nothing folded
+    assert re.findall(r'<li class="(you|agent)">', page) == ["you", "agent", "you", "you", "agent", "you"]
+    assert 'href="/p/2026.000012"' in page                                                # one converted paper
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
     assert "/convert" in site.SITEMAP_PAGES and " /convert " in caddy
     assert "/convert.txt" in site.SITEMAP_PAGES and " /convert.txt " in caddy             # reachable, and indexed
@@ -381,8 +383,8 @@ def test_lab_and_convert_say_what_a_newcomer_needs():
     submit = (pages.parent / "submit.html").read_text()
     for page in (convert, submit):                          # possible without an agent, and not recommended
         assert "we do not recommend it" in page
-    assert "What you need" in convert and "perhaps already published" not in convert
-    assert "A chat assistant has a size limit" in convert
+    assert "You need:" in convert and "perhaps already published" not in convert
+    assert "a chat assistant, only a short one" in convert
     for name in ("lab.html", "agents.html"):
         page = (pages / name).read_text()
         assert "claimset init" in page and "claimset skill install" not in page

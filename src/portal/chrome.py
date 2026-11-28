@@ -122,11 +122,14 @@ def base_url():
     return os.environ.get("PORTAL_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
-def for_ai(*links):
-    """The small line for AI assistants under a page's title (design §7.4, *For AI assistants*): where an
-    assistant given this page, perhaps copied into a chat, should look. `links`: (what, address) pairs."""
-    parts = "; ".join(f'{esc(what)}: <a href="{esc(url)}">{esc(url)}</a>' for what, url in links)
-    return f'<p class="for-ai">AI assistants: {parts}</p>'
+def for_ai(url, *more):
+    """The small line for AI assistants under a page's title (design §7.4, *For AI assistants*), the same on every
+    page: "AI assistants, your instructions:" and where an assistant given this page, perhaps copied into a chat,
+    should look. `more`: further (what, address) pairs, after the first address."""
+    def link(u):
+        return f'<a href="{esc(u)}">{esc(u)}</a>'
+    rest = "".join(f"; {esc(what)}: {link(u)}" for what, u in more)
+    return f'<p class="for-ai">AI assistants, your instructions: {link(url)}{rest}</p>'
 
 
 def _with_for_ai(main, line):
@@ -134,7 +137,7 @@ def _with_for_ai(main, line):
     block. A page that has its own line keeps it."""
     if 'class="for-ai"' in main:
         return main
-    line = line or for_ai(("how to read and use EntryLib", f"{base_url()}/llms.txt"))
+    line = line or for_ai(f"{base_url()}/llms.txt")
     if "</h1>" in main:
         return main.replace("</h1>", "</h1>" + line, 1)
     end = main.find(">") + 1 if main.startswith("<div") else 0

@@ -1012,12 +1012,11 @@ def for_ai(doc, base_url, current=True, cid=None):
     same text for people and programs."""
     key, n = ids.url_key(doc["paper"]["id"]), doc["paper"].get("version")
     if cid:
-        url, what = f"{base_url}/p/{key}/{cid}.txt", "this claim as plain text"
+        url = f"{base_url}/p/{key}/{cid}.txt"
     else:
         # its web page: whoever read this page can open it, and its IDs link to the claims' files
         url = f"{base_url}/p/{key}/overview.read" if current else f"{base_url}/p/{key}/v{n}/overview.read"
-        what = "read the overview"
-    return chrome.for_ai((what, url))
+    return chrome.for_ai(url)
 
 
 def not_claimed(doc):
@@ -1731,6 +1730,7 @@ def fixed_page(name, base_url):
             .replace("{convert_request}", esc(skills.shown(base_url)))
             .replace("{plan_request}", esc(planning.short(base_url))))
     return shell(title, f'<div class="wrap prose">{body}</div>', active=active, description=description,
+                 ai=chrome.for_ai(f"{base_url}/llms.txt"),          # a page with its own line keeps it
                  script="/page.js" if "data-copy" in body else None)       # its copy buttons
 
 
@@ -2148,7 +2148,7 @@ def submit_page(body):
                'without the consent link.</p>')
     intro_end = body.find("</p>") + len("</p>")                     # the guarantor's note after the introduction
     body = body[:intro_end] + waiting + body[intro_end:] if intro_end > 3 else waiting + body
-    ai = chrome.for_ai(("to write and submit a claimset", f"{chrome.base_url()}/skills/claimset-submit.md"))
+    ai = chrome.for_ai(f"{chrome.base_url()}/skills/claimset-submit.md")
     return shell("Publish a paper", f'<div class="wrap prose">{body}</div>', active="submit", ai=ai,
                  description="Publish a paper on EntryLib: upload the package or claimset file your AI agent made; "
                  "its responsible researcher confirms with ORCID.")

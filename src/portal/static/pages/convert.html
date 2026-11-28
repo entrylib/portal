@@ -1,58 +1,53 @@
 <h1>Turn your paper into a claimset</h1>
-<p class="for-ai">AI assistants: your instructions: <a href="{base}/convert.txt">{base}/convert.txt</a></p>
-<p class="lead">Your AI assistant does the conversion: it turns your published paper into a claimset, the same research
-as separate claims, each with its evidence, conditions and limits. You answer its questions and check its work.
-Only the paper's authors do this.</p>
+<p class="for-ai">AI assistants, your instructions: <a href="{base}/convert.txt">{base}/convert.txt</a></p>
+<p class="lead">Your AI assistant turns your published paper into a claimset: the same research as separate claims,
+each with its evidence, conditions and limits. You answer its questions and check its work.</p>
 
 <div class="connect start">
-<p><strong>Attach your paper to your AI assistant</strong> (Claude, ChatGPT, Gemini…) <strong>and write:</strong></p>
+<p class="say-intro"><strong>Attach your paper to your AI assistant and paste this line with it.</strong></p>
 <p class="say" id="convert-line">Turn my paper into a claimset for EntryLib, following {base}/convert.txt</p>
-<p class="copy-row"><button type="button" class="button" data-copy="convert-line" data-copied="Copied: now paste it into your AI chat" hidden>Copy this line</button></p>
-<p>Then it is your part:</p>
-<ol>
-<li>Answer its questions: that you are an author, which author answers for the claimset, its licence, which findings
-matter most.</li>
-<li>Check every claim it lists against your paper, and the short summary it drafts.</li>
-<li>Confirm with ORCID, through the link it gives you, within 48 hours. See <a href="/before-you-submit">Before you
-submit</a>.</li>
-</ol>
+<p class="copy-row"><button type="button" class="button" data-copy="convert-line"
+data-copied="Copied: now paste it into your AI chat" hidden>Copy this line</button></p>
+<p class="needs"><strong>Only the paper's authors do this. You need:</strong> a published paper with a DOI or an arXiv
+ID · an AI assistant (an agent that runs commands suits any paper; a chat assistant, only a short one) · an ORCID iD ·
+time to check 20 to 40 claims.</p>
 </div>
 <p class="small">Your assistant cannot open web pages? <a href="/convert/message.txt"
-download="entrylib-convert-message.txt">Download the full message</a>, which carries the instructions, the rules and an
-example claimset (about 15,000 tokens), and attach it with your paper instead of the line above.</p>
+download="entrylib-convert-message.txt">Download the full message</a>
+(about 15,000 tokens) and attach it with your paper instead of the line.</p>
 
-<details class="more"><summary>Why bother</summary>
-<ul>
-<li><strong>AI assistants read it right.</strong> People increasingly meet research through an assistant. Given a
-PDF, it summarises what it guesses matters; given a claimset, it finds each of your findings with the conditions it
-holds under and what it rests on, and cites it exactly (<code>entrylib:2026.000001@v1#C3</code>).</li>
-<li><strong>You see which of your claims are supported, and which are not.</strong> Every principal claim gets a
-page and a Support score showing how fully the paper's record backs it, and what would back it more (<a
-href="/about#quality">how</a>).</li>
-<li><strong>It is found where research is now searched.</strong> Papers on EntryLib are listed for search engines
-and answer engines, and any assistant can search and read them through EntryLib's <a href="/agents">MCP server</a>.</li>
-<li><strong>It stays yours and stays current.</strong> You are its responsible researcher. A correction is a new
-version, every version is kept, and the claimset links to the published paper. Publishing is free, with no account
-beyond your ORCID iD.</li>
-</ul>
-</details>
+<section class="flow">
+<h2>How it goes</h2>
+<p>Your assistant does the writing. You check it and answer for it.</p>
+<ol class="timeline">
+<li class="you"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="role">You</span><strong>Attach</strong>your paper, with the line</li>
+<li class="agent"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 5v3"/><circle cx="12" cy="4" r="1"/><path d="M9.5 13h.01M14.5 13h.01M10 16h4M3 12v3M21 12v3"/></svg></span><span class="role">Assistant</span><strong>Draft</strong>the claims, each with where it comes from</li>
+<li class="you"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="role">You</span><strong>Answer</strong>that you are an author, the licence, what matters most</li>
+<li class="you"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="role">You</span><strong>Check</strong>every claim against your paper</li>
+<li class="agent"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 5v3"/><circle cx="12" cy="4" r="1"/><path d="M9.5 13h.01M14.5 13h.01M10 16h4M3 12v3M21 12v3"/></svg></span><span class="role">Assistant</span><strong>Submit</strong>after checking the file</li>
+<li class="you"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="role">You</span><strong>Confirm</strong>with ORCID, within 48 hours</li>
+</ol>
+<p class="note">Before you confirm, see <a href="/before-you-submit">what the responsible researcher checks</a>.</p>
+</section>
 
-<details class="more"><summary>What you need</summary>
-<ul>
-<li><strong>A published paper that you wrote</strong>, with a DOI, an arXiv ID or another permanent identifier, and
-its supplementary material. A draft that is not published anywhere is not converted: your agent writes it up as a
-new claimset instead (see <a href="/before-you-submit">Before you submit</a>).</li>
-<li><strong>An AI assistant.</strong> An agent that can run commands (Claude Code, Codex, Cursor and others) suits a
-paper of any length: it writes the file on your computer, checks it and submits it.
-<strong>A chat assistant has a size limit:</strong> the claimset of a full paper is a long file, often over 100 KB, more than most chat assistants can
-write in one reply, so use one for a short paper with a few claims; connect EntryLib's <a href="/agents">MCP
-server</a> so it can check and submit the file, or upload the file it gives you at <a href="/submit">Submit</a>. The
-format is open, so you can write the claimset by hand, but we do not recommend it.</li>
-<li><strong>An ORCID iD</strong> for the author who answers for the claimset. It is free at
-<a href="https://orcid.org">orcid.org</a>.</li>
-<li><strong>Time to check every claim against your paper.</strong> A full paper often gives 20 to 40 claims. Your
-assistant lists each with where it comes from; reading that list is the part only you can do.</li>
-</ul>
-</details>
+<h2>Why it is worth it</h2>
+<div class="trust two">
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><strong>AI reads it right</strong><span>Given a PDF, an assistant guesses what matters. Given a claimset, it
+finds each finding with its conditions, and cites it exactly.</span></div>
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/></svg><strong>See which claims are supported</strong><span>Each main claim gets its own page and a Support
+score, with what would back it more (<a href="/about#quality">how</a>).</span></div>
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><strong>Found where research is searched</strong><span>Listed for search engines and answer engines, and
+open to any assistant through EntryLib's <a href="/agents">MCP server</a>.</span></div>
+<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><strong>Yours, current and free</strong><span>A correction is a new version; every version is kept. No
+account beyond your ORCID iD.</span></div>
+</div>
 
-<p>Not an author? A paper by others is not submitted here.</p>
+<h2>One converted paper</h2>
+<div class="example">
+<span class="origin">Converted by its authors</span>
+<h3><a href="/p/2026.000012">Complex exponential smoothing</a></h3>
+<p class="meta">Published as doi:10.1002/nav.22074. On EntryLib, each main claim has its own score, and the
+corrections of the published paper are listed.</p>
+<p class="links"><a href="/p/2026.000012">Read it</a></p>
+</div>
+<p class="small">The format is open: you can write a claimset by hand, but we do not recommend it.</p>

@@ -75,7 +75,7 @@ def page(shell, name, entry, cat):
             f'<p class="muted small">{_from(cat)} Changes are proposed there, with the references that support them.'
             f"</p></div>")
     head = f'<link rel="alternate" type="text/markdown" href="{text}">'
-    ai = chrome.for_ai(("this guide as plain text", chrome.base_url() + text))
+    ai = chrome.for_ai(chrome.base_url() + text)
     return shell(entry["title"], main, head=head, ai=ai, canonical=f"/study-planning/{name}", script="/page.js",
                  description=f"EntryLib's good practice for planning a study: {entry['title']}. Defaults for the "
                              f"choices a study makes, each with its reason and references.")
