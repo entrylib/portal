@@ -38,7 +38,8 @@ code { font: inherit; font-size: 0.94em; background: var(--panel); padding: 0 4p
   overflow-wrap: anywhere; }
 h1, h2, h3 { line-height: 1.2; font-weight: 600; }
 main { min-height: 60vh; }
-.wrap { max-width: 76rem; margin: 0 auto; padding: 0 16px; }
+:root { --site-width: 76rem; --text-width: 50rem; --rail-width: 270px; }   /* design §7.4, *Layouts* */
+.wrap { max-width: var(--site-width); margin: 0 auto; padding: 0 16px; }
 .muted, .small { color: var(--muted); }
 .small { font-size: 15px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -213,11 +214,11 @@ details.notice[open] summary { margin-bottom: 4px; }
 .entry-rail > .toc-bar { grid-area: bar; }
 @media (max-width: 860px) { .entry-rail > .panel .panel-row { flex: 1 1 180px; } }      /* as the record's panel */
 @media (min-width: 861px) {
-  .entry[data-view="paper"] { grid-template-columns: minmax(0, 50rem) 270px; grid-template-rows: auto 1fr;
+  .entry[data-view="paper"] { grid-template-columns: minmax(0, var(--text-width)) var(--rail-width); grid-template-rows: auto 1fr;
     grid-template-areas: "head rail" "body rail"; justify-content: space-between; }
   /* The record (design §7.4, *The record*): the same rail, the panel and under it the contents, to the right of a
      body that keeps the page's width for its tables. */
-  .entry[data-rail] { grid-template-columns: minmax(0, 1fr) 270px; grid-template-rows: auto 1fr;
+  .entry[data-rail] { grid-template-columns: minmax(0, 1fr) var(--rail-width); grid-template-rows: auto 1fr;
     grid-template-areas: "head rail" "body rail"; }
   .entry-rail { display: block; grid-area: rail; align-self: stretch; min-width: 0; }
 }
@@ -341,7 +342,7 @@ dialog.peek .score-claim { border-top: 0; padding-top: 0; }
 
 /* prose pages */
 .prose { padding-top: 32px; }
-.prose > * { max-width: 50rem; }
+.prose > * { max-width: var(--text-width); }
 .prose > .grid, .prose > .table-wrap { max-width: 60rem; }
 .prose h1 { font-size: clamp(30px, 4.5vw, 42px); margin: 0 0 16px; }
 .prose h2 { font-size: 26px; margin: 40px 0 10px; border-top: 1px solid var(--rule); padding-top: 22px; }
@@ -555,22 +556,39 @@ dialog.help .popup-body { max-height: 90vh; overflow-y: auto; padding: 20px 64px
 .card-summary { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .connect pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; font-size: 14px; }
 .copy-row { margin: 12px 0 4px; }
-/* /convert (design §7.4, *Skills*): the line for the author's assistant, and what is folded under it */
-.connect.start { border-left: 4px solid var(--accent); padding: 16px 20px; margin: 20px 0 16px; }
-.connect.start ol { margin-bottom: 4px; }
-.say { font-weight: 600; font-size: 18px; background: var(--ground); border: 1px solid var(--rule-light);
-  border-radius: 6px; padding: 12px 14px; margin: 6px 0 0; overflow-wrap: anywhere; }
 details.more { border-top: 1px solid var(--rule-light); padding: 10px 0; }
 details.more > summary { cursor: pointer; font-weight: 600; font-size: 19px; }
-/* /lab (design §7.4, *Planning a study*): the line for the agent, who does what, why readers trust it, an example */
-.lab-alt { font-size: 16px; color: var(--muted); margin-top: -4px; }
-.say-intro { margin: 0 0 4px; }
-.connect.start .needs { font-size: 15px; color: var(--muted); margin: 14px 0 0; padding-top: 12px;
+
+/* ---- Layouts and parts shared across the site (design §7.4, *Layouts*) -------------------------------------------
+   Widths: --site-width (the header, footer and every page's outer box, .wrap), --text-width (one column of text: a
+   paper, a fixed page, a prose page) and --rail-width (the rail beside that column: the panel and On this page).
+   Layouts: a paper's page (.entry[data-view="paper"]) and every fixed page (.page-text, the same grid: its title,
+   then one column of text with On this page in the rail); the home page and Read, the site's full width.
+   Parts, for any page: .copy-box (a line to copy, with .copy-intro, .copy-line, .copy-row, .copy-note; .quiet for a
+   secondary one), .alt-path (one line to another way), .band (a tinted section, with .band-note), .timeline (who
+   does what: li.you and li.agent, each with .dot, .role, strong and a few words), .features (icon, strong and span;
+   .two for two columns), .features-note, .feature-card (one example, linked), details.more (a fold). */
+.page-text .page-head h1 { font-size: clamp(30px, 4.5vw, 42px); margin: 0 0 8px; }
+.page-text .page-head .for-ai { margin: 0; }
+.page-text .page-head { margin-bottom: 20px; }
+.page-text > .cs-body.prose { padding-top: 0; }
+.page-text > .cs-body.prose > :first-child { margin-top: 0; }
+.alt-path { font-size: 16px; color: var(--muted); margin-top: -4px; }
+.copy-box { background: var(--panel); border: 1px solid var(--rule-light); border-left: 4px solid var(--accent);
+  border-radius: 6px; padding: 16px 20px; margin: 20px 0 16px; }
+.copy-box.quiet { border-left-color: var(--rule); }
+.copy-box > p { margin: 0; }
+.copy-intro { margin: 0 0 4px; }
+.copy-line { font-weight: 600; font-size: 18px; background: var(--ground); border: 1px solid var(--rule-light);
+  border-radius: 6px; padding: 12px 14px; margin: 6px 0 0; overflow-wrap: anywhere; }
+.copy-box > .copy-row { margin: 12px 0 4px; }
+.copy-note { font-size: 15px; color: var(--muted); margin: 14px 0 0; padding-top: 12px;
   border-top: 1px solid var(--rule-light); line-height: 1.5; }
-.connect.start .needs strong { color: var(--ink); }
-.connect.start.alt { border-left-color: var(--rule); }
-.prose > .flow { background: var(--panel); border-radius: 10px; padding: 22px 22px 18px; box-sizing: border-box; }
-.prose .flow h2 { margin-top: 0; border-top: 0; padding-top: 0; }
+.copy-box > .copy-note { margin-top: 14px; }
+.copy-note strong { color: var(--ink); }
+.band { background: var(--panel); border-radius: 10px; padding: 22px 22px 18px; box-sizing: border-box; margin: 28px 0; }
+.prose .band h2 { margin-top: 0; border-top: 0; padding-top: 0; }
+.band-note { font-size: 15px; color: var(--muted); margin: 10px 0 0; }
 .timeline { display: flex; margin: 20px 0 10px; padding: 0; list-style: none; }
 .timeline li { flex: 1 1 0; min-width: 0; text-align: center; position: relative; padding: 40px 4px 0; margin: 0;
   font-size: 14px; color: var(--muted); line-height: 1.35; }
@@ -585,23 +603,22 @@ details.more > summary { cursor: pointer; font-weight: 600; font-size: 19px; }
 .timeline .role { display: block; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .timeline .you .role { color: var(--accent); }
 .timeline strong { display: block; color: var(--ink); font-size: 15px; margin: 2px 0; }
-.flow .note { font-size: 15px; color: var(--muted); margin: 10px 0 0; }
-.trust { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 16px 0 10px; }
-.trust svg { width: 26px; height: 26px; color: var(--accent); display: block; margin-bottom: 6px; }
-.trust strong { display: block; font-size: 17px; margin-bottom: 2px; }
-.trust span { font-size: 15px; color: var(--muted); line-height: 1.45; }
-.trust-also { font-size: 15px; color: var(--muted); }
-.trust.two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; }   /* /convert */
-.example { border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
-.example .origin { color: var(--ok); }
-.example h3 { margin: 8px 0 6px; font-size: 20px; line-height: 1.3; }
-.example h3 a { color: var(--ink); text-decoration: none; }
-.example h3 a:hover { text-decoration: underline; }
-.example .meta { font-size: 15px; color: var(--muted); margin: 0 0 10px; }
-.example .links { margin: 0; font-size: 15px; }
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 28px; margin: 16px 0 10px; }
+.features.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.features svg { width: 26px; height: 26px; color: var(--accent); display: block; margin-bottom: 6px; }
+.features strong { display: block; font-size: 17px; margin-bottom: 2px; }
+.features span { font-size: 15px; color: var(--muted); line-height: 1.45; }
+.features-note { font-size: 15px; color: var(--muted); }
+.feature-card { border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+.feature-card .origin { color: var(--ok); }
+.feature-card h3 { margin: 8px 0 6px; font-size: 20px; line-height: 1.3; }
+.feature-card h3 a { color: var(--ink); text-decoration: none; }
+.feature-card h3 a:hover { text-decoration: underline; }
+.feature-card .meta { font-size: 15px; color: var(--muted); margin: 0 0 10px; }
+.feature-card .links { margin: 0; font-size: 15px; }
 @media (max-width: 760px) {
-  .trust, .trust.two { grid-template-columns: 1fr; gap: 14px; }
-  .prose > .flow { padding: 18px 14px 14px; }
+  .features, .features.two { grid-template-columns: 1fr; gap: 14px; }
+  .band { padding: 18px 14px 14px; }
   /* Six steps in two rows of three, as a snake: left to right, down on the right, then right to left. */
   .timeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 22px; }
   .timeline li:nth-child(3)::before, .timeline li:nth-child(4)::before { left: 0; right: 10px; }

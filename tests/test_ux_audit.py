@@ -195,7 +195,7 @@ def test_the_convert_page():
     assert f"Turn my paper into a claimset for EntryLib, following {BASE}/convert.txt</p>" in page
     assert f'<p class="for-ai">AI assistants, your instructions: <a href="{BASE}/convert.txt">' in page
     assert "Only the paper's authors" in page and "claimset-from-paper" not in page     # the instructions: convert.txt
-    assert '<details class="more"' not in page and "Why it is worth it" in page     # nothing folded
+    assert '<details class="more"' not in page and "What you get" in page     # nothing folded
     assert re.findall(r'<li class="(you|agent)">', page) == ["you", "agent", "you", "you", "agent", "you"]
     assert 'href="/p/2026.000012"' in page                                                # one converted paper
     caddy = (Path(__file__).parent.parent / "deploy" / "Caddyfile").read_text()
@@ -425,3 +425,23 @@ def test_every_page_tells_an_ai_assistant_where_to_look():
     assert '<div class="wrap"><p class="for-ai">' in no_title
     own = chrome.shell("A page", '<h1>A</h1>' + chrome.for_ai(("x", "https://e.org/x")))
     assert own.count('class="for-ai"') == 1                                    # its own line, not two
+
+
+def test_fixed_pages_share_the_paper_layout_and_the_site_parts():
+    """Design §7.4, *Layouts*: every fixed page is laid out as a paper's page, one column of text with On this page in
+    the rail; the widths are set once; the parts are the site's, not a page's own."""
+    base = chrome.base_url()
+    for name in site.PAGES:
+        page = site.fixed_page(name, base)
+        assert 'class="cs-page entry page-text" data-view="paper"' in page, name
+        assert '<nav class="cs-toc"' in page and 'class="toc-top"' in page, name
+        head = page.split('class="cs-header entry-header page-head">')[1].split("</div>")[0]
+        assert "<h1>" in head and 'class="for-ai"' in head, name                 # the title and the AI line on top
+        for sid in re.findall(r'<h2[^>]* id="([^"]+)"', page):
+            assert f'href="#{sid}"' in page, (name, sid)                         # every section in the contents
+    css = (Path(site.__file__).parent / "static" / "site.css").read_text()
+    assert css.count("--text-width:") == 1 and "minmax(0, var(--text-width)) var(--rail-width)" in css
+    for part in (".copy-box", ".copy-line", ".band", ".timeline", ".features", ".feature-card", ".alt-path"):
+        assert f"{part} " in css, part
+    for old in (".connect.start", ".say ", ".trust", ".flow ", ".example "):
+        assert old not in css, old
